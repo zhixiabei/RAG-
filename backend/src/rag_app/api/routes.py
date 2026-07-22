@@ -4,7 +4,7 @@ from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse
 from uuid import uuid4
 
-from .schemas import ChatRequest, KnowledgeBaseCreate
+from .schemas import ChatRequest, ConversationCreate, KnowledgeBaseCreate
 
 router = APIRouter()
 
@@ -14,7 +14,7 @@ def services(request: Request):
     if startup_error:
         raise HTTPException(
             503,
-            f"基础设施未就绪，请先启动 PostgreSQL、MinIO 和 Qdrant。原因: {startup_error}",
+            f"基础设施或模型服务未就绪，请检查 PostgreSQL、MinIO、Qdrant 和模型配置。原因: {startup_error}",
         )
     return request.app.state.services
 
@@ -26,17 +26,23 @@ def health(request: Request):
     payload = {
         "ok": startup_error is None,
         "storage": "postgresql+minio+qdrant",
-        "ollama": service.settings.ollama_url,
+        "model_mode": service.settings.model_mode,
+        "embedding_model": service.models.embedding_model,
     }
     if startup_error:
         payload["detail"] = f"基础设施初始化失败: {startup_error}"
     return JSONResponse(status_code=503 if startup_error else 200, content=payload)
 
 
+@router.get("/api/v1/models")
+def list_models(request: Request):
+    return services(request).models.list_chat_models()
+
+
 @router.post("/api/v1/knowledge-bases")
 def create_knowledge_base(request: Request, payload: KnowledgeBaseCreate):
     service = services(request)
-    return service.repository.create_knowledge_base(str(uuid4()), payload.name, payload.description, service.settings.ollama_embedding_model)
+    return service.repository.create_knowledge_base(str(uuid4()), payload.name, payload.description, service.models.embedding_model)
 
 
 @router.get("/api/v1/knowledge-bases")
@@ -86,7 +92,34 @@ def chat(request: Request, knowledge_base_id: str, payload: ChatRequest):
     service = services(request)
     if not service.repository.knowledge_base_exists(knowledge_base_id):
         raise HTTPException(404, "知识库不存在")
+    conversation = service.repository.get_conversation(payload.conversation_id)
+    if not conversation or conversation["knowledge_base_id"] != knowledge_base_id:
+        raise HTTPException(404, "对话不存在")
     try:
-        return service.rag.answer(knowledge_base_id, payload.question)
+        return service.rag.answer(knowledge_base_id, payload.conversation_id, payload.question, payload.model)
     except Exception as exc:
         raise HTTPException(503, f"问答服务不可用: {exc}") from exc
+
+
+@router.get("/api/v1/knowledge-bases/{knowledge_base_id}/conversations")
+def list_conversations(request: Request, knowledge_base_id: str):
+    service = services(request)
+    if not service.repository.knowledge_base_exists(knowledge_base_id):
+        raise HTTPException(404, "知识库不存在")
+    return service.repository.list_conversations(knowledge_base_id)
+
+
+@router.post("/api/v1/knowledge-bases/{knowledge_base_id}/conversations")
+def create_conversation(request: Request, knowledge_base_id: str, payload: ConversationCreate):
+    service = services(request)
+    if not service.repository.knowledge_base_exists(knowledge_base_id):
+        raise HTTPException(404, "知识库不存在")
+    return service.repository.create_conversation(str(uuid4()), knowledge_base_id, payload.title.strip())
+
+
+@router.get("/api/v1/conversations/{conversation_id}/messages")
+def list_messages(request: Request, conversation_id: str):
+    service = services(request)
+    if not service.repository.get_conversation(conversation_id):
+        raise HTTPException(404, "对话不存在")
+    return service.repository.list_messages(conversation_id)

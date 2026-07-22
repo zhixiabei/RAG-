@@ -37,11 +37,30 @@ export function uploadDocument(knowledgeBaseId, file) {
   return request(`/api/v1/knowledge-bases/${knowledgeBaseId}/documents`, { method: 'POST', body: form })
 }
 
-export function askKnowledgeBase(knowledgeBaseId, question) {
+export function listChatModels() {
+  return request('/api/v1/models')
+}
+
+export function askKnowledgeBase(knowledgeBaseId, conversationId, question, model) {
   return request(`/api/v1/knowledge-bases/${knowledgeBaseId}/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ question }),
+    body: JSON.stringify({ conversation_id: conversationId, question, model: model || null }),
   })
 }
 
+export function listConversations(knowledgeBaseId) {
+  return request(`/api/v1/knowledge-bases/${knowledgeBaseId}/conversations`)
+}
+
+export function createConversation(knowledgeBaseId, title) {
+  return request(`/api/v1/knowledge-bases/${knowledgeBaseId}/conversations`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title }),
+  })
+}
+
+export function listConversationMessages(conversationId) {
+  return request(`/api/v1/conversations/${conversationId}/messages`)
+}

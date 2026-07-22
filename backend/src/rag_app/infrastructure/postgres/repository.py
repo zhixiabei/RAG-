@@ -102,9 +102,82 @@ class PostgresRepository:
                     },
                 )
 
-    def add_message(self, knowledge_base_id: str, question: str, answer: str, citations: list[dict[str, Any]]) -> None:
+    def create_conversation(self, conversation_id: str, knowledge_base_id: str, title: str) -> dict[str, Any]:
         with self.engine.begin() as connection:
             connection.execute(
-                text("INSERT INTO messages (knowledge_base_id, question, answer, citations) VALUES (:kb, :question, :answer, CAST(:citations AS JSONB))"),
-                {"kb": knowledge_base_id, "question": question, "answer": answer, "citations": json.dumps(citations, ensure_ascii=False)},
+                text("INSERT INTO conversations (id, knowledge_base_id, title) VALUES (:id, :kb, :title)"),
+                {"id": conversation_id, "kb": knowledge_base_id, "title": title},
             )
+        return self.get_conversation(conversation_id) or {}
+
+    def get_conversation(self, conversation_id: str) -> dict[str, Any] | None:
+        with self.engine.begin() as connection:
+            row = connection.execute(
+                text("SELECT * FROM conversations WHERE id = :id"),
+                {"id": conversation_id},
+            ).mappings().first()
+        return dict(row) if row else None
+
+    def list_conversations(self, knowledge_base_id: str) -> list[dict[str, Any]]:
+        with self.engine.begin() as connection:
+            rows = connection.execute(
+                text("""
+                    SELECT
+                        conversations.*,
+                        (SELECT count(*) * 2 FROM messages WHERE conversation_id = conversations.id) AS message_count,
+                        (SELECT question FROM messages WHERE conversation_id = conversations.id ORDER BY id DESC LIMIT 1) AS last_message
+                    FROM conversations
+                    WHERE knowledge_base_id = :kb
+                    ORDER BY updated_at DESC, created_at DESC
+                """),
+                {"kb": knowledge_base_id},
+            ).mappings().all()
+        return [dict(row) for row in rows]
+
+    def add_message(self, conversation_id: str, knowledge_base_id: str, question: str, answer: str, citations: list[dict[str, Any]]) -> None:
+        with self.engine.begin() as connection:
+            connection.execute(
+                text("""
+                    INSERT INTO messages (knowledge_base_id, conversation_id, question, answer, citations)
+                    VALUES (:kb, :conversation, :question, :answer, CAST(:citations AS JSONB))
+                """),
+                {
+                    "kb": knowledge_base_id,
+                    "conversation": conversation_id,
+                    "question": question,
+                    "answer": answer,
+                    "citations": json.dumps(citations, ensure_ascii=False),
+                },
+            )
+            connection.execute(
+                text("UPDATE conversations SET updated_at = now() WHERE id = :id"),
+                {"id": conversation_id},
+            )
+
+    def list_messages(self, conversation_id: str) -> list[dict[str, Any]]:
+        with self.engine.begin() as connection:
+            rows = connection.execute(
+                text("SELECT id, question, answer, citations, created_at FROM messages WHERE conversation_id = :conversation ORDER BY id"),
+                {"conversation": conversation_id},
+            ).mappings().all()
+
+        messages = []
+        for row in rows:
+            messages.extend(
+                (
+                    {
+                        "id": f"{row['id']}:user",
+                        "role": "user",
+                        "content": row["question"],
+                        "created_at": row["created_at"],
+                    },
+                    {
+                        "id": f"{row['id']}:assistant",
+                        "role": "assistant",
+                        "content": row["answer"],
+                        "citations": row["citations"] or [],
+                        "created_at": row["created_at"],
+                    },
+                )
+            )
+        return messages

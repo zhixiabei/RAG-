@@ -13,6 +13,13 @@ class IngestionService:
         self.models = models
 
     def ingest(self, knowledge_base_id: str, file_name: str, mime_type: str, content: bytes) -> dict:
+        knowledge_base = self.repository.get_knowledge_base(knowledge_base_id)
+        if not knowledge_base:
+            raise ValueError("知识库不存在")
+        if knowledge_base["embedding_model"] != self.models.embedding_model:
+            raise RuntimeError(
+                f"知识库使用 {knowledge_base['embedding_model']} 建立索引，当前 embedding 模型是 {self.models.embedding_model}，请重新建立知识库并导入文档"
+            )
         safe_name = Path(file_name).name
         if not self.parser.supports(safe_name):
             suffix = Path(safe_name).suffix.lower()

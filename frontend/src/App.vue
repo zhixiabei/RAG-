@@ -71,7 +71,7 @@ async function refreshDocuments() {
           <DocumentList :documents="store.documents" :loading="store.loading" />
         </section>
 
-        <ChatWorkspace v-else :kb-id="store.selected.id" />
+        <ChatWorkspace v-else :key="store.selected.id" :kb-id="store.selected.id" />
       </template>
 
       <section v-else class="empty-workspace">
@@ -86,4 +86,3 @@ async function refreshDocuments() {
     <CreateKnowledgeBaseDialog v-if="createDialogOpen" :saving="creating" @close="createDialogOpen = false" @submit="createKnowledgeBase" />
   </div>
 </template>
-

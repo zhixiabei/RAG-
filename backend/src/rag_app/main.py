@@ -19,6 +19,7 @@ from .application.rag_service import RagService
 from .config import Settings
 from .infrastructure.minio.object_store import MinioObjectStore
 from .infrastructure.ollama.gateway import OllamaGateway
+from .infrastructure.openai_compatible.gateway import OpenAICompatibleGateway
 from .infrastructure.parsing.document_parser import DocumentParser
 from .infrastructure.postgres.repository import PostgresRepository
 from .infrastructure.qdrant.vector_store import QdrantVectorStore
@@ -33,7 +34,7 @@ class Services:
     repository: PostgresRepository
     objects: MinioObjectStore
     vectors: QdrantVectorStore
-    models: OllamaGateway
+    models: OllamaGateway | OpenAICompatibleGateway
     ingestion: IngestionService
     rag: RagService
 
@@ -48,7 +49,22 @@ def build_services(settings: Settings) -> Services:
         settings.minio_bucket,
     )
     vectors = QdrantVectorStore(settings.qdrant_url, settings.qdrant_collection)
-    models = OllamaGateway(settings.ollama_url, settings.ollama_chat_model, settings.ollama_embedding_model)
+    if settings.model_mode == "local":
+        models = OllamaGateway(settings.ollama_url, settings.ollama_chat_model, settings.ollama_embedding_model)
+    elif settings.model_mode == "remote":
+        models = OpenAICompatibleGateway(
+            settings.remote_llm_provider_name,
+            settings.remote_llm_base_url,
+            settings.remote_llm_api_key,
+            [model.strip() for model in settings.remote_llm_models.split(",") if model.strip()],
+            settings.remote_default_chat_model,
+            settings.remote_embedding_provider_name,
+            settings.remote_embedding_base_url,
+            settings.remote_embedding_api_key,
+            settings.remote_embedding_model,
+        )
+    else:
+        raise ValueError("MODEL_MODE 只能是 local 或 remote")
     return Services(
         settings=settings,
         repository=repository,
@@ -65,7 +81,7 @@ def initialize_services(services: Services) -> None:
         ("PostgreSQL", services.repository.initialize),
         ("MinIO", services.objects.ensure_bucket),
         ("Qdrant", services.vectors.check_connection),
-        ("Ollama", services.models.check_connection),
+        ("模型服务", services.models.check_connection),
     )
     errors = []
     for name, check in checks:
