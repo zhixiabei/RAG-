@@ -26,14 +26,17 @@ class QdrantVectorStore:
             raise RuntimeError("Qdrant collection 向量维度与 embedding 模型不一致")
 
     def upsert(self, points: list[dict[str, Any]], vectors: list[list[float]]) -> None:
-        self.client.upsert(
-            collection_name=self.collection,
-            points=models.Batch(
-                ids=[vector_point_id(point["chunk_id"]) for point in points],
-                vectors=vectors,
-                payloads=points,
-            ),
-        )
+        batch_size = 256
+        for start in range(0, len(points), batch_size):
+            point_batch = points[start:start + batch_size]
+            self.client.upsert(
+                collection_name=self.collection,
+                points=models.Batch(
+                    ids=[vector_point_id(point["chunk_id"]) for point in point_batch],
+                    vectors=vectors[start:start + batch_size],
+                    payloads=point_batch,
+                ),
+            )
 
     def search(self, knowledge_base_id: str, vector: list[float], limit: int) -> list[SearchHit]:
         result = self.client.query_points(

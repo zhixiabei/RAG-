@@ -19,12 +19,21 @@ class OllamaGateway:
             raise RuntimeError(f"缺少 Ollama 模型: {', '.join(missing)}")
 
     def embed(self, texts: list[str]) -> list[list[float]]:
-        response = httpx.post(f"{self.base_url}/api/embed", json={"model": self.embedding_model, "input": texts}, timeout=180)
-        response.raise_for_status()
-        embeddings = response.json().get("embeddings")
-        if not embeddings or len(embeddings) != len(texts):
-            raise RuntimeError("Ollama 未返回完整 embedding")
-        return embeddings
+        result: list[list[float]] = []
+        batch_size = 32
+        for start in range(0, len(texts), batch_size):
+            batch = texts[start:start + batch_size]
+            response = httpx.post(
+                f"{self.base_url}/api/embed",
+                json={"model": self.embedding_model, "input": batch},
+                timeout=180,
+            )
+            response.raise_for_status()
+            embeddings = response.json().get("embeddings")
+            if not embeddings or len(embeddings) != len(batch):
+                raise RuntimeError("Ollama 未返回完整 embedding")
+            result.extend(embeddings)
+        return result
 
     def answer(self, question: str, context: str) -> str:
         response = httpx.post(

@@ -67,6 +67,9 @@ def upload_document(request: Request, knowledge_base_id: str, file: UploadFile =
         raise HTTPException(404, "知识库不存在")
     if not file.filename:
         raise HTTPException(400, "文件名不能为空")
+    if not service.ingestion.parser.supports(file.filename):
+        suffix = Path(file.filename).suffix.lower()
+        raise HTTPException(415, f"暂不支持的文件类型: {suffix or '无扩展名'}")
     try:
         return service.ingestion.ingest(
             knowledge_base_id,

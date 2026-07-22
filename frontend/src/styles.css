@@ -56,7 +56,9 @@ h1, h2, h3, p { margin: 0; }
 .section-icon { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 8px; background: #fbf0df; color: #a56b26; }
 .import-copy h3 { color: #303a42; font-size: 14px; }
 .import-copy p { margin-top: 4px; color: #879198; font-size: 12px; }
-.import-panel > .button { margin-top: 16px; }
+.import-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.skip-summary { display: grid; gap: 4px; margin-top: 12px; padding: 9px 10px; border-left: 3px solid #d2a04f; background: #fff9ee; color: #74644d; font-size: 11px; }
+.skip-summary span { color: #94846d; overflow-wrap: anywhere; }
 .section-heading { display: flex; align-items: center; justify-content: space-between; margin: 30px 0 12px; }
 .section-heading > div:first-child { display: flex; align-items: baseline; gap: 10px; }
 .section-heading h2 { color: #313b43; font-size: 16px; }
@@ -109,4 +111,3 @@ h1, h2, h3, p { margin: 0; }
 
 @media (max-width: 800px) { .sidebar { width: 210px; flex-basis: 210px; }.topbar, .content-header { padding-left: 22px; padding-right: 22px; }.document-view, .view-tabs { padding-left: 22px; padding-right: 22px; }.chat-layout { padding-left: 22px; padding-right: 22px; } }
 @media (max-width: 620px) { .app-shell { display: block; }.sidebar { width: 100%; min-height: auto; padding: 14px; }.brand-block { padding-bottom: 15px; }.knowledge-list { display: flex; overflow-x: auto; }.knowledge-item { min-width: 180px; }.sidebar-create { margin-top: 12px; }.sidebar-footer { display: none; }.topbar { padding: 0 16px; }.content-header { display: block; padding: 26px 16px 20px; }.content-header .button { margin-top: 16px; }.view-tabs { padding: 0 16px; }.document-view { padding: 18px 16px 30px; }.section-heading { display: block; }.table-search { width: 100%; margin-top: 12px; }.document-table th:nth-child(3), .document-table td:nth-child(3), .document-table th:nth-child(4), .document-table td:nth-child(4) { display: none; }.chat-layout { height: calc(100vh - 190px); min-height: 460px; padding: 0 16px 18px; }.topbar-status { display: none; } }
-

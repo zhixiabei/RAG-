@@ -13,8 +13,14 @@ class IngestionService:
         self.models = models
 
     def ingest(self, knowledge_base_id: str, file_name: str, mime_type: str, content: bytes) -> dict:
-        document_id = str(uuid4())
         safe_name = Path(file_name).name
+        if not self.parser.supports(safe_name):
+            suffix = Path(safe_name).suffix.lower()
+            raise ValueError(f"暂不支持的文件类型: {suffix or '无扩展名'}")
+        if not content:
+            raise ValueError("文件内容为空")
+
+        document_id = str(uuid4())
         title = Path(safe_name).stem.replace("_", " ").replace("-", " ") or safe_name
         object_key = f"{knowledge_base_id}/{document_id}/source/{safe_name}"
         self.objects.put_bytes(object_key, content, mime_type)
@@ -51,4 +57,3 @@ class IngestionService:
             self.repository.update_document(document_id, status="failed", error_message=str(exc))
             raise
         return self.repository.get_document(document_id) or {"id": document_id, "status": "ready"}
-

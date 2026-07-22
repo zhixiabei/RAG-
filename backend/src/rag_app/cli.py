@@ -11,10 +11,8 @@ if __package__ in {None, ""}:
     __package__ = "rag_app"
 
 from .config import Settings
+from .infrastructure.parsing.document_parser import SUPPORTED_SUFFIXES
 from .main import build_services, initialize_services
-
-
-SUPPORTED_SUFFIXES = {".pdf", ".docx", ".md", ".markdown", ".txt", ".html", ".htm"}
 
 
 def import_folder(knowledge_base_id: str, folder: Path) -> int:
