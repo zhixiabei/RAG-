@@ -206,7 +206,7 @@ async function send() {
             </div>
           </div>
         </article>
-        <div v-if="sending" class="typing"><span /><span /><span />正在检索和组织答案</div>
+        <div v-if="sending" class="typing"><span /><span /><span />正在判断和组织答案</div>
       </div>
       <div class="chat-composer">
         <textarea v-model="question" rows="3" placeholder="输入你的问题" :disabled="sending || loadingMessages" @keydown.enter.exact.prevent="send" />

@@ -14,7 +14,7 @@
 | 开发环境 | 本机 Docker Compose + Ollama |
 | 生产环境 | 公司内网服务器 |
 | 公网依赖 | 运行时禁止连接公网 |
-| Agent | MVP 不引入，采用固定 RAG 流程 |
+| Agent | 采用受控的三阶段 Agent 流程，不开放任意工具调用 |
 | 权限 | 暂不实现细粒度权限，但预留数据字段和过滤接口 |
 
 ## 2. 目标与边界
@@ -106,21 +106,23 @@ Frontend -> Backend API -> PostgreSQL / MinIO / Qdrant / Ollama
 
 前端 MVP 使用普通 JSON 请求和任务状态轮询；后续可以使用 SSE 推送导入进度和流式回答。前端静态资源不引用公网 CDN、字体或第三方脚本。
 
-## 4. 固定 RAG 与 Agent 的边界
+## 4. 受控 Agent RAG 的边界
 
-MVP 使用固定 RAG，不需要 Agent：
+问答使用三个职责单一、顺序固定的 Agent：
+
+三个 Agent 分别位于项目根目录 `agent/` 下的独立文件中。后端 `RagService` 只负责顺序编排和消息持久化，模型网关只负责通用文本生成与 embedding，不保存 Agent prompt。
 
 ```text
 用户问题
-  -> 问题 embedding
-  -> Qdrant 召回
-  -> 元数据过滤
-  -> 上下文组装
-  -> Ollama LLM
+  -> RetrievalDecisionAgent（判断是否需要新知识）
+  -> KnowledgeRetrievalAgent（按需执行 embedding 与 Qdrant 召回）
+  -> AnswerAgent（基于上下文和历史生成唯一的用户输出）
   -> 答案 + 引用
 ```
 
-Agent 只有在需要自主选择工具或执行多步任务时才引入，例如同时查询知识库、数据库、工单系统并根据结果决定下一步。未来可以在 RAG Service 之上增加 Agent Orchestrator，但不能用 Agent 替代基础检索链路。
+`RagService` 是确定性编排器，Agent 不能任意选择工具或改变执行顺序。检索决策异常时默认执行检索；无检索结果且无可用历史时直接返回信息不足，避免无依据生成。API 返回 `agent_trace`，记录决策、检索状态和最终输出状态。
+
+当前不增加独立的查询改写、重排或答案评审 Agent。查询改写适合在多轮指代检索效果不足时引入；重排适合候选片段增多后引入；答案评审会额外增加一次模型调用，应在有离线评测证明收益后再启用。基础检索链路始终由应用控制，不能交给模型任意调用。
 
 ## 5. 数据归属与标识
 

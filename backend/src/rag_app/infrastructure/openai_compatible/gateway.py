@@ -47,6 +47,38 @@ class OpenAICompatibleGateway:
             for model in self.models
         ]
 
+    def complete(
+        self,
+        messages: list[dict[str, str]],
+        model: str | None = None,
+        temperature: float = 0.1,
+        max_tokens: int | None = None,
+        reasoning: bool | None = None,
+    ) -> str:
+        selected_model = model or self.chat_model
+        if selected_model not in self.models:
+            raise RuntimeError(f"远程聊天模型未配置: {selected_model}")
+        payload = {
+            "model": selected_model,
+            "messages": messages,
+            "stream": False,
+            "temperature": temperature,
+        }
+        if max_tokens is not None:
+            payload["max_tokens"] = max_tokens
+        response = httpx.post(
+            f"{self.base_url}/chat/completions",
+            headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"},
+            json=payload,
+            timeout=180,
+        )
+        response.raise_for_status()
+        choices = response.json().get("choices") or []
+        output = choices[0].get("message", {}).get("content", "").strip() if choices else ""
+        if not output:
+            raise RuntimeError(f"{self.provider_name} 未返回文本")
+        return output
+
     def embed(self, texts: list[str]) -> list[list[float]]:
         result: list[list[float]] = []
         batch_size = 32
@@ -65,32 +97,3 @@ class OpenAICompatibleGateway:
                 raise RuntimeError(f"{self.embedding_provider_name} 未返回完整 embedding")
             result.extend(embeddings)
         return result
-
-    def answer(self, question: str, context: str, history: list[dict], model: str | None = None) -> str:
-        model = model or self.chat_model
-        if model not in self.models:
-            raise RuntimeError(f"远程聊天模型未配置: {model}")
-        messages = [
-            {
-                "role": "system",
-                "content": "你是知识库问答助手，只能依据检索上下文和此前对话中已有的知识库信息回答；信息不足时明确说明，不得编造。",
-            }
-        ]
-        messages.extend(
-            {"role": item["role"], "content": item["content"]}
-            for item in history
-            if item.get("role") in {"user", "assistant"} and item.get("content")
-        )
-        messages.append({"role": "user", "content": f"当前问题：{question}\n\n本轮检索上下文：\n{context}"})
-        response = httpx.post(
-            f"{self.base_url}/chat/completions",
-            headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"},
-            json={"model": model, "messages": messages, "stream": False, "temperature": 0.1},
-            timeout=180,
-        )
-        response.raise_for_status()
-        choices = response.json().get("choices") or []
-        answer = choices[0].get("message", {}).get("content", "").strip() if choices else ""
-        if not answer:
-            raise RuntimeError(f"{self.provider_name} 未返回答案")
-        return answer

@@ -7,9 +7,13 @@
 ## 目录职责
 
 ```text
+agent/
+  retrieval_decision_agent.py  判断本轮是否需要检索
+  knowledge_retrieval_agent.py 执行知识库向量检索
+  answer_agent.py              生成唯一的最终回答
 backend/src/rag_app/
   api/              HTTP 路由和请求模型
-  application/      入库与问答用例编排
+  application/      入库用例与 Agent 流程编排
   domain/           领域模型和端口接口
   infrastructure/  PostgreSQL、MinIO、Qdrant、Ollama、解析器实现
   config.py         环境配置

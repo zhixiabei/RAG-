@@ -42,5 +42,12 @@ class ModelGateway(Protocol):
     embedding_model: str
 
     def list_chat_models(self) -> list[dict[str, Any]]: ...
+    def complete(
+        self,
+        messages: list[dict[str, str]],
+        model: str | None = None,
+        temperature: float = 0.1,
+        max_tokens: int | None = None,
+        reasoning: bool | None = None,
+    ) -> str: ...
     def embed(self, texts: list[str]) -> list[list[float]]: ...
-    def answer(self, question: str, context: str, history: list[dict[str, Any]], model: str | None = None) -> str: ...

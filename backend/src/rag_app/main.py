@@ -4,6 +4,10 @@ import logging
 from pathlib import Path
 import sys
 
+project_root = Path(__file__).resolve().parents[3]
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
+
 if __package__ in {None, ""}:
     source_root = Path(__file__).resolve().parents[1]
     if str(source_root) not in sys.path:
@@ -13,6 +17,7 @@ if __package__ in {None, ""}:
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from agent import AnswerAgent, KnowledgeRetrievalAgent, RetrievalDecisionAgent
 from .api.routes import router
 from .application.ingestion_service import IngestionService
 from .application.rag_service import RagService
@@ -65,6 +70,14 @@ def build_services(settings: Settings) -> Services:
         )
     else:
         raise ValueError("MODEL_MODE 只能是 local 或 remote")
+    decision_agent = RetrievalDecisionAgent(models)
+    retrieval_agent = KnowledgeRetrievalAgent(
+        vectors,
+        models,
+        settings.rag_retrieval_top_k,
+        settings.rag_context_top_k,
+    )
+    answer_agent = AnswerAgent(models)
     return Services(
         settings=settings,
         repository=repository,
@@ -72,7 +85,7 @@ def build_services(settings: Settings) -> Services:
         vectors=vectors,
         models=models,
         ingestion=IngestionService(repository, objects, vectors, DocumentParser(), models),
-        rag=RagService(repository, vectors, models, settings.rag_retrieval_top_k, settings.rag_context_top_k),
+        rag=RagService(repository, decision_agent, retrieval_agent, answer_agent),
     )
 
 
