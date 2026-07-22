@@ -47,6 +47,7 @@ class OllamaGateway:
         temperature: float = 0.1,
         max_tokens: int | None = None,
         reasoning: bool | None = None,
+        response_schema: dict | None = None,
     ) -> str:
         options = {"temperature": temperature}
         if max_tokens is not None:
@@ -59,6 +60,8 @@ class OllamaGateway:
         }
         if reasoning is not None:
             payload["think"] = reasoning
+        if response_schema is not None:
+            payload["format"] = response_schema
         response = httpx.post(
             f"{self.base_url}/api/chat",
             json=payload,

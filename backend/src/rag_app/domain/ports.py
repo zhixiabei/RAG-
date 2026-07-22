@@ -49,5 +49,6 @@ class ModelGateway(Protocol):
         temperature: float = 0.1,
         max_tokens: int | None = None,
         reasoning: bool | None = None,
+        response_schema: dict[str, Any] | None = None,
     ) -> str: ...
     def embed(self, texts: list[str]) -> list[list[float]]: ...

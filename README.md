@@ -10,6 +10,7 @@
 agent/
   retrieval_decision_agent.py  判断本轮是否需要检索
   knowledge_retrieval_agent.py 执行知识库向量检索
+  relevance_grading_agent.py   评估候选片段能否回答问题并按阈值过滤
   answer_agent.py              生成唯一的最终回答
 backend/src/rag_app/
   api/              HTTP 路由和请求模型
@@ -92,6 +93,8 @@ QDRANT_COLLECTION=rag_chunks_remote_embedding
 DeepSeek 官方 API 不提供 embedding 接口，所以必须配置一个支持 OpenAI 兼容 `/embeddings` 的远程服务。若同一个平台同时提供聊天和 embedding，可将两组 Base URL 和 API Key 配成相同值。
 
 切换 embedding 模型后需要新建知识库并重新导入文档，同时使用新的 `QDRANT_COLLECTION`；系统会阻止用不同 embedding 模型查询旧索引。问答输入框下方的模型菜单用于切换当前模式内配置的聊天模型。
+
+检索后会由相关性评分 Agent 对候选片段给出 `0~1` 分数。默认只把分数不低于 `0.65` 的片段交给回答 Agent，可通过 `RAG_RELEVANCE_THRESHOLD` 调整；若全部候选均低于阈值，系统直接返回“知识库中无相关内容”。
 
 ## 一键启动前后端
 

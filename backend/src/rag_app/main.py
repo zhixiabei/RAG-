@@ -17,7 +17,7 @@ if __package__ in {None, ""}:
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from agent import AnswerAgent, KnowledgeRetrievalAgent, RetrievalDecisionAgent
+from agent import AnswerAgent, KnowledgeRetrievalAgent, RelevanceGradingAgent, RetrievalDecisionAgent
 from .api.routes import router
 from .application.ingestion_service import IngestionService
 from .application.rag_service import RagService
@@ -77,6 +77,7 @@ def build_services(settings: Settings) -> Services:
         settings.rag_retrieval_top_k,
         settings.rag_context_top_k,
     )
+    relevance_agent = RelevanceGradingAgent(models, settings.rag_relevance_threshold)
     answer_agent = AnswerAgent(models)
     return Services(
         settings=settings,
@@ -85,7 +86,7 @@ def build_services(settings: Settings) -> Services:
         vectors=vectors,
         models=models,
         ingestion=IngestionService(repository, objects, vectors, DocumentParser(), models),
-        rag=RagService(repository, decision_agent, retrieval_agent, answer_agent),
+        rag=RagService(repository, decision_agent, retrieval_agent, relevance_agent, answer_agent),
     )
 
 

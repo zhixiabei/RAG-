@@ -35,3 +35,4 @@ class Settings(BaseSettings):
     remote_embedding_model: str = ""
     rag_retrieval_top_k: int = 20
     rag_context_top_k: int = 8
+    rag_relevance_threshold: float = 0.65

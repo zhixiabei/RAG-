@@ -54,6 +54,7 @@ class OpenAICompatibleGateway:
         temperature: float = 0.1,
         max_tokens: int | None = None,
         reasoning: bool | None = None,
+        response_schema: dict | None = None,
     ) -> str:
         selected_model = model or self.chat_model
         if selected_model not in self.models:
@@ -66,12 +67,23 @@ class OpenAICompatibleGateway:
         }
         if max_tokens is not None:
             payload["max_tokens"] = max_tokens
+        if response_schema is not None:
+            payload["response_format"] = {"type": "json_object"}
         response = httpx.post(
             f"{self.base_url}/chat/completions",
             headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"},
             json=payload,
             timeout=180,
         )
+        if response_schema is not None and response.status_code in {400, 422}:
+            # Some OpenAI-compatible providers do not implement response_format.
+            payload.pop("response_format", None)
+            response = httpx.post(
+                f"{self.base_url}/chat/completions",
+                headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"},
+                json=payload,
+                timeout=180,
+            )
         response.raise_for_status()
         choices = response.json().get("choices") or []
         output = choices[0].get("message", {}).get("content", "").strip() if choices else ""

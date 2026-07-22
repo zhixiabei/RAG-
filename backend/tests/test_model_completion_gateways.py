@@ -23,6 +23,18 @@ class ModelCompletionGatewayTest(unittest.TestCase):
         self.assertFalse(payload["think"])
         response.raise_for_status.assert_called_once()
 
+    @patch("rag_app.infrastructure.ollama.gateway.httpx.post")
+    def test_ollama_maps_response_schema(self, post):
+        response = Mock()
+        response.json.return_value = {"message": {"content": '{"decision":"SKIP"}'}}
+        post.return_value = response
+        gateway = OllamaGateway("http://ollama", "qwen", "embed")
+        schema = {"type": "object", "required": ["decision"]}
+
+        gateway.complete([], response_schema=schema)
+
+        self.assertEqual(post.call_args.kwargs["json"]["format"], schema)
+
     @patch("rag_app.infrastructure.openai_compatible.gateway.httpx.post")
     def test_openai_compatible_maps_completion_options(self, post):
         response = Mock()
@@ -49,6 +61,41 @@ class ModelCompletionGatewayTest(unittest.TestCase):
         self.assertEqual(payload["temperature"], 0)
         self.assertEqual(payload["max_tokens"], 8)
         response.raise_for_status.assert_called_once()
+
+    @patch("rag_app.infrastructure.openai_compatible.gateway.httpx.post")
+    def test_openai_compatible_requests_json_for_response_schema(self, post):
+        response = Mock()
+        response.json.return_value = {"choices": [{"message": {"content": '{"decision":"SKIP"}'}}]}
+        post.return_value = response
+        gateway = OpenAICompatibleGateway(
+            "Provider", "https://chat.example/v1", "chat-key", ["chat-model"], "chat-model",
+            "EmbeddingProvider", "https://embed.example/v1", "embed-key", "embed-model",
+        )
+
+        gateway.complete([], response_schema={"type": "object"})
+
+        self.assertEqual(
+            post.call_args.kwargs["json"]["response_format"],
+            {"type": "json_object"},
+        )
+
+    @patch("rag_app.infrastructure.openai_compatible.gateway.httpx.post")
+    def test_openai_compatible_retries_when_json_mode_is_unsupported(self, post):
+        unsupported = Mock(status_code=400)
+        success = Mock(status_code=200)
+        success.json.return_value = {"choices": [{"message": {"content": '{"decision":"SKIP"}'}}]}
+        post.side_effect = [unsupported, success]
+        gateway = OpenAICompatibleGateway(
+            "Provider", "https://chat.example/v1", "chat-key", ["chat-model"], "chat-model",
+            "EmbeddingProvider", "https://embed.example/v1", "embed-key", "embed-model",
+        )
+
+        result = gateway.complete([], response_schema={"type": "object"})
+
+        self.assertEqual(result, '{"decision":"SKIP"}')
+        self.assertEqual(post.call_count, 2)
+        self.assertNotIn("response_format", post.call_args.kwargs["json"])
+        success.raise_for_status.assert_called_once()
 
 
 if __name__ == "__main__":

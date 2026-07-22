@@ -1,6 +1,8 @@
 <script setup>
 import { nextTick, ref, watch } from 'vue'
+import DOMPurify from 'dompurify'
 import { Bot, BrainCircuit, MessageSquareText, Plus, Send, UserRound } from 'lucide-vue-next'
+import { marked } from 'marked'
 import {
   askKnowledgeBase,
   createConversation,
@@ -23,6 +25,10 @@ const error = ref('')
 const transcript = ref(null)
 let conversationRequestId = 0
 let messageRequestId = 0
+
+function renderMarkdown(content) {
+  return DOMPurify.sanitize(marked.parse(content || '', { async: false, breaks: true, gfm: true }))
+}
 
 async function scrollToBottom(behavior = 'auto') {
   await nextTick()
@@ -197,11 +203,12 @@ async function send() {
           <div class="message-avatar"><UserRound v-if="message.role === 'user'" :size="16" /><Bot v-else :size="16" /></div>
           <div class="message-content">
             <div class="message-label">{{ message.role === 'user' ? '你' : '知识库助手' }}</div>
-            <div class="message-text">{{ message.content }}</div>
+            <div v-if="message.role === 'assistant'" class="message-text markdown-body" v-html="renderMarkdown(message.content)" />
+            <div v-else class="message-text">{{ message.content }}</div>
             <div v-if="message.citations?.length" class="citations">
               <span class="citation-label">引用</span>
               <span v-for="citation in message.citations" :key="citation.chunk_id" class="citation">
-                {{ citation.title }}<span v-if="citation.page_number"> · 第 {{ citation.page_number }} 页</span>
+                {{ citation.title }}<span v-if="citation.page_number"> · 第 {{ citation.page_number }} 页</span><span v-if="citation.relevance_score != null"> · 相关度 {{ Math.round(citation.relevance_score * 100) }}%</span>
               </span>
             </div>
           </div>

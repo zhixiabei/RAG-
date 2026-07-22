@@ -13,3 +13,4 @@ python-pptx>=1.0,<2
 openpyxl>=3.1,<4
 xlrd>=2.0,<3
 pywin32>=306; sys_platform == "win32"
+markdown==3.10.2
