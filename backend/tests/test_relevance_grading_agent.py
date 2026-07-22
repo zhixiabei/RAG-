@@ -20,15 +20,22 @@ class RelevanceGradingAgentTest(unittest.TestCase):
             SearchHit("chunk-1", "doc-1", "kb-1", "制度.pdf", "报销上限为 500 元", 0.91),
             SearchHit("chunk-2", "doc-2", "kb-1", "通讯录.pdf", "张三的电话", 0.88),
         ]
-        models = FakeModels('{"items":[{"chunk_id":"chunk-1","score":0.92},{"chunk_id":"chunk-2","score":0.12}]}')
+        models = FakeModels('{"items":[{"chunk_id":"c1","score":0.92},{"chunk_id":"c2","score":0.12}]}')
 
-        result = RelevanceGradingAgent(models, threshold=0.65).run("报销上限是多少？", hits)
+        result = RelevanceGradingAgent(models, threshold=0.65).run(
+            "总结知识点",
+            hits,
+            "报销制度 核心规则",
+        )
 
         self.assertEqual([hit.chunk_id for hit in result.relevant_hits], ["chunk-1"])
         self.assertEqual(result.score_for("chunk-1"), 0.92)
         self.assertEqual(result.score_for("chunk-2"), 0.12)
-        self.assertEqual(models.calls[0][2:5], (0, 256, False))
+        self.assertEqual(models.calls[0][2:5], (0, None, False))
         self.assertEqual(models.calls[0][5]["required"], ["items"])
+        self.assertIn('"resolved_search_query": "报销制度 核心规则"', models.calls[0][0][-1]["content"])
+        self.assertIn('"chunk_id": "c1"', models.calls[0][0][-1]["content"])
+        self.assertNotIn('"chunk_id": "chunk-1"', models.calls[0][0][-1]["content"])
 
     def test_invalid_output_fails_closed(self):
         hit = SearchHit("chunk-1", "doc-1", "kb-1", "制度.pdf", "内容", 0.91)
@@ -37,6 +44,19 @@ class RelevanceGradingAgentTest(unittest.TestCase):
 
         self.assertEqual(result.relevant_hits, ())
         self.assertEqual(result.score_for("chunk-1"), 0.0)
+
+    def test_truncated_json_preserves_complete_scores(self):
+        hits = [
+            SearchHit("chunk-1", "doc-1", "kb-1", "课程.pdf", "知识点一", 0.91),
+            SearchHit("chunk-2", "doc-1", "kb-1", "课程.pdf", "知识点二", 0.88),
+        ]
+        output = '{"items":[{"chunk_id":"c1","score":0.9},{"chunk_id":"c2"'
+
+        result = RelevanceGradingAgent(FakeModels(output)).run("总结课程", hits)
+
+        self.assertEqual([hit.chunk_id for hit in result.relevant_hits], ["chunk-1"])
+        self.assertEqual(result.score_for("chunk-1"), 0.9)
+        self.assertEqual(result.score_for("chunk-2"), 0.0)
 
     def test_empty_candidates_do_not_call_model(self):
         models = FakeModels("unused")

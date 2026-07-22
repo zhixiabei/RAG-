@@ -3,6 +3,7 @@ import unittest
 from agent.retrieval_decision_agent import (
     RetrievalDecisionAgent,
     retrieval_decision_messages,
+    retrieval_search_query,
     should_retrieve,
 )
 
@@ -41,14 +42,32 @@ class RetrievalDecisionAgentTest(unittest.TestCase):
         self.assertIn("总结一下", messages[1]["content"])
 
     def test_agent_uses_bounded_deterministic_completion(self):
-        models = FakeModels('{"decision":"SKIP"}')
+        models = FakeModels('{"decision":"SKIP","search_query":""}')
 
         decision = RetrievalDecisionAgent(models).run("谢谢", [])
 
         self.assertFalse(decision.should_retrieve)
         self.assertEqual(decision.outcome, "skip")
-        self.assertEqual(models.calls[0][2:5], (0, 32, False))
-        self.assertEqual(models.calls[0][5]["required"], ["decision"])
+        self.assertEqual(models.calls[0][2:5], (0, None, False))
+        self.assertEqual(models.calls[0][5]["required"], ["decision", "search_query"])
+
+    def test_uses_standalone_search_query_from_model(self):
+        output = '{"decision":"RETRIEVE","search_query":"时变电磁场 核心概念 基本规律"}'
+        models = FakeModels(output)
+
+        decision = RetrievalDecisionAgent(models).run(
+            "总结知识点",
+            [{"role": "user", "content": "总结时变电磁场中的知识点"}],
+        )
+
+        self.assertTrue(decision.should_retrieve)
+        self.assertEqual(decision.search_query, "时变电磁场 核心概念 基本规律")
+
+    def test_missing_search_query_falls_back_to_current_question(self):
+        self.assertEqual(
+            retrieval_search_query('{"decision":"RETRIEVE"}', "报销制度是什么？"),
+            "报销制度是什么？",
+        )
 
     def test_model_identity_question_skips_retrieval_without_completion(self):
         models = FakeModels('{"decision":"RETRIEVE"}')

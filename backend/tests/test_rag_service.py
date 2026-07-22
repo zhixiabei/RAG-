@@ -42,16 +42,20 @@ class FakeModelGateway:
 
     def complete(self, messages, model=None, temperature=0.1, max_tokens=None, reasoning=None, response_schema=None):
         self.completion_calls.append((messages, model, temperature, max_tokens, reasoning, response_schema))
-        if max_tokens == 32:
+        if response_schema and response_schema.get("required") == ["decision", "search_query"]:
             decision = "RETRIEVE" if self.retrieval_needed else "SKIP"
-            return f'{{"decision":"{decision}"}}'
+            query = "时变电磁场 核心概念 基本规律" if self.retrieval_needed else ""
+            return f'{{"decision":"{decision}","search_query":"{query}"}}'
         if response_schema and response_schema.get("required") == ["items"]:
             import json
 
             candidates = json.loads(messages[-1]["content"])["candidates"]
             items = [
-                {"chunk_id": item["chunk_id"], "score": self.relevance_scores.get(item["chunk_id"], 0.9)}
-                for item in candidates
+                {
+                    "chunk_id": item["chunk_id"],
+                    "score": self.relevance_scores.get(f"chunk-{index}", 0.9),
+                }
+                for index, item in enumerate(candidates, 1)
             ]
             return json.dumps({"items": items})
         return "测试回答"
@@ -100,9 +104,10 @@ class RagServiceTest(unittest.TestCase):
         self.assertTrue(result["retrieval_used"])
         self.assertEqual(result["retrieved_count"], 1)
         self.assertEqual(result["citations"][0]["chunk_id"], "chunk-1")
-        self.assertEqual(models.embed_calls, [["报销制度是什么？"]])
+        self.assertEqual(models.embed_calls, [["时变电磁场 核心概念 基本规律"]])
         self.assertEqual(len(vectors.search_calls), 1)
         self.assertEqual(result["agent_trace"][0]["outcome"], "retrieve")
+        self.assertEqual(result["agent_trace"][0]["search_query"], "时变电磁场 核心概念 基本规律")
         self.assertEqual(result["agent_trace"][1]["retrieved_count"], 1)
         self.assertEqual(result["agent_trace"][2]["relevant_count"], 1)
         self.assertEqual(result["citations"][0]["relevance_score"], 0.9)

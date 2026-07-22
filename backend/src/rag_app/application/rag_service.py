@@ -29,8 +29,9 @@ class RagService:
         hits = []
         relevance_result = None
         if retrieval_used:
-            retrieved_hits = self.retrieval_agent.run(knowledge_base, question)
-            relevance_result = self.relevance_agent.run(question, retrieved_hits)
+            search_query = decision.search_query or question
+            retrieved_hits = self.retrieval_agent.run(knowledge_base, search_query)
+            relevance_result = self.relevance_agent.run(question, retrieved_hits, search_query)
             hits = list(relevance_result.relevant_hits)
         citations = [
             Citation(
@@ -58,6 +59,7 @@ class RagService:
                     "agent": self.decision_agent.name,
                     "status": "completed",
                     "outcome": decision.outcome,
+                    "search_query": decision.search_query if retrieval_used else None,
                 },
                 {
                     "agent": self.retrieval_agent.name,
