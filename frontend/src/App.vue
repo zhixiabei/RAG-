@@ -1,6 +1,6 @@
 <script setup>
-import { onMounted, ref } from 'vue'
-import { FileStack, MessageSquareText, Plus, Search } from 'lucide-vue-next'
+import { computed, onMounted, ref, watch } from 'vue'
+import { FileStack, MessageSquareText, Plus, Search, X } from 'lucide-vue-next'
 import KnowledgeSidebar from './components/KnowledgeSidebar.vue'
 import CreateKnowledgeBaseDialog from './components/CreateKnowledgeBaseDialog.vue'
 import DocumentList from './components/DocumentList.vue'
@@ -12,8 +12,33 @@ const store = useKnowledgeBaseStore()
 const activeTab = ref('documents')
 const createDialogOpen = ref(false)
 const creating = ref(false)
+const documentQuery = ref('')
+
+const filteredDocuments = computed(() => {
+  const terms = documentQuery.value
+    .trim()
+    .toLocaleLowerCase('zh-CN')
+    .split(/\s+/)
+    .filter(Boolean)
+
+  if (!terms.length) return store.documents
+
+  return store.documents.filter((document) => {
+    const searchableText = `${document.title || ''} ${document.file_name || ''}`.toLocaleLowerCase('zh-CN')
+    return terms.every((term) => searchableText.includes(term))
+  })
+})
+
+const documentCountText = computed(() => {
+  if (!documentQuery.value.trim()) return `${store.documents.length} 个文件`
+  return `${filteredDocuments.value.length} / ${store.documents.length} 个文件`
+})
 
 onMounted(() => store.load())
+
+watch(() => store.selectedId, () => {
+  documentQuery.value = ''
+})
 
 async function createKnowledgeBase(name, description) {
   creating.value = true
@@ -64,10 +89,20 @@ async function refreshDocuments() {
         <section v-if="activeTab === 'documents'" class="document-view">
           <ImportPanel :kb-id="store.selected.id" @completed="refreshDocuments" />
           <div class="section-heading">
-            <div><h2>文档</h2><span>{{ store.documents.length }} 个文件</span></div>
-            <div class="table-search"><Search :size="15" /><input placeholder="搜索文档" /></div>
+            <div><h2>文档</h2><span>{{ documentCountText }}</span></div>
+            <label class="table-search">
+              <Search :size="15" />
+              <input v-model="documentQuery" type="search" placeholder="搜索文档" aria-label="按标题或文件名搜索文档" />
+              <button v-if="documentQuery" type="button" title="清空搜索" aria-label="清空搜索" @click="documentQuery = ''">
+                <X :size="14" />
+              </button>
+            </label>
           </div>
-          <DocumentList :documents="store.documents" :loading="store.loading" />
+          <DocumentList
+            :documents="filteredDocuments"
+            :loading="store.loading"
+            :empty-message="documentQuery.trim() ? `没有找到包含“${documentQuery.trim()}”的文档` : ''"
+          />
         </section>
 
         <ChatWorkspace v-else :key="store.selected.id" :kb-id="store.selected.id" />

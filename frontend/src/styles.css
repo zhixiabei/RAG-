@@ -61,8 +61,12 @@ h1, h2, h3, p { margin: 0; }
 .section-heading > div:first-child { display: flex; align-items: baseline; gap: 10px; }
 .section-heading h2 { color: #313b43; font-size: 16px; }
 .section-heading span { color: #9aa3a8; font-size: 12px; }
-.table-search { display: flex; align-items: center; gap: 7px; width: 200px; padding: 7px 10px; border: 1px solid #dfe4e7; border-radius: 6px; color: #9aa3a8; background: #fff; }
-.table-search input { width: 100%; border: 0; outline: 0; color: #33404a; background: transparent; font-size: 12px; }
+.table-search { display: flex; align-items: center; gap: 7px; width: 220px; padding: 7px 8px 7px 10px; border: 1px solid #dfe4e7; border-radius: 6px; color: #9aa3a8; background: #fff; }
+.table-search:focus-within { border-color: #6a9b9b; box-shadow: 0 0 0 3px #e6f0ef; }
+.table-search input { width: 100%; min-width: 0; border: 0; outline: 0; color: #33404a; background: transparent; font-size: 12px; }
+.table-search input::-webkit-search-cancel-button { display: none; }
+.table-search button { display: grid; place-items: center; width: 20px; height: 20px; flex: 0 0 20px; padding: 0; border-radius: 4px; color: #8d989e; background: transparent; }
+.table-search button:hover { color: #35434a; background: #eef1f2; }
 .table-wrap { overflow: hidden; border: 1px solid #dfe4e7; border-radius: 8px; background: #fff; }
 .document-table { width: 100%; border-collapse: collapse; text-align: left; }
 .document-table th { padding: 11px 16px; border-bottom: 1px solid #e5e8ea; color: #90999e; background: #fafbfb; font-size: 11px; font-weight: 700; }

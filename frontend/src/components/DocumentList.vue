@@ -4,6 +4,7 @@ import { FileText, RefreshCw } from 'lucide-vue-next'
 defineProps({
   documents: { type: Array, default: () => [] },
   loading: Boolean,
+  emptyMessage: { type: String, default: '' },
 })
 
 function statusText(status) {
@@ -32,7 +33,7 @@ function formatDate(value) {
           <td colspan="4" class="table-state"><RefreshCw :size="17" class="spinning" />正在加载文档</td>
         </tr>
         <tr v-else-if="!documents.length">
-          <td colspan="4" class="table-state">还没有文档，先导入一个文件夹</td>
+          <td colspan="4" class="table-state">{{ emptyMessage || '还没有文档，先导入一个文件夹' }}</td>
         </tr>
         <tr v-for="document in documents" :key="document.id">
           <td>
