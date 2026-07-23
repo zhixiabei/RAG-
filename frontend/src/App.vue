@@ -1,6 +1,6 @@
 <script setup>
 import { onMounted, ref } from 'vue'
-import { FileStack, MessageSquareText, Plus, Search, Server } from 'lucide-vue-next'
+import { FileStack, MessageSquareText, Plus, Search } from 'lucide-vue-next'
 import KnowledgeSidebar from './components/KnowledgeSidebar.vue'
 import CreateKnowledgeBaseDialog from './components/CreateKnowledgeBaseDialog.vue'
 import DocumentList from './components/DocumentList.vue'
@@ -44,7 +44,6 @@ async function refreshDocuments() {
     <main class="main-area">
       <header class="topbar">
         <div class="breadcrumb"><span>工作区</span><span class="breadcrumb-separator">/</span><strong>{{ store.selected?.name || '未选择知识库' }}</strong></div>
-        <div class="topbar-status"><span class="online-dot" />本机服务 <Server :size="15" /></div>
       </header>
 
       <template v-if="store.selected">

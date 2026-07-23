@@ -44,7 +44,5 @@ const emit = defineEmits(['select', 'create', 'refresh'])
       <Plus :size="16" />
       新建知识库
     </button>
-
-    <div class="sidebar-footer">本机开发环境 · Ollama</div>
   </aside>
 </template>
