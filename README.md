@@ -65,6 +65,8 @@ AUTH_OWNER_ID=personal
 
 知识库表使用 `owner_id` 隔离数据，文档、向量、对话和消息均通过知识库归属继承隔离。现有数据库升级时，已有知识库自动归入 `personal`；不要随意修改已经使用中的 `AUTH_OWNER_ID`。
 
+文档导入进度保存在 `documents.progress` 和 `documents.stage` 中。切换到问答界面不会中断当前上传；退出后重新登录时，文档列表会恢复后台正在处理的文件并自动刷新状态。尚未发送到后端的本地文件选择不会跨登录保存。
+
 如果当前终端位于 `frontend`，先回到项目根目录：
 
 ```powershell
