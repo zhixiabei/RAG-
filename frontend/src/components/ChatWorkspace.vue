@@ -1,9 +1,8 @@
 <script setup>
 import { nextTick, ref, watch } from 'vue'
-import DOMPurify from 'dompurify'
 import { Bot, BrainCircuit, Check, LoaderCircle, MessageSquareText, Pencil, Plus, Send, Trash2, UserRound, X } from 'lucide-vue-next'
-import { marked } from 'marked'
 import DeleteConfirmDialog from './DeleteConfirmDialog.vue'
+import { renderMarkdown } from '../utils/markdown'
 import {
   askKnowledgeBase,
   createConversation,
@@ -35,10 +34,6 @@ const deletingConversation = ref(false)
 const conversationDeleteError = ref('')
 let conversationRequestId = 0
 let messageRequestId = 0
-
-function renderMarkdown(content) {
-  return DOMPurify.sanitize(marked.parse(content || '', { async: false, breaks: true, gfm: true }))
-}
 
 async function scrollToBottom(behavior = 'auto') {
   await nextTick()

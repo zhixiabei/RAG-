@@ -44,6 +44,7 @@ class AnswerAgentTest(unittest.TestCase):
         self.assertEqual(answer, "最终回答")
         messages = models.calls[0][0]
         self.assertEqual(messages[-1], {"role": "user", "content": "上限是多少？"})
+        self.assertIn("行内数学公式必须用 $...$", messages[0]["content"])
         self.assertIn("制度.pdf", messages[-2]["content"])
         self.assertIn("报销上限为 500 元", messages[-2]["content"])
 
