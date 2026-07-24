@@ -14,6 +14,11 @@ function statusText(status) {
   return { ready: '已就绪', processing: '处理中', failed: '失败' }[status] || status
 }
 
+function progressValue(document) {
+  const value = Number(document.progress || 0)
+  return Math.min(100, Math.max(0, value))
+}
+
 function formatDate(value) {
   if (!value) return '-'
   return new Intl.DateTimeFormat('zh-CN', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
@@ -44,7 +49,14 @@ function formatDate(value) {
             <div class="document-name"><FileText :size="17" /><span>{{ document.title }}</span></div>
             <small class="document-file">{{ document.file_name }}</small>
           </td>
-          <td><span class="status" :class="`status-${document.status}`"><i />{{ statusText(document.status) }}</span></td>
+          <td>
+            <span class="status" :class="`status-${document.status}`">
+              <i />{{ statusText(document.status) }}<template v-if="document.status === 'processing'"> {{ progressValue(document) }}%</template>
+            </span>
+            <div v-if="document.status === 'processing'" class="document-progress" :aria-label="`导入进度 ${progressValue(document)}%`">
+              <span :style="{ width: `${progressValue(document)}%` }" />
+            </div>
+          </td>
           <td>{{ document.chunk_count || 0 }}</td>
           <td class="muted">{{ formatDate(document.updated_at) }}</td>
           <td class="document-actions">

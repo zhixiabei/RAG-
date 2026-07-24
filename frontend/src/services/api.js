@@ -1,7 +1,7 @@
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8080').replace(/\/$/, '')
 
 async function request(path, init) {
-  const response = await fetch(`${API_BASE_URL}${path}`, init)
+  const response = await fetch(`${API_BASE_URL}${path}`, { credentials: 'include', ...init })
   if (!response.ok) {
     let message = `请求失败（${response.status}）`
     try {
@@ -10,10 +10,31 @@ async function request(path, init) {
     } catch {
       // Keep the HTTP status when the server does not return JSON.
     }
-    throw new Error(message)
+    const error = new Error(message)
+    error.status = response.status
+    if (response.status === 401 && !path.startsWith('/api/v1/auth/')) {
+      window.dispatchEvent(new Event('rag:unauthorized'))
+    }
+    throw error
   }
   if (response.status === 204) return null
   return response.json()
+}
+
+export function login(username, password) {
+  return request('/api/v1/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password }),
+  })
+}
+
+export function logout() {
+  return request('/api/v1/auth/logout', { method: 'POST' })
+}
+
+export function getCurrentUser() {
+  return request('/api/v1/auth/me')
 }
 
 export function listKnowledgeBases() {

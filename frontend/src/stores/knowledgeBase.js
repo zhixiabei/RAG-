@@ -15,6 +15,7 @@ export const useKnowledgeBaseStore = defineStore('knowledgeBase', () => {
   const loading = ref(false)
   const error = ref('')
   const selected = computed(() => items.value.find((item) => item.id === selectedId.value) || null)
+  const hasProcessingDocuments = computed(() => documents.value.some((document) => document.status === 'processing'))
 
   async function load() {
     loading.value = true
@@ -31,7 +32,12 @@ export const useKnowledgeBaseStore = defineStore('knowledgeBase', () => {
   }
 
   async function loadDocuments(knowledgeBaseId = selectedId.value) {
-    documents.value = knowledgeBaseId ? await listDocuments(knowledgeBaseId) : []
+    if (!knowledgeBaseId) {
+      documents.value = []
+      return
+    }
+    const result = await listDocuments(knowledgeBaseId)
+    if (selectedId.value === knowledgeBaseId) documents.value = result
   }
 
   async function select(id) {
@@ -63,11 +69,20 @@ export const useKnowledgeBaseStore = defineStore('knowledgeBase', () => {
     }
   }
 
+  function reset() {
+    items.value = []
+    documents.value = []
+    selectedId.value = null
+    loading.value = false
+    error.value = ''
+  }
+
   return {
     items,
     documents,
     selectedId,
     selected,
+    hasProcessingDocuments,
     loading,
     error,
     load,
@@ -76,5 +91,6 @@ export const useKnowledgeBaseStore = defineStore('knowledgeBase', () => {
     create,
     removeKnowledgeBase,
     removeDocument,
+    reset,
   }
 })

@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 import logging
+import os
 from pathlib import Path
 import sys
 
@@ -17,7 +18,13 @@ if __package__ in {None, ""}:
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from agent import AnswerAgent, KnowledgeRetrievalAgent, RelevanceGradingAgent, RetrievalDecisionAgent
+from agent import (
+    AnswerAgent,
+    ContextCompressionAgent,
+    KnowledgeRetrievalAgent,
+    RelevanceGradingAgent,
+    RetrievalDecisionAgent,
+)
 from .api.routes import router
 from .application.deletion_service import DeletionService
 from .application.ingestion_service import IngestionService
@@ -80,6 +87,7 @@ def build_services(settings: Settings) -> Services:
         settings.rag_context_top_k,
     )
     relevance_agent = RelevanceGradingAgent(models, settings.rag_relevance_threshold)
+    compression_agent = ContextCompressionAgent(models, settings.rag_context_max_chars)
     answer_agent = AnswerAgent(models)
     return Services(
         settings=settings,
@@ -89,11 +97,16 @@ def build_services(settings: Settings) -> Services:
         models=models,
         ingestion=IngestionService(repository, objects, vectors, DocumentParser(), models),
         deletion=DeletionService(repository, objects, vectors),
-        rag=RagService(repository, decision_agent, retrieval_agent, relevance_agent, answer_agent),
+        rag=RagService(repository, decision_agent, retrieval_agent, relevance_agent, compression_agent, answer_agent),
     )
 
 
 def initialize_services(services: Services) -> None:
+    if services.settings.app_env != "local" and (
+        services.settings.auth_password == "admin"
+        or services.settings.auth_secret == "local-development-secret-change-me"
+    ):
+        raise RuntimeError("非本地环境必须配置安全的 AUTH_PASSWORD 和 AUTH_SECRET")
     checks = (
         ("PostgreSQL", services.repository.initialize),
         ("MinIO", services.objects.ensure_bucket),
@@ -128,10 +141,11 @@ async def lifespan(app: FastAPI):
 
 def create_app() -> FastAPI:
     app = FastAPI(title="RAG Knowledge Assistant", version="0.1.0", lifespan=lifespan)
+    cors_origins = os.getenv("CORS_ORIGINS", "http://127.0.0.1:5173,http://localhost:5173")
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=False,
+        allow_origins=[origin.strip() for origin in cors_origins.split(",") if origin.strip()],
+        allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
     )

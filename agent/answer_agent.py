@@ -1,6 +1,7 @@
 import json
-from typing import Any, Sequence
+from typing import Any, Mapping, Sequence
 
+from .context import format_retrieved_context
 from .contracts import ModelGateway, SearchHit
 from .query_intent import is_assistant_identity_question
 
@@ -53,15 +54,13 @@ class AnswerAgent:
         hits: Sequence[SearchHit],
         retrieval_used: bool,
         model: str | None = None,
+        context_texts: Mapping[str, str] | None = None,
     ) -> str:
         if is_assistant_identity_question(question):
             active_model = model or self.models.chat_model
             return f"我是知识库助手，当前回答使用的模型是 {active_model}。"
         if hits:
-            context = "\n\n".join(
-                f"[文档] {hit.title}\n[页码] {hit.page_number or '未知'}\n[内容] {hit.text}"
-                for hit in hits
-            )
+            context = format_retrieved_context(hits, context_texts)
         elif retrieval_used:
             return "知识库中无相关内容。"
         elif not retrieval_used:

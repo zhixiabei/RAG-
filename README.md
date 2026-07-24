@@ -50,6 +50,21 @@ python -m uvicorn rag_app.main:app --app-dir backend/src --host 127.0.0.1 --port
 
 上面的命令必须在项目根目录 `D:\startwell\RAG` 执行。`python -m uvicorn --help` 只会显示帮助，不会启动后端。
 
+## 个人登录
+
+系统提供一个由环境变量配置的个人账号。首次使用前建议在 `.env` 中设置：
+
+```dotenv
+AUTH_USERNAME=admin
+AUTH_PASSWORD=替换为强密码
+AUTH_SECRET=替换为至少32位随机字符串
+AUTH_OWNER_ID=personal
+```
+
+本地环境未配置时可使用 `admin / admin`；这组默认凭据只用于本机开发。`APP_ENV` 不是 `local` 时，后端会拒绝使用默认密码或默认签名密钥启动。登录状态保存在 HttpOnly Cookie 中，默认有效期为 7 天。
+
+知识库表使用 `owner_id` 隔离数据，文档、向量、对话和消息均通过知识库归属继承隔离。现有数据库升级时，已有知识库自动归入 `personal`；不要随意修改已经使用中的 `AUTH_OWNER_ID`。
+
 如果当前终端位于 `frontend`，先回到项目根目录：
 
 ```powershell
@@ -95,6 +110,8 @@ DeepSeek 官方 API 不提供 embedding 接口，所以必须配置一个支持 
 切换 embedding 模型后需要新建知识库并重新导入文档，同时使用新的 `QDRANT_COLLECTION`；系统会阻止用不同 embedding 模型查询旧索引。问答输入框下方的模型菜单用于切换当前模式内配置的聊天模型。
 
 检索后会由相关性评分 Agent 对候选片段给出 `0~1` 分数。`RAG_RETRIEVAL_TOP_K` 控制向量库宽召回候选数量，默认 50；`RAG_CONTEXT_TOP_K` 控制最终交给回答 Agent 的上下文数量，默认 8。默认只把分数不低于 `0.65` 的片段交给回答 Agent，可通过 `RAG_RELEVANCE_THRESHOLD` 调整；若全部候选均低于阈值，系统直接返回“知识库中无相关内容”。
+
+最终检索上下文不超过 `RAG_CONTEXT_MAX_CHARS` 时保持原文且不会增加模型调用；超过上限时，压缩 Agent 会抽取与当前问题直接相关的连续原文，并在代码侧验证摘录确实存在于来源片段中。默认上限为 `12000` 个字符，压缩失败时会使用确定性的相关窗口截取作为兜底，并始终限制最终上下文长度。
 
 ## 一键启动前后端
 

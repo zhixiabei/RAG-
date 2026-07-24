@@ -4,7 +4,8 @@ from fastapi import APIRouter, File, HTTPException, Request, Response, UploadFil
 from fastapi.responses import JSONResponse
 from uuid import uuid4
 
-from .schemas import ChatRequest, ConversationCreate, ConversationUpdate, KnowledgeBaseCreate
+from ..application.auth import SESSION_COOKIE_NAME, create_session, credentials_match, verify_session
+from .schemas import ChatRequest, ConversationCreate, ConversationUpdate, KnowledgeBaseCreate, LoginRequest
 
 router = APIRouter()
 
@@ -17,6 +18,63 @@ def services(request: Request):
             f"基础设施或模型服务未就绪，请检查 PostgreSQL、MinIO、Qdrant 和模型配置。原因: {startup_error}",
         )
     return request.app.state.services
+
+
+def current_user(request: Request) -> dict:
+    settings = request.app.state.services.settings
+    payload = verify_session(request.cookies.get(SESSION_COOKIE_NAME), settings.auth_secret)
+    if (
+        not payload
+        or payload["sub"] != settings.auth_username
+        or payload["owner_id"] != settings.auth_owner_id
+    ):
+        raise HTTPException(401, "请先登录")
+    return {"username": payload["sub"], "owner_id": payload["owner_id"]}
+
+
+def owned_knowledge_base(request: Request, knowledge_base_id: str) -> tuple[object, dict, dict]:
+    service = services(request)
+    user = current_user(request)
+    item = service.repository.get_knowledge_base(knowledge_base_id, user["owner_id"])
+    if not item:
+        raise HTTPException(404, "知识库不存在")
+    return service, user, item
+
+
+@router.post("/api/v1/auth/login")
+def login(request: Request, response: Response, payload: LoginRequest):
+    settings = request.app.state.services.settings
+    if not credentials_match(payload.username, payload.password, settings.auth_username, settings.auth_password):
+        raise HTTPException(401, "用户名或密码错误")
+    token = create_session(
+        settings.auth_username,
+        settings.auth_owner_id,
+        settings.auth_secret,
+        settings.auth_session_ttl_seconds,
+    )
+    response.set_cookie(
+        SESSION_COOKIE_NAME,
+        token,
+        max_age=settings.auth_session_ttl_seconds,
+        httponly=True,
+        secure=settings.auth_cookie_secure,
+        samesite="lax",
+        path="/",
+    )
+    return {"username": settings.auth_username}
+
+
+@router.post("/api/v1/auth/logout", status_code=204)
+def logout():
+    response = Response(status_code=204)
+    response.delete_cookie(SESSION_COOKIE_NAME, path="/")
+    return response
+
+
+@router.get("/api/v1/auth/me")
+def me(request: Request):
+    user = current_user(request)
+    return {"username": user["username"]}
 
 
 @router.get("/health")
@@ -36,31 +94,38 @@ def health(request: Request):
 
 @router.get("/api/v1/models")
 def list_models(request: Request):
+    current_user(request)
     return services(request).models.list_chat_models()
 
 
 @router.post("/api/v1/knowledge-bases")
 def create_knowledge_base(request: Request, payload: KnowledgeBaseCreate):
     service = services(request)
-    return service.repository.create_knowledge_base(str(uuid4()), payload.name, payload.description, service.models.embedding_model)
+    user = current_user(request)
+    return service.repository.create_knowledge_base(
+        str(uuid4()),
+        payload.name,
+        payload.description,
+        service.models.embedding_model,
+        user["owner_id"],
+    )
 
 
 @router.get("/api/v1/knowledge-bases")
 def list_knowledge_bases(request: Request):
-    return services(request).repository.list_knowledge_bases()
+    user = current_user(request)
+    return services(request).repository.list_knowledge_bases(user["owner_id"])
 
 
 @router.get("/api/v1/knowledge-bases/{knowledge_base_id}")
 def get_knowledge_base(request: Request, knowledge_base_id: str):
-    item = services(request).repository.get_knowledge_base(knowledge_base_id)
-    if not item:
-        raise HTTPException(404, "知识库不存在")
+    _, _, item = owned_knowledge_base(request, knowledge_base_id)
     return item
 
 
 @router.delete("/api/v1/knowledge-bases/{knowledge_base_id}", status_code=204)
 def delete_knowledge_base(request: Request, knowledge_base_id: str):
-    service = services(request)
+    service, _, _ = owned_knowledge_base(request, knowledge_base_id)
     try:
         deleted = service.deletion.delete_knowledge_base(knowledge_base_id)
     except Exception as exc:
@@ -72,17 +137,13 @@ def delete_knowledge_base(request: Request, knowledge_base_id: str):
 
 @router.get("/api/v1/knowledge-bases/{knowledge_base_id}/documents")
 def list_documents(request: Request, knowledge_base_id: str):
-    service = services(request)
-    if not service.repository.knowledge_base_exists(knowledge_base_id):
-        raise HTTPException(404, "知识库不存在")
+    service, _, _ = owned_knowledge_base(request, knowledge_base_id)
     return service.repository.list_documents(knowledge_base_id)
 
 
 @router.post("/api/v1/knowledge-bases/{knowledge_base_id}/documents")
 def upload_document(request: Request, knowledge_base_id: str, file: UploadFile = File(...)):
-    service = services(request)
-    if not service.repository.knowledge_base_exists(knowledge_base_id):
-        raise HTTPException(404, "知识库不存在")
+    service, _, _ = owned_knowledge_base(request, knowledge_base_id)
     if not file.filename:
         raise HTTPException(400, "文件名不能为空")
     if not service.ingestion.parser.supports(file.filename):
@@ -101,7 +162,7 @@ def upload_document(request: Request, knowledge_base_id: str, file: UploadFile =
 
 @router.delete("/api/v1/knowledge-bases/{knowledge_base_id}/documents/{document_id}", status_code=204)
 def delete_document(request: Request, knowledge_base_id: str, document_id: str):
-    service = services(request)
+    service, _, _ = owned_knowledge_base(request, knowledge_base_id)
     try:
         deleted = service.deletion.delete_document(knowledge_base_id, document_id)
     except Exception as exc:
@@ -113,10 +174,8 @@ def delete_document(request: Request, knowledge_base_id: str, document_id: str):
 
 @router.post("/api/v1/knowledge-bases/{knowledge_base_id}/chat")
 def chat(request: Request, knowledge_base_id: str, payload: ChatRequest):
-    service = services(request)
-    if not service.repository.knowledge_base_exists(knowledge_base_id):
-        raise HTTPException(404, "知识库不存在")
-    conversation = service.repository.get_conversation(payload.conversation_id)
+    service, user, _ = owned_knowledge_base(request, knowledge_base_id)
+    conversation = service.repository.get_conversation(payload.conversation_id, user["owner_id"])
     if not conversation or conversation["knowledge_base_id"] != knowledge_base_id:
         raise HTTPException(404, "对话不存在")
     try:
@@ -127,24 +186,21 @@ def chat(request: Request, knowledge_base_id: str, payload: ChatRequest):
 
 @router.get("/api/v1/knowledge-bases/{knowledge_base_id}/conversations")
 def list_conversations(request: Request, knowledge_base_id: str):
-    service = services(request)
-    if not service.repository.knowledge_base_exists(knowledge_base_id):
-        raise HTTPException(404, "知识库不存在")
-    return service.repository.list_conversations(knowledge_base_id)
+    service, user, _ = owned_knowledge_base(request, knowledge_base_id)
+    return service.repository.list_conversations(knowledge_base_id, user["owner_id"])
 
 
 @router.post("/api/v1/knowledge-bases/{knowledge_base_id}/conversations")
 def create_conversation(request: Request, knowledge_base_id: str, payload: ConversationCreate):
-    service = services(request)
-    if not service.repository.knowledge_base_exists(knowledge_base_id):
-        raise HTTPException(404, "知识库不存在")
+    service, _, _ = owned_knowledge_base(request, knowledge_base_id)
     return service.repository.create_conversation(str(uuid4()), knowledge_base_id, payload.title.strip())
 
 
 @router.get("/api/v1/conversations/{conversation_id}/messages")
 def list_messages(request: Request, conversation_id: str):
     service = services(request)
-    if not service.repository.get_conversation(conversation_id):
+    user = current_user(request)
+    if not service.repository.get_conversation(conversation_id, user["owner_id"]):
         raise HTTPException(404, "对话不存在")
     return service.repository.list_messages(conversation_id)
 
@@ -152,7 +208,8 @@ def list_messages(request: Request, conversation_id: str):
 @router.patch("/api/v1/conversations/{conversation_id}")
 def update_conversation(request: Request, conversation_id: str, payload: ConversationUpdate):
     service = services(request)
-    if not service.repository.get_conversation(conversation_id):
+    user = current_user(request)
+    if not service.repository.get_conversation(conversation_id, user["owner_id"]):
         raise HTTPException(404, "对话不存在")
     return service.repository.update_conversation_title(conversation_id, payload.title)
 
@@ -160,7 +217,8 @@ def update_conversation(request: Request, conversation_id: str, payload: Convers
 @router.delete("/api/v1/conversations/{conversation_id}", status_code=204)
 def delete_conversation(request: Request, conversation_id: str):
     service = services(request)
-    if not service.repository.get_conversation(conversation_id):
+    user = current_user(request)
+    if not service.repository.get_conversation(conversation_id, user["owner_id"]):
         raise HTTPException(404, "对话不存在")
     service.repository.delete_conversation(conversation_id)
     return Response(status_code=204)

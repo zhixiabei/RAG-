@@ -1,6 +1,13 @@
 import unittest
+import json
 
-from agent import AnswerAgent, KnowledgeRetrievalAgent, RelevanceGradingAgent, RetrievalDecisionAgent
+from agent import (
+    AnswerAgent,
+    ContextCompressionAgent,
+    KnowledgeRetrievalAgent,
+    RelevanceGradingAgent,
+    RetrievalDecisionAgent,
+)
 from rag_app.application.rag_service import RagService
 from rag_app.domain.models import SearchHit
 
@@ -47,9 +54,18 @@ class FakeModelGateway:
             query = "时变电磁场 核心概念 基本规律" if self.retrieval_needed else ""
             return f'{{"decision":"{decision}","search_query":"{query}"}}'
         if response_schema and response_schema.get("required") == ["items"]:
-            import json
-
             candidates = json.loads(messages[-1]["content"])["candidates"]
+            item_properties = response_schema["properties"]["items"]["items"]["properties"]
+            if "excerpts" in item_properties:
+                return json.dumps(
+                    {
+                        "items": [
+                            {"chunk_id": item["chunk_id"], "excerpts": [item["content"][:80]]}
+                            for item in candidates
+                        ]
+                    },
+                    ensure_ascii=False,
+                )
             items = [
                 {
                     "chunk_id": item["chunk_id"],
@@ -66,12 +82,13 @@ class FakeModelGateway:
 
 class RagServiceTest(unittest.TestCase):
     @staticmethod
-    def build_service(repository, vectors, models):
+    def build_service(repository, vectors, models, context_max_chars=12_000):
         return RagService(
             repository,
             RetrievalDecisionAgent(models),
             KnowledgeRetrievalAgent(vectors, models, retrieval_top_k=20, context_top_k=8),
             RelevanceGradingAgent(models, threshold=0.65),
+            ContextCompressionAgent(models, max_chars=context_max_chars),
             AnswerAgent(models),
         )
 
@@ -110,6 +127,7 @@ class RagServiceTest(unittest.TestCase):
         self.assertEqual(result["agent_trace"][0]["search_query"], "时变电磁场 核心概念 基本规律")
         self.assertEqual(result["agent_trace"][1]["retrieved_count"], 1)
         self.assertEqual(result["agent_trace"][2]["relevant_count"], 1)
+        self.assertFalse(result["agent_trace"][3]["triggered"])
         self.assertEqual(result["citations"][0]["relevance_score"], 0.9)
         self.assertEqual(len(models.completion_calls), 3)
 
@@ -142,6 +160,31 @@ class RagServiceTest(unittest.TestCase):
         self.assertEqual(result["citations"], [])
         self.assertEqual(models.completion_calls, [])
         self.assertEqual(vectors.search_calls, [])
+
+    def test_compresses_only_when_answer_context_exceeds_budget(self):
+        hit = SearchHit(
+            "chunk-1",
+            "doc-1",
+            "kb-1",
+            "制度.pdf",
+            "报销流程要求主管审批。" * 100,
+            0.92,
+            3,
+        )
+        repository = FakeRepository()
+        vectors = FakeVectorStore([hit])
+        models = FakeModelGateway(retrieval_needed=True)
+        service = self.build_service(repository, vectors, models, context_max_chars=160)
+
+        result = service.answer("kb-1", "conversation-1", "报销流程是什么？")
+
+        compression_trace = result["agent_trace"][3]
+        self.assertTrue(compression_trace["triggered"])
+        self.assertLessEqual(compression_trace["compressed_chars"], 160)
+        answer_messages = models.completion_calls[-1][0]
+        context_payload = json.loads(answer_messages[-2]["content"].split("\n", 1)[1])
+        self.assertLessEqual(len(context_payload["retrieved_context"]), 160)
+        self.assertEqual(len(models.completion_calls), 4)
 
 
 if __name__ == "__main__":

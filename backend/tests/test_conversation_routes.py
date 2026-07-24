@@ -17,8 +17,11 @@ class FakeRepository:
             }
         }
 
-    def get_conversation(self, conversation_id):
-        return self.conversations.get(conversation_id)
+    def get_conversation(self, conversation_id, owner_id=None):
+        conversation = self.conversations.get(conversation_id)
+        if conversation and owner_id not in {None, "personal"}:
+            return None
+        return conversation
 
     def update_conversation_title(self, conversation_id, title):
         self.conversations[conversation_id]["title"] = title
@@ -33,9 +36,24 @@ class ConversationRoutesTest(unittest.TestCase):
         self.repository = FakeRepository()
         app = FastAPI()
         app.state.startup_error = None
-        app.state.services = SimpleNamespace(repository=self.repository)
+        app.state.services = SimpleNamespace(
+            repository=self.repository,
+            settings=SimpleNamespace(
+                auth_username="admin",
+                auth_password="test-password",
+                auth_secret="test-secret",
+                auth_owner_id="personal",
+                auth_session_ttl_seconds=3600,
+                auth_cookie_secure=False,
+            ),
+        )
         app.include_router(router)
         self.client = TestClient(app)
+        response = self.client.post(
+            "/api/v1/auth/login",
+            json={"username": "admin", "password": "test-password"},
+        )
+        self.assertEqual(response.status_code, 200)
 
     def test_renames_conversation(self):
         response = self.client.patch(

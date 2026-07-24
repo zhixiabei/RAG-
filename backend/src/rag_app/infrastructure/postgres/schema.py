@@ -2,6 +2,7 @@ SCHEMA_STATEMENTS = (
     """
     CREATE TABLE IF NOT EXISTS knowledge_bases (
         id TEXT PRIMARY KEY,
+        owner_id TEXT NOT NULL DEFAULT 'personal',
         name TEXT NOT NULL,
         description TEXT NOT NULL DEFAULT '',
         embedding_model TEXT NOT NULL,
@@ -18,12 +19,17 @@ SCHEMA_STATEMENTS = (
         mime_type TEXT NOT NULL,
         source_object_key TEXT NOT NULL,
         status TEXT NOT NULL,
+        progress INTEGER NOT NULL DEFAULT 0,
+        stage TEXT NOT NULL DEFAULT 'queued',
         chunk_count INTEGER NOT NULL DEFAULT 0,
         error_message TEXT,
         created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
     )
     """,
+    "ALTER TABLE knowledge_bases ADD COLUMN IF NOT EXISTS owner_id TEXT NOT NULL DEFAULT 'personal'",
+    "ALTER TABLE documents ADD COLUMN IF NOT EXISTS progress INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE documents ADD COLUMN IF NOT EXISTS stage TEXT NOT NULL DEFAULT 'queued'",
     """
     CREATE TABLE IF NOT EXISTS document_chunks (
         id TEXT PRIMARY KEY,
@@ -78,6 +84,7 @@ SCHEMA_STATEMENTS = (
     """,
     "ALTER TABLE messages ALTER COLUMN conversation_id SET NOT NULL",
     "CREATE INDEX IF NOT EXISTS idx_documents_kb ON documents(knowledge_base_id)",
+    "CREATE INDEX IF NOT EXISTS idx_knowledge_bases_owner ON knowledge_bases(owner_id)",
     "CREATE INDEX IF NOT EXISTS idx_chunks_document ON document_chunks(document_id)",
     "CREATE INDEX IF NOT EXISTS idx_conversations_kb_updated ON conversations(knowledge_base_id, updated_at DESC)",
     "CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON messages(conversation_id, id)",

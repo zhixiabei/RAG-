@@ -4,7 +4,7 @@ import { FileUp, FolderOpen, UploadCloud, X } from 'lucide-vue-next'
 import { uploadDocument } from '../services/api'
 
 const props = defineProps({ kbId: { type: String, required: true } })
-const emit = defineEmits(['completed'])
+const emit = defineEmits(['started', 'completed'])
 const fileInput = ref(null)
 const folderInput = ref(null)
 const files = ref([])
@@ -62,12 +62,14 @@ function removeFile(index) {
 async function startImport() {
   if (!files.value.length || importing.value) return
   importing.value = true
+  emit('started')
+  const knowledgeBaseId = props.kbId
   current.value = 0
   failed.value = []
   const failedFiles = []
   for (const file of files.value) {
     try {
-      await uploadDocument(props.kbId, file)
+      await uploadDocument(knowledgeBaseId, file)
     } catch (cause) {
       failedFiles.push(file)
       failed.value.push({ name: file.name, message: cause instanceof Error ? cause.message : '导入失败' })

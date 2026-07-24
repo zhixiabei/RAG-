@@ -41,10 +41,13 @@ class IngestionService:
             "status": "processing",
         })
         try:
+            self.repository.update_document(document_id, progress=10, stage="parsing")
             chunks = self.parser.parse(safe_name, content)
             if not chunks:
                 raise ValueError("文档没有可索引的文本")
+            self.repository.update_document(document_id, progress=35, stage="embedding")
             embeddings = self.models.embed([chunk.text for chunk in chunks])
+            self.repository.update_document(document_id, progress=70, stage="indexing")
             self.vectors.ensure_collection(len(embeddings[0]))
             points = [
                 {
@@ -58,9 +61,17 @@ class IngestionService:
                 for chunk in chunks
             ]
             self.vectors.upsert(points, embeddings)
+            self.repository.update_document(document_id, progress=90, stage="saving")
             self.repository.replace_chunks(document_id, knowledge_base_id, chunks)
-            self.repository.update_document(document_id, status="ready", chunk_count=len(chunks), error_message=None)
+            self.repository.update_document(
+                document_id,
+                status="ready",
+                progress=100,
+                stage="ready",
+                chunk_count=len(chunks),
+                error_message=None,
+            )
         except Exception as exc:
-            self.repository.update_document(document_id, status="failed", error_message=str(exc))
+            self.repository.update_document(document_id, status="failed", stage="failed", error_message=str(exc))
             raise
         return self.repository.get_document(document_id) or {"id": document_id, "status": "ready"}

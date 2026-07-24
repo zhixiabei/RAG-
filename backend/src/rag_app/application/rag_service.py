@@ -1,6 +1,12 @@
 from ..domain.models import Citation
 from ..domain.ports import MetadataRepository
-from agent import AnswerAgent, KnowledgeRetrievalAgent, RelevanceGradingAgent, RetrievalDecisionAgent
+from agent import (
+    AnswerAgent,
+    ContextCompressionAgent,
+    KnowledgeRetrievalAgent,
+    RelevanceGradingAgent,
+    RetrievalDecisionAgent,
+)
 
 
 class RagService:
@@ -10,12 +16,14 @@ class RagService:
         decision_agent: RetrievalDecisionAgent,
         retrieval_agent: KnowledgeRetrievalAgent,
         relevance_agent: RelevanceGradingAgent,
+        compression_agent: ContextCompressionAgent,
         answer_agent: AnswerAgent,
     ):
         self.repository = repository
         self.decision_agent = decision_agent
         self.retrieval_agent = retrieval_agent
         self.relevance_agent = relevance_agent
+        self.compression_agent = compression_agent
         self.answer_agent = answer_agent
 
     def answer(self, knowledge_base_id: str, conversation_id: str, question: str, model: str | None = None) -> dict:
@@ -26,13 +34,20 @@ class RagService:
         decision = self.decision_agent.run(question, history)
         retrieval_used = decision.should_retrieve
         retrieved_hits = []
+        relevant_hits = []
         hits = []
         relevance_result = None
+        compression_result = None
+        search_query = question
         if retrieval_used:
             search_query = decision.search_query or question
             retrieved_hits = self.retrieval_agent.run(knowledge_base, search_query)
             relevance_result = self.relevance_agent.run(question, retrieved_hits, search_query)
-            hits = list(relevance_result.relevant_hits[: self.retrieval_agent.context_top_k])
+            relevant_hits = list(relevance_result.relevant_hits[: self.retrieval_agent.context_top_k])
+            hits = relevant_hits
+            if hits:
+                compression_result = self.compression_agent.run(question, hits, search_query)
+                hits = [hit for hit in hits if hit.chunk_id in compression_result.kept_chunk_ids]
         citations = [
             Citation(
                 hit.document_id,
@@ -44,7 +59,14 @@ class RagService:
             ).as_dict()
             for hit in hits
         ]
-        answer = self.answer_agent.run(question, history, hits, retrieval_used, model)
+        answer = self.answer_agent.run(
+            question,
+            history,
+            hits,
+            retrieval_used,
+            model,
+            context_texts=compression_result.text_by_chunk_id if compression_result else None,
+        )
         self.repository.add_message(conversation_id, knowledge_base_id, question, answer, citations)
         return {
             "conversation_id": conversation_id,
@@ -53,7 +75,7 @@ class RagService:
             "citations": citations,
             "retrieval_used": retrieval_used,
             "retrieved_count": len(retrieved_hits),
-            "relevant_count": len(hits),
+            "relevant_count": len(relevant_hits),
             "agent_trace": [
                 {
                     "agent": self.decision_agent.name,
@@ -70,8 +92,17 @@ class RagService:
                     "agent": self.relevance_agent.name,
                     "status": "completed" if retrieval_used else "skipped",
                     "candidate_count": len(retrieved_hits),
-                    "relevant_count": len(hits),
+                    "relevant_count": len(relevant_hits),
                     "threshold": self.relevance_agent.threshold,
+                },
+                {
+                    "agent": self.compression_agent.name,
+                    "status": "completed" if compression_result else "skipped",
+                    "triggered": compression_result.triggered if compression_result else False,
+                    "original_chars": compression_result.original_chars if compression_result else 0,
+                    "compressed_chars": compression_result.compressed_chars if compression_result else 0,
+                    "max_chars": self.compression_agent.max_chars,
+                    "kept_count": len(hits),
                 },
                 {
                     "agent": self.answer_agent.name,

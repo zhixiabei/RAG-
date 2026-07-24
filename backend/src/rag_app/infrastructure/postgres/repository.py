@@ -22,25 +22,36 @@ class PostgresRepository:
             for statement in SCHEMA_STATEMENTS:
                 connection.execute(text(statement))
 
-    def knowledge_base_exists(self, knowledge_base_id: str) -> bool:
-        return self.get_knowledge_base(knowledge_base_id) is not None
+    def knowledge_base_exists(self, knowledge_base_id: str, owner_id: str | None = None) -> bool:
+        return self.get_knowledge_base(knowledge_base_id, owner_id) is not None
 
-    def create_knowledge_base(self, knowledge_base_id: str, name: str, description: str, embedding_model: str) -> dict[str, Any]:
+    def create_knowledge_base(
+        self,
+        knowledge_base_id: str,
+        name: str,
+        description: str,
+        embedding_model: str,
+        owner_id: str = "personal",
+    ) -> dict[str, Any]:
         with self.engine.begin() as connection:
             connection.execute(
-                text("INSERT INTO knowledge_bases (id, name, description, embedding_model) VALUES (:id, :name, :description, :embedding_model)"),
-                {"id": knowledge_base_id, "name": name, "description": description, "embedding_model": embedding_model},
+                text("INSERT INTO knowledge_bases (id, owner_id, name, description, embedding_model) VALUES (:id, :owner_id, :name, :description, :embedding_model)"),
+                {"id": knowledge_base_id, "owner_id": owner_id, "name": name, "description": description, "embedding_model": embedding_model},
             )
-        return self.get_knowledge_base(knowledge_base_id) or {}
+        return self.get_knowledge_base(knowledge_base_id, owner_id) or {}
 
-    def list_knowledge_bases(self) -> list[dict[str, Any]]:
+    def list_knowledge_bases(self, owner_id: str | None = None) -> list[dict[str, Any]]:
         with self.engine.begin() as connection:
-            rows = connection.execute(text("SELECT * FROM knowledge_bases ORDER BY created_at DESC")).mappings().all()
+            clause = " WHERE owner_id = :owner_id" if owner_id is not None else ""
+            parameters = {"owner_id": owner_id} if owner_id is not None else {}
+            rows = connection.execute(text(f"SELECT * FROM knowledge_bases{clause} ORDER BY created_at DESC"), parameters).mappings().all()
         return [dict(row) for row in rows]
 
-    def get_knowledge_base(self, knowledge_base_id: str) -> dict[str, Any] | None:
+    def get_knowledge_base(self, knowledge_base_id: str, owner_id: str | None = None) -> dict[str, Any] | None:
         with self.engine.begin() as connection:
-            row = connection.execute(text("SELECT * FROM knowledge_bases WHERE id = :id"), {"id": knowledge_base_id}).mappings().first()
+            clause = " AND owner_id = :owner_id" if owner_id is not None else ""
+            parameters = {"id": knowledge_base_id, "owner_id": owner_id} if owner_id is not None else {"id": knowledge_base_id}
+            row = connection.execute(text(f"SELECT * FROM knowledge_bases WHERE id = :id{clause}"), parameters).mappings().first()
         return dict(row) if row else None
 
     def create_document(self, item: dict[str, Any]) -> None:
@@ -124,27 +135,33 @@ class PostgresRepository:
             )
         return self.get_conversation(conversation_id) or {}
 
-    def get_conversation(self, conversation_id: str) -> dict[str, Any] | None:
+    def get_conversation(self, conversation_id: str, owner_id: str | None = None) -> dict[str, Any] | None:
         with self.engine.begin() as connection:
+            join = " JOIN knowledge_bases ON knowledge_bases.id = conversations.knowledge_base_id" if owner_id is not None else ""
+            clause = " AND knowledge_bases.owner_id = :owner_id" if owner_id is not None else ""
+            parameters = {"id": conversation_id, "owner_id": owner_id} if owner_id is not None else {"id": conversation_id}
             row = connection.execute(
-                text("SELECT * FROM conversations WHERE id = :id"),
-                {"id": conversation_id},
+                text(f"SELECT conversations.* FROM conversations{join} WHERE conversations.id = :id{clause}"),
+                parameters,
             ).mappings().first()
         return dict(row) if row else None
 
-    def list_conversations(self, knowledge_base_id: str) -> list[dict[str, Any]]:
+    def list_conversations(self, knowledge_base_id: str, owner_id: str | None = None) -> list[dict[str, Any]]:
         with self.engine.begin() as connection:
+            owner_clause = " AND knowledge_bases.owner_id = :owner_id" if owner_id is not None else ""
+            join = " JOIN knowledge_bases ON knowledge_bases.id = conversations.knowledge_base_id" if owner_id is not None else ""
+            parameters = {"kb": knowledge_base_id, "owner_id": owner_id} if owner_id is not None else {"kb": knowledge_base_id}
             rows = connection.execute(
-                text("""
+                text(f"""
                     SELECT
                         conversations.*,
                         (SELECT count(*) * 2 FROM messages WHERE conversation_id = conversations.id) AS message_count,
                         (SELECT question FROM messages WHERE conversation_id = conversations.id ORDER BY id DESC LIMIT 1) AS last_message
-                    FROM conversations
-                    WHERE knowledge_base_id = :kb
-                    ORDER BY updated_at DESC, created_at DESC
+                    FROM conversations{join}
+                    WHERE conversations.knowledge_base_id = :kb{owner_clause}
+                    ORDER BY conversations.updated_at DESC, conversations.created_at DESC
                 """),
-                {"kb": knowledge_base_id},
+                parameters,
             ).mappings().all()
         return [dict(row) for row in rows]
 
