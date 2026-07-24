@@ -21,5 +21,4 @@ class KnowledgeRetrievalAgent:
                 f"{self.models.embedding_model}，请重新建立知识库并导入文档"
             )
         query_vector = self.models.embed([question])[0]
-        hits = self.vectors.search(knowledge_base["id"], query_vector, self.retrieval_top_k)
-        return list(hits[: self.context_top_k])
+        return list(self.vectors.search(knowledge_base["id"], query_vector, self.retrieval_top_k))

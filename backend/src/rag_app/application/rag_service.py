@@ -32,7 +32,7 @@ class RagService:
             search_query = decision.search_query or question
             retrieved_hits = self.retrieval_agent.run(knowledge_base, search_query)
             relevance_result = self.relevance_agent.run(question, retrieved_hits, search_query)
-            hits = list(relevance_result.relevant_hits)
+            hits = list(relevance_result.relevant_hits[: self.retrieval_agent.context_top_k])
         citations = [
             Citation(
                 hit.document_id,

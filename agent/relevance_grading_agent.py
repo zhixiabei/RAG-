@@ -65,6 +65,11 @@ def _parse_scores(output: str, known_ids: set[str]) -> dict[str, float]:
     try:
         payload = json.loads(normalized)
         items = payload.get("items", [])
+        if not items and isinstance(payload.get("scores"), dict):
+            items = [
+                {"chunk_id": chunk_id, "score": score}
+                for chunk_id, score in payload["scores"].items()
+            ]
     except (AttributeError, json.JSONDecodeError):
         # Preserve complete items when a small local model truncates the final JSON object.
         items = [

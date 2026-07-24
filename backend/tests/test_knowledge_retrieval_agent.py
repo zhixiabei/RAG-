@@ -22,7 +22,7 @@ class FakeVectors:
 
 
 class KnowledgeRetrievalAgentTest(unittest.TestCase):
-    def test_limits_context_hits(self):
+    def test_returns_all_retrieval_candidates(self):
         hits = [
             SearchHit(f"chunk-{index}", "doc-1", "kb-1", "制度.pdf", f"内容 {index}", 0.9)
             for index in range(4)
@@ -32,7 +32,7 @@ class KnowledgeRetrievalAgentTest(unittest.TestCase):
 
         result = agent.run({"id": "kb-1", "embedding_model": "test-embedding"}, "报销制度")
 
-        self.assertEqual(len(result), 2)
+        self.assertEqual(len(result), 4)
         self.assertEqual(vectors.calls, [("kb-1", [0.1, 0.2], 10)])
 
     def test_rejects_incompatible_embedding_model(self):

@@ -94,7 +94,7 @@ DeepSeek 官方 API 不提供 embedding 接口，所以必须配置一个支持 
 
 切换 embedding 模型后需要新建知识库并重新导入文档，同时使用新的 `QDRANT_COLLECTION`；系统会阻止用不同 embedding 模型查询旧索引。问答输入框下方的模型菜单用于切换当前模式内配置的聊天模型。
 
-检索后会由相关性评分 Agent 对候选片段给出 `0~1` 分数。默认只把分数不低于 `0.65` 的片段交给回答 Agent，可通过 `RAG_RELEVANCE_THRESHOLD` 调整；若全部候选均低于阈值，系统直接返回“知识库中无相关内容”。
+检索后会由相关性评分 Agent 对候选片段给出 `0~1` 分数。`RAG_RETRIEVAL_TOP_K` 控制向量库宽召回候选数量，默认 50；`RAG_CONTEXT_TOP_K` 控制最终交给回答 Agent 的上下文数量，默认 8。默认只把分数不低于 `0.65` 的片段交给回答 Agent，可通过 `RAG_RELEVANCE_THRESHOLD` 调整；若全部候选均低于阈值，系统直接返回“知识库中无相关内容”。
 
 ## 一键启动前后端
 

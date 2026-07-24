@@ -45,6 +45,14 @@ class RelevanceGradingAgentTest(unittest.TestCase):
         self.assertEqual(result.relevant_hits, ())
         self.assertEqual(result.score_for("chunk-1"), 0.0)
 
+    def test_parses_scores_object_from_remote_model(self):
+        hit = SearchHit("chunk-1", "doc-1", "kb-1", "doc.pdf", "content", 0.91)
+
+        result = RelevanceGradingAgent(FakeModels('{"scores":{"c1":0.88}}')).run("question", [hit])
+
+        self.assertEqual(result.relevant_hits, (hit,))
+        self.assertEqual(result.score_for("chunk-1"), 0.88)
+
     def test_truncated_json_preserves_complete_scores(self):
         hits = [
             SearchHit("chunk-1", "doc-1", "kb-1", "课程.pdf", "知识点一", 0.91),
