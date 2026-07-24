@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { FileStack, MessageSquareText, Plus, Search, X } from 'lucide-vue-next'
 import KnowledgeSidebar from './components/KnowledgeSidebar.vue'
 import CreateKnowledgeBaseDialog from './components/CreateKnowledgeBaseDialog.vue'
+import DeleteConfirmDialog from './components/DeleteConfirmDialog.vue'
 import DocumentList from './components/DocumentList.vue'
 import ImportPanel from './components/ImportPanel.vue'
 import ChatWorkspace from './components/ChatWorkspace.vue'
@@ -13,6 +14,9 @@ const activeTab = ref('documents')
 const createDialogOpen = ref(false)
 const creating = ref(false)
 const documentQuery = ref('')
+const deleteTarget = ref(null)
+const deletingId = ref(null)
+const deleteError = ref('')
 
 const filteredDocuments = computed(() => {
   const terms = documentQuery.value
@@ -53,6 +57,41 @@ async function createKnowledgeBase(name, description) {
 async function refreshDocuments() {
   await store.loadDocuments()
 }
+
+function requestKnowledgeBaseDelete(item) {
+  deleteError.value = ''
+  deleteTarget.value = { type: 'knowledge-base', item }
+}
+
+function requestDocumentDelete(item) {
+  deleteError.value = ''
+  deleteTarget.value = { type: 'document', item, knowledgeBaseId: store.selectedId }
+}
+
+function closeDeleteDialog() {
+  if (deletingId.value) return
+  deleteTarget.value = null
+  deleteError.value = ''
+}
+
+async function confirmDelete() {
+  if (!deleteTarget.value || deletingId.value) return
+  const target = deleteTarget.value
+  deletingId.value = target.item.id
+  deleteError.value = ''
+  try {
+    if (target.type === 'knowledge-base') {
+      await store.removeKnowledgeBase(target.item.id)
+    } else {
+      await store.removeDocument(target.knowledgeBaseId, target.item.id)
+    }
+    deleteTarget.value = null
+  } catch (cause) {
+    deleteError.value = cause instanceof Error ? cause.message : '删除失败'
+  } finally {
+    deletingId.value = null
+  }
+}
 </script>
 
 <template>
@@ -61,9 +100,11 @@ async function refreshDocuments() {
       :items="store.items"
       :selected-id="store.selectedId"
       :loading="store.loading"
+      :deleting-id="deleteTarget?.type === 'knowledge-base' ? deletingId : null"
       @select="store.select"
       @create="createDialogOpen = true"
       @refresh="store.load"
+      @delete="requestKnowledgeBaseDelete"
     />
 
     <main class="main-area">
@@ -102,6 +143,8 @@ async function refreshDocuments() {
             :documents="filteredDocuments"
             :loading="store.loading"
             :empty-message="documentQuery.trim() ? `没有找到包含“${documentQuery.trim()}”的文档` : ''"
+            :deleting-id="deleteTarget?.type === 'document' ? deletingId : null"
+            @delete="requestDocumentDelete"
           />
         </section>
 
@@ -118,5 +161,16 @@ async function refreshDocuments() {
     </main>
 
     <CreateKnowledgeBaseDialog v-if="createDialogOpen" :saving="creating" @close="createDialogOpen = false" @submit="createKnowledgeBase" />
+    <DeleteConfirmDialog
+      v-if="deleteTarget"
+      :title="deleteTarget.type === 'knowledge-base' ? '删除知识库' : '删除文档'"
+      :message="deleteTarget.type === 'knowledge-base'
+        ? `知识库“${deleteTarget.item.name}”中的文档、向量和历史对话都会被永久删除。`
+        : `文档“${deleteTarget.item.title}”及其原文件和向量索引都会被永久删除。`"
+      :busy="Boolean(deletingId)"
+      :error="deleteError"
+      @close="closeDeleteDialog"
+      @confirm="confirmDelete"
+    />
   </div>
 </template>

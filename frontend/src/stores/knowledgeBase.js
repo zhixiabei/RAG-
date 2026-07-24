@@ -1,6 +1,12 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
-import { createKnowledgeBase, listDocuments, listKnowledgeBases } from '../services/api'
+import {
+  createKnowledgeBase,
+  deleteDocument as deleteDocumentRequest,
+  deleteKnowledgeBase as deleteKnowledgeBaseRequest,
+  listDocuments,
+  listKnowledgeBases,
+} from '../services/api'
 
 export const useKnowledgeBaseStore = defineStore('knowledgeBase', () => {
   const items = ref([])
@@ -40,6 +46,35 @@ export const useKnowledgeBaseStore = defineStore('knowledgeBase', () => {
     documents.value = []
   }
 
-  return { items, documents, selectedId, selected, loading, error, load, loadDocuments, select, create }
-})
+  async function removeKnowledgeBase(id) {
+    const index = items.value.findIndex((item) => item.id === id)
+    await deleteKnowledgeBaseRequest(id)
+    items.value = items.value.filter((item) => item.id !== id)
+    if (selectedId.value !== id) return
 
+    selectedId.value = items.value[Math.min(index, items.value.length - 1)]?.id || null
+    await loadDocuments(selectedId.value)
+  }
+
+  async function removeDocument(knowledgeBaseId, documentId) {
+    await deleteDocumentRequest(knowledgeBaseId, documentId)
+    if (selectedId.value === knowledgeBaseId) {
+      documents.value = documents.value.filter((document) => document.id !== documentId)
+    }
+  }
+
+  return {
+    items,
+    documents,
+    selectedId,
+    selected,
+    loading,
+    error,
+    load,
+    loadDocuments,
+    select,
+    create,
+    removeKnowledgeBase,
+    removeDocument,
+  }
+})

@@ -12,6 +12,7 @@ async function request(path, init) {
     }
     throw new Error(message)
   }
+  if (response.status === 204) return null
   return response.json()
 }
 
@@ -27,6 +28,10 @@ export function createKnowledgeBase(name, description) {
   })
 }
 
+export function deleteKnowledgeBase(knowledgeBaseId) {
+  return request(`/api/v1/knowledge-bases/${knowledgeBaseId}`, { method: 'DELETE' })
+}
+
 export function listDocuments(knowledgeBaseId) {
   return request(`/api/v1/knowledge-bases/${knowledgeBaseId}/documents`)
 }
@@ -35,6 +40,10 @@ export function uploadDocument(knowledgeBaseId, file) {
   const form = new FormData()
   form.append('file', file, file.name)
   return request(`/api/v1/knowledge-bases/${knowledgeBaseId}/documents`, { method: 'POST', body: form })
+}
+
+export function deleteDocument(knowledgeBaseId, documentId) {
+  return request(`/api/v1/knowledge-bases/${knowledgeBaseId}/documents/${documentId}`, { method: 'DELETE' })
 }
 
 export function listChatModels() {
@@ -63,4 +72,16 @@ export function createConversation(knowledgeBaseId, title) {
 
 export function listConversationMessages(conversationId) {
   return request(`/api/v1/conversations/${conversationId}/messages`)
+}
+
+export function renameConversation(conversationId, title) {
+  return request(`/api/v1/conversations/${conversationId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title }),
+  })
+}
+
+export function deleteConversation(conversationId) {
+  return request(`/api/v1/conversations/${conversationId}`, { method: 'DELETE' })
 }

@@ -22,3 +22,6 @@ class MinioObjectStore:
 
     def put_bytes(self, object_key: str, content: bytes, content_type: str) -> None:
         self.client.put_object(self.bucket, object_key, BytesIO(content), len(content), content_type=content_type)
+
+    def delete_object(self, object_key: str) -> None:
+        self.client.remove_object(self.bucket, object_key)

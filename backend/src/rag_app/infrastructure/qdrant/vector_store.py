@@ -58,3 +58,22 @@ class QdrantVectorStore:
             )
             for point in result.points
         ]
+
+    def delete_document(self, document_id: str) -> None:
+        self._delete_by_payload("document_id", document_id)
+
+    def delete_knowledge_base(self, knowledge_base_id: str) -> None:
+        self._delete_by_payload("knowledge_base_id", knowledge_base_id)
+
+    def _delete_by_payload(self, field: str, value: str) -> None:
+        if not self.client.collection_exists(self.collection):
+            return
+        self.client.delete(
+            collection_name=self.collection,
+            points_selector=models.FilterSelector(
+                filter=models.Filter(
+                    must=[models.FieldCondition(key=field, match=models.MatchValue(value=value))]
+                )
+            ),
+            wait=True,
+        )

@@ -19,6 +19,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from agent import AnswerAgent, KnowledgeRetrievalAgent, RelevanceGradingAgent, RetrievalDecisionAgent
 from .api.routes import router
+from .application.deletion_service import DeletionService
 from .application.ingestion_service import IngestionService
 from .application.rag_service import RagService
 from .config import Settings
@@ -41,6 +42,7 @@ class Services:
     vectors: QdrantVectorStore
     models: OllamaGateway | OpenAICompatibleGateway
     ingestion: IngestionService
+    deletion: DeletionService
     rag: RagService
 
 
@@ -86,6 +88,7 @@ def build_services(settings: Settings) -> Services:
         vectors=vectors,
         models=models,
         ingestion=IngestionService(repository, objects, vectors, DocumentParser(), models),
+        deletion=DeletionService(repository, objects, vectors),
         rag=RagService(repository, decision_agent, retrieval_agent, relevance_agent, answer_agent),
     )
 

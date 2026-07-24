@@ -1,14 +1,17 @@
 <script setup>
 import { nextTick, ref, watch } from 'vue'
 import DOMPurify from 'dompurify'
-import { Bot, BrainCircuit, MessageSquareText, Plus, Send, UserRound } from 'lucide-vue-next'
+import { Bot, BrainCircuit, Check, LoaderCircle, MessageSquareText, Pencil, Plus, Send, Trash2, UserRound, X } from 'lucide-vue-next'
 import { marked } from 'marked'
+import DeleteConfirmDialog from './DeleteConfirmDialog.vue'
 import {
   askKnowledgeBase,
   createConversation,
+  deleteConversation,
   listChatModels,
   listConversationMessages,
   listConversations,
+  renameConversation,
 } from '../services/api'
 
 const props = defineProps({ kbId: { type: String, required: true } })
@@ -23,6 +26,13 @@ const loadingConversations = ref(false)
 const loadingMessages = ref(false)
 const error = ref('')
 const transcript = ref(null)
+const renamingId = ref(null)
+const renameTitle = ref('')
+const renameInput = ref(null)
+const savingRename = ref(false)
+const conversationDeleteTarget = ref(null)
+const deletingConversation = ref(false)
+const conversationDeleteError = ref('')
 let conversationRequestId = 0
 let messageRequestId = 0
 
@@ -72,13 +82,88 @@ async function selectConversation(conversationId) {
 }
 
 function startNewConversation() {
-  if (sending.value) return
+  if (sending.value || deletingConversation.value) return
   messageRequestId += 1
   activeConversationId.value = null
   messages.value = []
   question.value = ''
   error.value = ''
   loadingMessages.value = false
+}
+
+async function startRename(conversation) {
+  if (sending.value || deletingConversation.value) return
+  renamingId.value = conversation.id
+  renameTitle.value = conversation.title
+  error.value = ''
+  await nextTick()
+  renameInput.value?.focus()
+  renameInput.value?.select()
+}
+
+function setRenameInput(element) {
+  renameInput.value = element
+}
+
+function cancelRename() {
+  if (savingRename.value) return
+  renamingId.value = null
+  renameTitle.value = ''
+}
+
+async function saveRename(conversation) {
+  const title = renameTitle.value.trim()
+  if (!title || savingRename.value) return
+  savingRename.value = true
+  error.value = ''
+  try {
+    const updated = await renameConversation(conversation.id, title)
+    Object.assign(conversation, updated)
+    renamingId.value = null
+    renameTitle.value = ''
+  } catch (cause) {
+    error.value = cause instanceof Error ? cause.message : '对话改名失败'
+  } finally {
+    savingRename.value = false
+  }
+}
+
+function requestConversationDelete(conversation) {
+  if (sending.value || deletingConversation.value) return
+  cancelRename()
+  conversationDeleteError.value = ''
+  conversationDeleteTarget.value = conversation
+}
+
+function closeConversationDelete() {
+  if (deletingConversation.value) return
+  conversationDeleteTarget.value = null
+  conversationDeleteError.value = ''
+}
+
+async function confirmConversationDelete() {
+  const target = conversationDeleteTarget.value
+  if (!target || deletingConversation.value) return
+  deletingConversation.value = true
+  conversationDeleteError.value = ''
+  let nextConversationId = null
+  try {
+    await deleteConversation(target.id)
+    conversations.value = conversations.value.filter((conversation) => conversation.id !== target.id)
+    if (activeConversationId.value === target.id) {
+      messageRequestId += 1
+      activeConversationId.value = null
+      messages.value = []
+      loadingMessages.value = false
+      nextConversationId = conversations.value[0]?.id || null
+    }
+    conversationDeleteTarget.value = null
+  } catch (cause) {
+    conversationDeleteError.value = cause instanceof Error ? cause.message : '对话删除失败'
+  } finally {
+    deletingConversation.value = false
+  }
+  if (nextConversationId) await selectConversation(nextConversationId)
 }
 
 async function loadWorkspace(knowledgeBaseId) {
@@ -92,6 +177,9 @@ async function loadWorkspace(knowledgeBaseId) {
   question.value = ''
   error.value = ''
   sending.value = false
+  renamingId.value = null
+  conversationDeleteTarget.value = null
+  deletingConversation.value = false
   loadingConversations.value = true
   loadingMessages.value = false
   try {
@@ -171,20 +259,44 @@ async function send() {
       </div>
       <div v-if="loadingConversations" class="conversation-state">正在加载...</div>
       <nav v-else class="conversation-list" aria-label="历史对话列表">
-        <button
+        <div
           v-for="conversation in conversations"
           :key="conversation.id"
           class="conversation-item"
           :class="{ active: activeConversationId === conversation.id }"
-          :disabled="sending"
-          @click="selectConversation(conversation.id)"
         >
-          <MessageSquareText :size="15" />
-          <span class="conversation-copy">
-            <strong>{{ conversation.title }}</strong>
-            <small>{{ conversationMeta(conversation) }}</small>
-          </span>
-        </button>
+          <template v-if="renamingId === conversation.id">
+            <input
+              :ref="setRenameInput"
+              v-model="renameTitle"
+              class="conversation-rename-input"
+              maxlength="200"
+              aria-label="对话名称"
+              :disabled="savingRename"
+              @keydown.enter.prevent="saveRename(conversation)"
+              @keydown.esc.prevent="cancelRename"
+            />
+            <div class="conversation-actions visible">
+              <button class="conversation-action" title="保存名称" :disabled="savingRename || !renameTitle.trim()" @click="saveRename(conversation)">
+                <LoaderCircle v-if="savingRename" :size="14" class="spinning" /><Check v-else :size="14" />
+              </button>
+              <button class="conversation-action" title="取消改名" :disabled="savingRename" @click="cancelRename"><X :size="14" /></button>
+            </div>
+          </template>
+          <template v-else>
+            <button class="conversation-select" :disabled="sending || deletingConversation" @click="selectConversation(conversation.id)">
+              <MessageSquareText :size="15" />
+              <span class="conversation-copy">
+                <strong>{{ conversation.title }}</strong>
+                <small>{{ conversationMeta(conversation) }}</small>
+              </span>
+            </button>
+            <div class="conversation-actions">
+              <button class="conversation-action" title="重命名对话" :disabled="sending || deletingConversation" @click="startRename(conversation)"><Pencil :size="13" /></button>
+              <button class="conversation-action danger-icon" title="删除对话" :disabled="sending || deletingConversation" @click="requestConversationDelete(conversation)"><Trash2 :size="13" /></button>
+            </div>
+          </template>
+        </div>
         <div v-if="!conversations.length" class="conversation-state">还没有历史对话</div>
       </nav>
     </aside>
@@ -232,5 +344,15 @@ async function send() {
         <p v-if="error" class="error-text">{{ error }}</p>
       </div>
     </section>
+
+    <DeleteConfirmDialog
+      v-if="conversationDeleteTarget"
+      title="删除历史对话"
+      :message="`对话“${conversationDeleteTarget.title}”及其中的全部消息都会被永久删除。`"
+      :busy="deletingConversation"
+      :error="conversationDeleteError"
+      @close="closeConversationDelete"
+      @confirm="confirmConversationDelete"
+    />
   </section>
 </template>

@@ -1,10 +1,10 @@
 from pathlib import Path
 
-from fastapi import APIRouter, File, HTTPException, Request, UploadFile
+from fastapi import APIRouter, File, HTTPException, Request, Response, UploadFile
 from fastapi.responses import JSONResponse
 from uuid import uuid4
 
-from .schemas import ChatRequest, ConversationCreate, KnowledgeBaseCreate
+from .schemas import ChatRequest, ConversationCreate, ConversationUpdate, KnowledgeBaseCreate
 
 router = APIRouter()
 
@@ -58,6 +58,18 @@ def get_knowledge_base(request: Request, knowledge_base_id: str):
     return item
 
 
+@router.delete("/api/v1/knowledge-bases/{knowledge_base_id}", status_code=204)
+def delete_knowledge_base(request: Request, knowledge_base_id: str):
+    service = services(request)
+    try:
+        deleted = service.deletion.delete_knowledge_base(knowledge_base_id)
+    except Exception as exc:
+        raise HTTPException(503, f"知识库删除失败: {exc}") from exc
+    if not deleted:
+        raise HTTPException(404, "知识库不存在")
+    return Response(status_code=204)
+
+
 @router.get("/api/v1/knowledge-bases/{knowledge_base_id}/documents")
 def list_documents(request: Request, knowledge_base_id: str):
     service = services(request)
@@ -85,6 +97,18 @@ def upload_document(request: Request, knowledge_base_id: str, file: UploadFile =
         )
     except Exception as exc:
         raise HTTPException(500, f"文档入库失败: {exc}") from exc
+
+
+@router.delete("/api/v1/knowledge-bases/{knowledge_base_id}/documents/{document_id}", status_code=204)
+def delete_document(request: Request, knowledge_base_id: str, document_id: str):
+    service = services(request)
+    try:
+        deleted = service.deletion.delete_document(knowledge_base_id, document_id)
+    except Exception as exc:
+        raise HTTPException(503, f"文档删除失败: {exc}") from exc
+    if not deleted:
+        raise HTTPException(404, "文档不存在")
+    return Response(status_code=204)
 
 
 @router.post("/api/v1/knowledge-bases/{knowledge_base_id}/chat")
@@ -123,3 +147,20 @@ def list_messages(request: Request, conversation_id: str):
     if not service.repository.get_conversation(conversation_id):
         raise HTTPException(404, "对话不存在")
     return service.repository.list_messages(conversation_id)
+
+
+@router.patch("/api/v1/conversations/{conversation_id}")
+def update_conversation(request: Request, conversation_id: str, payload: ConversationUpdate):
+    service = services(request)
+    if not service.repository.get_conversation(conversation_id):
+        raise HTTPException(404, "对话不存在")
+    return service.repository.update_conversation_title(conversation_id, payload.title)
+
+
+@router.delete("/api/v1/conversations/{conversation_id}", status_code=204)
+def delete_conversation(request: Request, conversation_id: str):
+    service = services(request)
+    if not service.repository.get_conversation(conversation_id):
+        raise HTTPException(404, "对话不存在")
+    service.repository.delete_conversation(conversation_id)
+    return Response(status_code=204)

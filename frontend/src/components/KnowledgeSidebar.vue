@@ -1,9 +1,14 @@
 <script setup>
-import { Database, Plus, RefreshCw } from 'lucide-vue-next'
+import { Database, LoaderCircle, Plus, RefreshCw, Trash2 } from 'lucide-vue-next'
 
-defineProps({ items: { type: Array, default: () => [] }, selectedId: { type: String, default: null }, loading: Boolean })
+defineProps({
+  items: { type: Array, default: () => [] },
+  selectedId: { type: String, default: null },
+  loading: Boolean,
+  deletingId: { type: String, default: null },
+})
 
-const emit = defineEmits(['select', 'create', 'refresh'])
+const emit = defineEmits(['select', 'create', 'refresh', 'delete'])
 </script>
 
 <template>
@@ -24,19 +29,30 @@ const emit = defineEmits(['select', 'create', 'refresh'])
     </div>
 
     <nav class="knowledge-list" aria-label="知识库列表">
-      <button
+      <div
         v-for="item in items"
         :key="item.id"
         class="knowledge-item"
         :class="{ active: item.id === selectedId }"
-        @click="emit('select', item.id)"
       >
-        <span class="knowledge-dot" />
-        <span class="knowledge-copy">
-          <strong>{{ item.name }}</strong>
-          <small>{{ item.description || '暂无描述' }}</small>
-        </span>
-      </button>
+        <button class="knowledge-select" :disabled="Boolean(deletingId)" @click="emit('select', item.id)">
+          <span class="knowledge-dot" />
+          <span class="knowledge-copy">
+            <strong>{{ item.name }}</strong>
+            <small>{{ item.description || '暂无描述' }}</small>
+          </span>
+        </button>
+        <button
+          class="knowledge-delete"
+          :title="`删除知识库 ${item.name}`"
+          :aria-label="`删除知识库 ${item.name}`"
+          :disabled="Boolean(deletingId)"
+          @click="emit('delete', item)"
+        >
+          <LoaderCircle v-if="deletingId === item.id" :size="14" class="spinning" />
+          <Trash2 v-else :size="14" />
+        </button>
+      </div>
       <div v-if="!items.length" class="sidebar-empty">还没有知识库</div>
     </nav>
 

@@ -79,6 +79,20 @@ class PostgresRepository:
             ).mappings().all()
         return [dict(row) for row in rows]
 
+    def delete_document(self, document_id: str) -> None:
+        with self.engine.begin() as connection:
+            connection.execute(text("DELETE FROM document_chunks WHERE document_id = :id"), {"id": document_id})
+            connection.execute(text("DELETE FROM documents WHERE id = :id"), {"id": document_id})
+
+    def delete_knowledge_base(self, knowledge_base_id: str) -> None:
+        with self.engine.begin() as connection:
+            parameters = {"id": knowledge_base_id}
+            connection.execute(text("DELETE FROM messages WHERE knowledge_base_id = :id"), parameters)
+            connection.execute(text("DELETE FROM conversations WHERE knowledge_base_id = :id"), parameters)
+            connection.execute(text("DELETE FROM document_chunks WHERE knowledge_base_id = :id"), parameters)
+            connection.execute(text("DELETE FROM documents WHERE knowledge_base_id = :id"), parameters)
+            connection.execute(text("DELETE FROM knowledge_bases WHERE id = :id"), parameters)
+
     def replace_chunks(self, document_id: str, knowledge_base_id: str, chunks: list[ParsedChunk]) -> None:
         with self.engine.begin() as connection:
             connection.execute(text("DELETE FROM document_chunks WHERE document_id = :id"), {"id": document_id})
@@ -133,6 +147,19 @@ class PostgresRepository:
                 {"kb": knowledge_base_id},
             ).mappings().all()
         return [dict(row) for row in rows]
+
+    def update_conversation_title(self, conversation_id: str, title: str) -> dict[str, Any] | None:
+        with self.engine.begin() as connection:
+            connection.execute(
+                text("UPDATE conversations SET title = :title, updated_at = now() WHERE id = :id"),
+                {"id": conversation_id, "title": title},
+            )
+        return self.get_conversation(conversation_id)
+
+    def delete_conversation(self, conversation_id: str) -> None:
+        with self.engine.begin() as connection:
+            connection.execute(text("DELETE FROM messages WHERE conversation_id = :id"), {"id": conversation_id})
+            connection.execute(text("DELETE FROM conversations WHERE id = :id"), {"id": conversation_id})
 
     def add_message(self, conversation_id: str, knowledge_base_id: str, question: str, answer: str, citations: list[dict[str, Any]]) -> None:
         with self.engine.begin() as connection:
