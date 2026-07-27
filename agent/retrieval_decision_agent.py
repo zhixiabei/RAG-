@@ -4,7 +4,7 @@ import re
 from typing import Any
 
 from .contracts import ModelGateway
-from .query_intent import is_assistant_identity_question
+from .query_intent import is_assistant_identity_question, is_knowledge_catalog_inventory_question
 
 
 RETRIEVAL_DECISION_PROMPT = """判断回答当前消息是否需要检索新的知识库文档。
@@ -109,7 +109,7 @@ class RetrievalDecisionAgent:
         self.models = models
 
     def run(self, question: str, history: list[dict[str, Any]]) -> RetrievalDecision:
-        if is_assistant_identity_question(question):
+        if is_assistant_identity_question(question) or is_knowledge_catalog_inventory_question(question):
             return RetrievalDecision(False)
         output = self.models.complete(
             retrieval_decision_messages(question, history),

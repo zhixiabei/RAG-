@@ -142,7 +142,17 @@ class RagServiceTest(unittest.TestCase):
                 "status": "ready",
                 "folder_path": "井资料/化163-1井",
                 "file_name": "化163-1井示踪剂施工设计.docx",
-            }
+            },
+            {
+                "status": "ready",
+                "folder_path": "井资料/化163-1井",
+                "file_name": "化163-1井施工总结.pdf",
+            },
+            {
+                "status": "ready",
+                "folder_path": "井资料/化163-1井/曲线",
+                "file_name": "压力曲线.xlsx",
+            },
         ]
         vectors = FakeVectorStore()
         models = FakeModelGateway(retrieval_needed=True)
@@ -151,9 +161,11 @@ class RagServiceTest(unittest.TestCase):
         result = service.answer("kb-1", "conversation-1", "化163-1井文件夹有哪些文件？")
 
         self.assertTrue(result["catalog_used"])
-        self.assertEqual(result["answer"], "测试回答")
-        answer_messages = models.completion_calls[-1][0]
-        self.assertIn("井资料/化163-1井/化163-1井示踪剂施工设计.docx", answer_messages[-2]["content"])
+        self.assertFalse(result["retrieval_used"])
+        self.assertIn("化163-1井示踪剂施工设计.docx", result["answer"])
+        self.assertIn("化163-1井施工总结.pdf", result["answer"])
+        self.assertIn("曲线/压力曲线.xlsx", result["answer"])
+        self.assertEqual(models.completion_calls, [])
 
     def test_returns_no_related_content_when_all_candidates_score_below_threshold(self):
         hit = SearchHit("chunk-1", "doc-1", "kb-1", "制度.pdf", "无关内容", 0.92, 3)

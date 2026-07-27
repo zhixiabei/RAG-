@@ -24,6 +24,18 @@ _KNOWLEDGE_CATALOG_PATTERNS = (
     re.compile(r"\b(?:folder|directory|path|file\s+list|document\s+list)\b", re.IGNORECASE),
 )
 
+_KNOWLEDGE_CATALOG_INVENTORY_PATTERNS = (
+    re.compile(r"(?:文件夹|目录).{0,12}(?:有哪些|有什么|有啥|包含哪些|列出|多少(?:个)?).{0,8}(?:文件|文档|资料)?", re.IGNORECASE),
+    re.compile(r"(?:有哪些|有什么|有啥|列出|显示|多少(?:个)?).{0,10}(?:文件|文档|资料)", re.IGNORECASE),
+    re.compile(r"(?:文件|文档|资料).{0,10}(?:清单|列表|有哪些|有多少)", re.IGNORECASE),
+    re.compile(r"\b(?:list|show|count)\b.{0,20}\b(?:files?|documents?)\b", re.IGNORECASE),
+)
+
+_KNOWLEDGE_CATALOG_CONTENT_ACTIONS = re.compile(
+    r"(?:总结|概括|归纳|分析|对比|提取|解读|正文|主要内容|讲了什么|说明什么)",
+    re.IGNORECASE,
+)
+
 
 def is_assistant_identity_question(question: str) -> bool:
     """Return whether the user is asking about this assistant or its active model."""
@@ -35,3 +47,11 @@ def needs_knowledge_catalog(question: str) -> bool:
     """Return whether answering requires knowledge-base folder and file metadata."""
     normalized = " ".join(question.strip().split())
     return any(pattern.search(normalized) for pattern in _KNOWLEDGE_CATALOG_PATTERNS)
+
+
+def is_knowledge_catalog_inventory_question(question: str) -> bool:
+    """Return whether the question asks for a deterministic file listing or count."""
+    normalized = " ".join(question.strip().split())
+    if _KNOWLEDGE_CATALOG_CONTENT_ACTIONS.search(normalized):
+        return False
+    return any(pattern.search(normalized) for pattern in _KNOWLEDGE_CATALOG_INVENTORY_PATTERNS)

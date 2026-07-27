@@ -65,10 +65,13 @@ class AnswerAgent:
         model: str | None = None,
         context_texts: Mapping[str, str] | None = None,
         knowledge_catalog: str = "",
+        catalog_answer: str = "",
     ) -> str:
         if is_assistant_identity_question(question):
             active_model = model or self.models.chat_model
             return f"我是知识库助手，当前回答使用的模型是 {active_model}。"
+        if catalog_answer:
+            return catalog_answer
         if hits:
             context = format_retrieved_context(hits, context_texts)
         elif knowledge_catalog:

@@ -39,6 +39,21 @@ class AnswerAgentTest(unittest.TestCase):
         self.assertIn("knowledge_base_catalog", context_message)
         self.assertIn("井资料/化163-1井/施工设计.docx", context_message)
 
+    def test_returns_deterministic_catalog_answer_without_model_call(self):
+        models = FakeModels()
+
+        answer = AnswerAgent(models).run(
+            "化163-1井文件夹里有哪些文件？",
+            [],
+            [],
+            retrieval_used=False,
+            catalog_answer="化163-1井中共有 **2** 个已入库文件：\n- `施工设计.docx`\n- `施工总结.pdf`",
+        )
+
+        self.assertIn("施工设计.docx", answer)
+        self.assertIn("施工总结.pdf", answer)
+        self.assertEqual(models.calls, [])
+
     def test_unsuccessful_retrieval_does_not_fall_back_to_unrelated_history(self):
         models = FakeModels()
 

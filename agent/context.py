@@ -31,16 +31,10 @@ def format_retrieved_context(
 
 def format_knowledge_catalog(documents: Sequence[Mapping[str, Any]], max_chars: int = 12_000) -> str:
     """Render a bounded folder and file catalog from ready document metadata."""
-    file_paths = set()
+    entries = _ready_document_catalog_entries(documents)
+    file_paths = {path for _folder, path in entries}
     folder_paths = set()
-    for document in documents:
-        if document.get("status") != "ready":
-            continue
-        file_name = str(document.get("file_name") or document.get("title") or "").strip()
-        folder_path = str(document.get("folder_path") or "").replace("\\", "/").strip("/")
-        if not file_name:
-            continue
-        file_paths.add(f"{folder_path}/{file_name}" if folder_path else file_name)
+    for folder_path, _path in entries:
         if folder_path:
             parts = folder_path.split("/")
             folder_paths.update("/".join(parts[:index]) for index in range(1, len(parts) + 1))
@@ -51,12 +45,12 @@ def format_knowledge_catalog(documents: Sequence[Mapping[str, Any]], max_chars: 
         f"已入库目录：{len(sorted_folders)} 个文件夹，{len(sorted_files)} 个文件。",
         "[文件夹]",
     ]
-    entries = [*(f"- {path}" for path in sorted_folders), "[文件]", *(f"- {path}" for path in sorted_files)]
+    catalog_lines = [*(f"- {path}" for path in sorted_folders), "[文件]", *(f"- {path}" for path in sorted_files)]
     omitted = 0
-    for index, entry in enumerate(entries):
+    for index, entry in enumerate(catalog_lines):
         candidate = "\n".join([*lines, entry])
         if len(candidate) > max_chars:
-            omitted = len(entries) - index
+            omitted = len(catalog_lines) - index
             break
         lines.append(entry)
     if omitted:
@@ -67,3 +61,68 @@ def format_knowledge_catalog(documents: Sequence[Mapping[str, Any]], max_chars: 
             suffix = f"... 另有 {omitted} 项因目录上下文长度限制未显示。"
         lines.append(suffix)
     return "\n".join(lines)
+
+
+def format_knowledge_catalog_answer(
+    question: str,
+    documents: Sequence[Mapping[str, Any]],
+    history: Sequence[Mapping[str, Any]] = (),
+) -> str:
+    """Build an exact Markdown file listing without relying on a language model."""
+    entries = _ready_document_catalog_entries(documents)
+    if not entries:
+        return "当前知识库还没有已完成入库的文件。"
+
+    folders = sorted({folder for folder, _path in entries if folder}, key=lambda value: (-len(value), value.casefold()))
+    targets = _mentioned_catalog_folders(question, folders)
+    if not targets:
+        for message in reversed(history):
+            if message.get("role") != "user":
+                continue
+            targets = _mentioned_catalog_folders(str(message.get("content") or ""), folders)
+            if targets:
+                break
+
+    selected = [
+        path
+        for folder, path in entries
+        if not targets or any(folder == target or folder.startswith(f"{target}/") for target in targets)
+    ]
+    selected = sorted(set(selected), key=str.casefold)
+    if targets and not selected:
+        return "没有找到该文件夹中的已入库文件。"
+
+    scope = "、".join(f"`{_escape_markdown_code(target)}`" for target in targets) if targets else "知识库"
+    lines = [f"{scope}中共有 **{len(selected)}** 个已入库文件："]
+    lines.extend(f"- `{_escape_markdown_code(path)}`" for path in selected)
+    return "\n".join(lines)
+
+
+def _ready_document_catalog_entries(documents: Sequence[Mapping[str, Any]]) -> list[tuple[str, str]]:
+    entries = set()
+    for document in documents:
+        if document.get("status") != "ready":
+            continue
+        file_name = str(document.get("file_name") or document.get("title") or "").strip()
+        folder_path = str(document.get("folder_path") or "").replace("\\", "/").strip("/")
+        if not file_name:
+            continue
+        path = f"{folder_path}/{file_name}" if folder_path else file_name
+        entries.add((folder_path, path))
+    return sorted(entries, key=lambda item: item[1].casefold())
+
+
+def _mentioned_catalog_folders(text: str, folders: Sequence[str]) -> list[str]:
+    normalized = text.replace("\\", "/").casefold()
+    full_matches = [folder for folder in folders if folder.casefold() in normalized]
+    if full_matches:
+        return [
+            folder
+            for folder in full_matches
+            if not any(other != folder and other.startswith(f"{folder}/") for other in full_matches)
+        ]
+    return [folder for folder in folders if folder.rsplit("/", 1)[-1].casefold() in normalized]
+
+
+def _escape_markdown_code(value: str) -> str:
+    return value.replace("`", "\\`")
