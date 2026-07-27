@@ -6,7 +6,9 @@ from io import BytesIO, StringIO
 import json
 import os
 from pathlib import Path
+import posixpath
 import re
+import struct
 import sys
 import tempfile
 from typing import Any, Iterable
@@ -45,6 +47,23 @@ SUPPORTED_SUFFIXES = frozenset(
     }
 )
 
+GEOMAP_LAYER_STYLE_MAGIC = b"Geomap v3.60 LayerStyle\x00"
+GEOMAP_LAYER_STYLE_HEADER_SIZE = 516
+GEOMAP_LAYER_STYLE_RECORD_SIZE = 524
+GEOMAP_LAYER_STYLE_TEXT_SLOTS = (
+    (0, 64),
+    (80, 64),
+    (160, 64),
+    (240, 64),
+    (320, 64),
+    (400, 64),
+    (480, 32),
+)
+GEOMAP_ALBUM_MAGIC = b"GeoMap Album Information\n"
+GEOMAP_ALBUM_TREE_OFFSET = 2048
+PACKAGE_RELATIONSHIPS_NAMESPACE = "http://schemas.openxmlformats.org/package/2006/relationships"
+OPTIONAL_OFFICE_UI_PART_PREFIXES = ("customUI/", "userCustomization/")
+
 
 class UnsupportedDocumentTypeError(ValueError):
     pass
@@ -75,6 +94,64 @@ def _cell_text(value: Any) -> str:
     if isinstance(value, float) and value.is_integer():
         return str(int(value))
     return str(value).strip()
+
+
+def _relationship_source_directory(relationship_file: str) -> str:
+    directory, file_name = posixpath.split(relationship_file)
+    if posixpath.basename(directory) != "_rels" or not file_name.endswith(".rels"):
+        return ""
+    source_directory = posixpath.dirname(directory)
+    return source_directory
+
+
+def _repair_missing_optional_docx_parts(content: bytes) -> bytes:
+    """Remove broken relationships to optional Office UI customization parts."""
+    with ZipFile(BytesIO(content)) as source:
+        archive_names = set(source.namelist())
+        rewritten_relationships: dict[str, bytes] = {}
+        relationship_tag = f"{{{PACKAGE_RELATIONSHIPS_NAMESPACE}}}Relationship"
+
+        for entry in source.infolist():
+            if not entry.filename.endswith(".rels"):
+                continue
+            relationship_xml = source.read(entry)
+            try:
+                root = ElementTree.fromstring(relationship_xml)
+            except ElementTree.ParseError:
+                continue
+
+            source_directory = _relationship_source_directory(entry.filename)
+            changed = False
+            for relationship in list(root):
+                if relationship.tag != relationship_tag or relationship.get("TargetMode") == "External":
+                    continue
+                target = relationship.get("Target", "").replace("\\", "/")
+                target_part = posixpath.normpath(
+                    target.lstrip("/") if target.startswith("/") else posixpath.join(source_directory, target)
+                )
+                is_optional_ui_part = target_part.startswith(OPTIONAL_OFFICE_UI_PART_PREFIXES)
+                if is_optional_ui_part and target_part not in archive_names:
+                    root.remove(relationship)
+                    changed = True
+
+            if changed:
+                rewritten_relationships[entry.filename] = ElementTree.tostring(
+                    root,
+                    encoding="utf-8",
+                    xml_declaration=True,
+                )
+
+        if not rewritten_relationships:
+            return content
+
+        repaired = BytesIO()
+        with ZipFile(repaired, "w") as destination:
+            for entry in source.infolist():
+                destination.writestr(
+                    entry,
+                    rewritten_relationships.get(entry.filename, source.read(entry)),
+                )
+        return repaired.getvalue()
 
 
 class DocumentParser:
@@ -111,9 +188,9 @@ class DocumentParser:
         elif suffix == ".ppt":
             sources = self._parse_ppt(content)
         elif suffix == ".lst":
-            sources = [(None, None, _decode_text(content))]
+            sources = self._parse_lst(file_name, content)
         elif suffix == ".att":
-            sources = self._parse_without_extension(file_name, content)
+            sources = self._parse_att(file_name, content)
         elif suffix in {".dll", ".gdb"}:
             sources = self._parse_binary(file_name, content)
         elif not suffix:
@@ -134,7 +211,13 @@ class DocumentParser:
     def _parse_docx(self, content: bytes) -> list[tuple[int | None, str | None, str]]:
         from docx import Document
 
-        document = Document(BytesIO(content))
+        try:
+            document = Document(BytesIO(content))
+        except KeyError:
+            repaired_content = _repair_missing_optional_docx_parts(content)
+            if repaired_content is content:
+                raise
+            document = Document(BytesIO(repaired_content))
         parts = [paragraph.text for paragraph in document.paragraphs if paragraph.text.strip()]
         for table in document.tables:
             for row in table.rows:
@@ -400,6 +483,187 @@ class DocumentParser:
         if content.startswith(b"PK\x03\x04"):
             return self._parse_zip_container(content)
         return self._parse_binary(file_name, content)
+
+    def _parse_att(self, file_name: str, content: bytes) -> list[tuple[int | None, str | None, str]]:
+        if content.startswith(GEOMAP_LAYER_STYLE_MAGIC):
+            return self._parse_geomap_layer_style(file_name, content)
+        return self._parse_without_extension(file_name, content)
+
+    def _parse_lst(self, file_name: str, content: bytes) -> list[tuple[int | None, str | None, str]]:
+        if content.startswith(GEOMAP_ALBUM_MAGIC):
+            return self._parse_geomap_album(file_name, content)
+        return [(None, None, _decode_text(content))]
+
+    def _parse_geomap_album(
+        self,
+        file_name: str,
+        content: bytes,
+    ) -> list[tuple[int | None, str | None, str]]:
+        if len(content) <= GEOMAP_ALBUM_TREE_OFFSET:
+            raise ValueError("GeoMap Album Information 文件损坏：缺少图册树数据")
+
+        cursor = GEOMAP_ALBUM_TREE_OFFSET
+
+        def read_u32() -> int:
+            nonlocal cursor
+            if cursor + 4 > len(content):
+                raise ValueError("读取 uint32 时超出文件边界")
+            value = struct.unpack_from("<I", content, cursor)[0]
+            cursor += 4
+            return value
+
+        def read_string() -> str:
+            nonlocal cursor
+            size = read_u32()
+            if size > 1024 * 1024 or cursor + size > len(content):
+                raise ValueError(f"非法的 GBK 字符串长度: {size}")
+            raw = content[cursor:cursor + size]
+            cursor += size
+            try:
+                return raw.decode("gb18030")
+            except UnicodeDecodeError as exc:
+                raise ValueError("GeoMap 图册字符串不是有效的 GBK/GB18030") from exc
+
+        try:
+            stored_file_name = read_string()
+            flags = read_u32()
+            album_name = read_string()
+            category_count = read_u32()
+            if category_count > 10_000:
+                raise ValueError(f"非法的图册分类数: {category_count}")
+
+            categories: list[tuple[str, list[tuple[str, str, str]]]] = []
+            total_items = 0
+            for _ in range(category_count):
+                node_type = read_u32()
+                if node_type != 3:
+                    raise ValueError(f"未知的图册分类节点类型: {node_type}")
+                category_name = read_string()
+                item_count = read_u32()
+                if item_count > 100_000:
+                    raise ValueError(f"非法的图件数: {item_count}")
+                items = []
+                for _ in range(item_count):
+                    item_type = read_u32()
+                    if item_type != 1:
+                        raise ValueError(f"未知的图册图件节点类型: {item_type}")
+                    display_name = read_string()
+                    folder_path = read_string().replace("\\", "/").strip("/")
+                    database_name = read_string()
+                    items.append((display_name, folder_path, database_name))
+                total_items += len(items)
+                categories.append((category_name, items))
+
+            if cursor != len(content):
+                raise ValueError(f"图册树结束后仍有 {len(content) - cursor} 字节未解析数据")
+        except ValueError as exc:
+            raise ValueError(f"GeoMap Album Information 文件损坏: {exc}") from exc
+
+        sources: list[tuple[int | None, str | None, str]] = [
+            (
+                None,
+                "GeoMap Album Information",
+                "\n".join(
+                    (
+                        f"文件名: {file_name}",
+                        "格式: GeoMap Album Information 图册信息文件",
+                        "字符编码: GBK/GB18030",
+                        f"图册名: {album_name or stored_file_name}",
+                        f"分类数: {len(categories)}",
+                        f"图件数: {total_items}",
+                        f"图册标志: {flags}",
+                    )
+                ),
+            )
+        ]
+        for category_name, items in categories:
+            for display_name, folder_path, database_name in items:
+                relative_path = f"{folder_path}/{database_name}" if folder_path else database_name
+                sources.append(
+                    (
+                        None,
+                        f"GeoMap图册/{category_name}/{display_name}",
+                        "\n".join(
+                            (
+                                f"图册: {album_name or stored_file_name}",
+                                f"分类: {category_name}",
+                                f"图件显示名: {display_name}",
+                                f"相对目录: {folder_path or '.'}",
+                                f"GeoMap 数据库文件: {database_name}",
+                                f"完整相对路径: {relative_path}",
+                            )
+                        ),
+                    )
+                )
+        return sources
+
+    def _parse_geomap_layer_style(
+        self,
+        file_name: str,
+        content: bytes,
+    ) -> list[tuple[int | None, str | None, str]]:
+        body_size = len(content) - GEOMAP_LAYER_STYLE_HEADER_SIZE
+        if body_size <= 0 or body_size % GEOMAP_LAYER_STYLE_RECORD_SIZE:
+            raise ValueError(
+                "Geomap v3.60 LayerStyle 文件损坏："
+                f"文件头后的数据长度不是 {GEOMAP_LAYER_STYLE_RECORD_SIZE} 字节记录的整数倍"
+            )
+
+        record_count = body_size // GEOMAP_LAYER_STYLE_RECORD_SIZE
+        sources: list[tuple[int | None, str | None, str]] = [
+            (
+                None,
+                "Geomap v3.60 LayerStyle",
+                "\n".join(
+                    (
+                        f"文件名: {file_name}",
+                        "格式: Geomap v3.60 LayerStyle 属性文件",
+                        "字符编码: GBK/GB18030",
+                        f"LayerStyle 记录数: {record_count}",
+                        f"固定记录长度: {GEOMAP_LAYER_STYLE_RECORD_SIZE} 字节",
+                    )
+                ),
+            )
+        ]
+
+        for index in range(record_count):
+            start = GEOMAP_LAYER_STYLE_HEADER_SIZE + index * GEOMAP_LAYER_STYLE_RECORD_SIZE
+            record = content[start:start + GEOMAP_LAYER_STYLE_RECORD_SIZE]
+            fields = [
+                value
+                for offset, width in GEOMAP_LAYER_STYLE_TEXT_SLOTS
+                if (value := self._decode_geomap_text_slot(record[offset:offset + width]))
+            ]
+            if not fields:
+                continue
+            group_name = fields[0]
+            lines = [
+                f"LayerStyle 记录: {index + 1}/{record_count}",
+                f"图层、对象或属性组: {group_name}",
+            ]
+            if len(fields) > 1:
+                lines.append("原始字段序列: " + " | ".join(fields[1:]))
+            sources.append((None, f"LayerStyle/{index + 1:03d}/{group_name}", "\n".join(lines)))
+        return sources
+
+    @staticmethod
+    def _decode_geomap_text_slot(slot: bytes) -> str:
+        raw = slot.split(b"\x00", 1)[0]
+        if not raw:
+            return ""
+        try:
+            value = raw.decode("gb18030").strip()
+        except UnicodeDecodeError:
+            return ""
+        if not value or any(ord(character) < 32 for character in value):
+            return ""
+        meaningful = sum(
+            character.isalnum()
+            or "\u4e00" <= character <= "\u9fff"
+            or character in "._- /"
+            for character in value
+        )
+        return value if meaningful / len(value) >= 0.7 else ""
 
     def _looks_like_text(self, content: bytes) -> bool:
         sample = content[:8192]

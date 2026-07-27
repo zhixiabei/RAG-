@@ -166,6 +166,18 @@ def upload_document(request: Request, knowledge_base_id: str, file: UploadFile =
         raise HTTPException(500, f"文档入库失败: {exc}") from exc
 
 
+@router.delete("/api/v1/knowledge-bases/{knowledge_base_id}/documents")
+def delete_document_folder(request: Request, knowledge_base_id: str, folder_path: str):
+    service, _, _ = owned_knowledge_base(request, knowledge_base_id)
+    try:
+        deleted_count = service.deletion.delete_document_folder(knowledge_base_id, folder_path)
+    except Exception as exc:
+        raise HTTPException(503, f"文件夹删除失败: {exc}") from exc
+    if not deleted_count:
+        raise HTTPException(404, "文件夹不存在或文件夹中没有文档")
+    return {"deleted_count": deleted_count}
+
+
 @router.delete("/api/v1/knowledge-bases/{knowledge_base_id}/documents/{document_id}", status_code=204)
 def delete_document(request: Request, knowledge_base_id: str, document_id: str):
     service, _, _ = owned_knowledge_base(request, knowledge_base_id)

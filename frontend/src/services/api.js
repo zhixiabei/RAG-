@@ -70,6 +70,11 @@ export function deleteDocument(knowledgeBaseId, documentId) {
   return request(`/api/v1/knowledge-bases/${knowledgeBaseId}/documents/${documentId}`, { method: 'DELETE' })
 }
 
+export function deleteDocumentFolder(knowledgeBaseId, folderPath) {
+  const query = new URLSearchParams({ folder_path: folderPath })
+  return request(`/api/v1/knowledge-bases/${knowledgeBaseId}/documents?${query}`, { method: 'DELETE' })
+}
+
 export function listChatModels() {
   return request('/api/v1/models')
 }

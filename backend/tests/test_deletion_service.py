@@ -11,11 +11,13 @@ class FakeRepository:
                 "id": "doc-1",
                 "knowledge_base_id": "kb-1",
                 "source_object_key": "kb-1/doc-1/source/test.pdf",
+                "folder_path": "project/reports",
             },
             "doc-2": {
                 "id": "doc-2",
                 "knowledge_base_id": "kb-1",
                 "source_object_key": "kb-1/doc-2/source/other.pdf",
+                "folder_path": "project/data",
             },
         }
         self.deleted_documents = []
@@ -89,6 +91,21 @@ class DeletionServiceTest(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "MinIO unavailable"):
             self.service.delete_document("kb-1", "doc-1")
 
+        self.assertEqual(self.repository.deleted_documents, [])
+
+    def test_deletes_folder_and_all_nested_documents(self):
+        deleted_count = self.service.delete_document_folder("kb-1", "project")
+
+        self.assertEqual(deleted_count, 2)
+        self.assertEqual(self.vectors.deleted_documents, ["doc-1", "doc-2"])
+        self.assertEqual(
+            self.objects.deleted,
+            ["kb-1/doc-1/source/test.pdf", "kb-1/doc-2/source/other.pdf"],
+        )
+        self.assertEqual(self.repository.deleted_documents, ["doc-1", "doc-2"])
+
+    def test_does_not_treat_parent_path_as_a_folder(self):
+        self.assertEqual(self.service.delete_document_folder("kb-1", ".."), 0)
         self.assertEqual(self.repository.deleted_documents, [])
 
     def test_deletes_knowledge_base_and_all_source_objects(self):

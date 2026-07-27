@@ -26,6 +26,24 @@ const loggingIn = ref(false)
 const importActive = ref(false)
 let documentPollTimer = null
 
+const deleteDialogTitle = computed(() => {
+  if (deleteTarget.value?.type === 'knowledge-base') return '删除知识库'
+  if (deleteTarget.value?.type === 'document-folder') return '删除文件夹'
+  return '删除文档'
+})
+
+const deleteDialogMessage = computed(() => {
+  const target = deleteTarget.value
+  if (!target) return ''
+  if (target.type === 'knowledge-base') {
+    return `知识库“${target.item.name}”中的文档、向量和历史对话都会被永久删除。`
+  }
+  if (target.type === 'document-folder') {
+    return `文件夹“${target.item.name}”及其子文件夹中的 ${target.item.documentCount} 个文档、原文件和向量索引都会被永久删除。`
+  }
+  return `文档“${target.item.title}”及其原文件和向量索引都会被永久删除。`
+})
+
 const filteredDocuments = computed(() => {
   const terms = documentQuery.value
     .trim()
@@ -36,7 +54,7 @@ const filteredDocuments = computed(() => {
   if (!terms.length) return store.documents
 
   return store.documents.filter((document) => {
-    const searchableText = `${document.title || ''} ${document.file_name || ''}`.toLocaleLowerCase('zh-CN')
+    const searchableText = `${document.title || ''} ${document.file_name || ''} ${document.folder_path || ''}`.toLocaleLowerCase('zh-CN')
     return terms.every((term) => searchableText.includes(term))
   })
 })
@@ -158,6 +176,11 @@ function requestDocumentDelete(item) {
   deleteTarget.value = { type: 'document', item, knowledgeBaseId: store.selectedId }
 }
 
+function requestDocumentFolderDelete(item) {
+  deleteError.value = ''
+  deleteTarget.value = { type: 'document-folder', item, knowledgeBaseId: store.selectedId }
+}
+
 function closeDeleteDialog() {
   if (deletingId.value) return
   deleteTarget.value = null
@@ -172,6 +195,8 @@ async function confirmDelete() {
   try {
     if (target.type === 'knowledge-base') {
       await store.removeKnowledgeBase(target.item.id)
+    } else if (target.type === 'document-folder') {
+      await store.removeDocumentFolder(target.knowledgeBaseId, target.item.path)
     } else {
       await store.removeDocument(target.knowledgeBaseId, target.item.id)
     }
@@ -240,11 +265,14 @@ async function confirmDelete() {
             </label>
           </div>
           <DocumentList
+            :key="store.selected.id"
             :documents="filteredDocuments"
             :loading="store.loading"
             :empty-message="documentQuery.trim() ? `没有找到包含“${documentQuery.trim()}”的文档` : ''"
-            :deleting-id="deleteTarget?.type === 'document' ? deletingId : null"
+            :deleting-id="deleteTarget?.type === 'knowledge-base' ? null : deletingId"
+            :folder-actions="!documentQuery.trim()"
             @delete="requestDocumentDelete"
+            @delete-folder="requestDocumentFolderDelete"
           />
         </section>
 
@@ -263,10 +291,8 @@ async function confirmDelete() {
     <CreateKnowledgeBaseDialog v-if="createDialogOpen" :saving="creating" @close="createDialogOpen = false" @submit="createKnowledgeBase" />
     <DeleteConfirmDialog
       v-if="deleteTarget"
-      :title="deleteTarget.type === 'knowledge-base' ? '删除知识库' : '删除文档'"
-      :message="deleteTarget.type === 'knowledge-base'
-        ? `知识库“${deleteTarget.item.name}”中的文档、向量和历史对话都会被永久删除。`
-        : `文档“${deleteTarget.item.title}”及其原文件和向量索引都会被永久删除。`"
+      :title="deleteDialogTitle"
+      :message="deleteDialogMessage"
       :busy="Boolean(deletingId)"
       :error="deleteError"
       @close="closeDeleteDialog"

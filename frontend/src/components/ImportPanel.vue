@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { AlertTriangle, FileUp, FolderOpen, LoaderCircle, UploadCloud, X } from 'lucide-vue-next'
+import { AlertTriangle, ChevronRight, FileUp, Folder, FolderOpen, LoaderCircle, UploadCloud, X } from 'lucide-vue-next'
 import { uploadDocument } from '../services/api'
 
 const props = defineProps({ kbId: { type: String, required: true } })
@@ -18,6 +18,7 @@ const importedPaths = ref(new Set())
 const skippedDuplicateCount = ref(0)
 const recoveryMessage = ref('')
 const importGeneration = ref(0)
+const expandedFolders = ref(new Set())
 
 // 每个文件的状态: queued | uploading | done | failed
 const fileStatus = ref({})
@@ -46,6 +47,77 @@ const queueCounts = computed(() => {
   return counts
 })
 
+const queueRows = computed(() => {
+  const root = { folders: new Map(), files: [] }
+
+  files.value.forEach((file, index) => {
+    const relativePath = (file.webkitRelativePath || file.name).replaceAll('\\', '/')
+    const parts = relativePath.split('/').filter(Boolean)
+    const folderNames = parts.slice(0, -1)
+    let node = root
+    const pathParts = []
+
+    folderNames.forEach((name) => {
+      pathParts.push(name)
+      if (!node.folders.has(name)) {
+        node.folders.set(name, {
+          id: `folder:${pathParts.join('/')}`,
+          name,
+          path: pathParts.join('/'),
+          folders: new Map(),
+          files: [],
+        })
+      }
+      node = node.folders.get(name)
+    })
+
+    node.files.push({
+      id: `file:${index}:${relativePath}`,
+      type: 'file',
+      file,
+      index,
+      name: file.name,
+      path: relativePath,
+    })
+  })
+
+  function summarize(node) {
+    const counts = { queued: 0, uploading: 0, done: 0, failed: 0 }
+    const fileIndices = []
+
+    node.folders.forEach((folder) => {
+      summarize(folder)
+      Object.keys(counts).forEach((status) => { counts[status] += folder.counts[status] })
+      fileIndices.push(...folder.fileIndices)
+    })
+    node.files.forEach((entry) => {
+      const status = fileStatus.value[entry.index] || 'queued'
+      counts[status]++
+      fileIndices.push(entry.index)
+    })
+
+    node.counts = counts
+    node.fileIndices = fileIndices
+    node.fileCount = fileIndices.length
+  }
+
+  summarize(root)
+  const rows = []
+
+  function appendRows(node, depth) {
+    node.folders.forEach((folder) => {
+      rows.push({ ...folder, type: 'folder', depth })
+      if (expandedFolders.value.has(folder.id)) {
+        appendRows(folder, depth + 1)
+      }
+    })
+    node.files.forEach((entry) => rows.push({ ...entry, depth }))
+  }
+
+  appendRows(root, 0)
+  return rows
+})
+
 function queueStatusLabel(status) {
   return {
     queued: '等待导入',
@@ -53,6 +125,29 @@ function queueStatusLabel(status) {
     done: '已完成',
     failed: '导入失败',
   }[status] || '等待导入'
+}
+
+function folderStatus(folder) {
+  if (folder.counts.uploading) return 'uploading'
+  if (folder.counts.failed) return 'failed'
+  if (folder.counts.done === folder.fileCount) return 'done'
+  return 'queued'
+}
+
+function folderSummary(folder) {
+  const parts = [`${folder.fileCount} 个文件`]
+  if (folder.counts.queued) parts.push(`等待 ${folder.counts.queued}`)
+  if (folder.counts.uploading) parts.push(`导入中 ${folder.counts.uploading}`)
+  if (folder.counts.done) parts.push(`完成 ${folder.counts.done}`)
+  if (folder.counts.failed) parts.push(`失败 ${folder.counts.failed}`)
+  return parts.join(' · ')
+}
+
+function toggleFolder(folderId) {
+  const next = new Set(expandedFolders.value)
+  if (next.has(folderId)) next.delete(folderId)
+  else next.add(folderId)
+  expandedFolders.value = next
 }
 
 const SUPPORTED_EXTENSIONS = new Set([
@@ -137,6 +232,7 @@ function resetState() {
   skippedDuplicateCount.value = 0
   skippedTypes.value = []
   recoveryMessage.value = ''
+  expandedFolders.value = new Set()
   if (fileInput.value) fileInput.value.value = ''
   if (folderInput.value) folderInput.value.value = ''
 }
@@ -175,10 +271,6 @@ function folderPathFor(file) {
   return parts.slice(0, -1).join('/')
 }
 
-function displayName(file) {
-  return file.webkitRelativePath || file.name
-}
-
 function fileIdentity(file) {
   const path = folderPathFor(file)
   return path ? `${path}/${file.name}` : file.name
@@ -211,22 +303,30 @@ function chooseFiles(event) {
   failed.value = []
   fileStatus.value = {}
   fileErrors.value = {}
+  expandedFolders.value = new Set()
   files.value.forEach((_, idx) => { fileStatus.value[idx] = 'queued' })
   error.value = files.value.length ? '' : (duplicateCount > 0 ? '所选文件均已导入，无需重复导入' : '所选文件夹中没有可导入的文档')
   recoveryMessage.value = ''
   saveQueueSnapshot()
 }
 
-function removeFile(index) {
-  files.value.splice(index, 1)
+function removeFiles(indices) {
+  const removed = new Set(indices)
+  const remaining = []
   const newStatus = {}
   const newErrors = {}
-  files.value.forEach((_, idx) => {
-    newStatus[idx] = fileStatus.value[idx >= index ? idx + 1 : idx] || 'queued'
-    if (fileErrors.value[idx >= index ? idx + 1 : idx]) {
-      newErrors[idx] = fileErrors.value[idx >= index ? idx + 1 : idx]
+
+  files.value.forEach((file, oldIndex) => {
+    if (removed.has(oldIndex)) return
+    const newIndex = remaining.length
+    remaining.push(file)
+    newStatus[newIndex] = fileStatus.value[oldIndex] || 'queued'
+    if (fileErrors.value[oldIndex]) {
+      newErrors[newIndex] = fileErrors.value[oldIndex]
     }
   })
+
+  files.value = remaining
   fileStatus.value = newStatus
   fileErrors.value = newErrors
   if (files.value.length) {
@@ -234,6 +334,10 @@ function removeFile(index) {
   } else {
     clearQueueSnapshot()
   }
+}
+
+function removeFile(index) {
+  removeFiles([index])
 }
 
 async function uploadOne(knowledgeBaseId, file, index) {
@@ -381,23 +485,45 @@ async function startImport() {
       <div class="progress-track"><span :style="{ width: `${progress}%` }" /></div>
       <div class="queue-list">
         <div
-          v-for="(file, index) in files"
-          :key="`${displayName(file)}-${index}`"
+          v-for="row in queueRows"
+          :key="row.id"
           class="queue-item"
-          :class="{ 'queue-item-done': fileStatus[index] === 'done', 'queue-item-failed': fileStatus[index] === 'failed' }"
+          :class="{
+            'queue-folder': row.type === 'folder',
+            'queue-item-done': row.type === 'folder' ? folderStatus(row) === 'done' : fileStatus[row.index] === 'done',
+            'queue-item-failed': row.type === 'folder' ? folderStatus(row) === 'failed' : fileStatus[row.index] === 'failed',
+          }"
+          :style="{ '--queue-depth': row.depth }"
         >
-          <span class="queue-item-icon">
-            <LoaderCircle v-if="fileStatus[index] === 'uploading'" :size="14" class="spinning" />
-            <span v-else-if="fileStatus[index] === 'done'" class="icon-done">✓</span>
-            <span v-else-if="fileStatus[index] === 'failed'" class="icon-fail">✗</span>
-            <span v-else class="icon-queued">—</span>
-          </span>
-          <span class="queue-item-name">{{ displayName(file) }}</span>
-          <span class="queue-item-status" :data-status="fileStatus[index] || 'queued'">
-            {{ queueStatusLabel(fileStatus[index]) }}
-          </span>
-          <span v-if="fileErrors[index]" class="queue-item-error">{{ fileErrors[index] }}</span>
-          <button v-if="!importing" class="icon-button subtle" title="移除" @click="removeFile(index)"><X :size="14" /></button>
+          <template v-if="row.type === 'folder'">
+            <button
+              class="queue-folder-main"
+              type="button"
+              :aria-expanded="expandedFolders.has(row.id)"
+              :title="row.path"
+              @click="toggleFolder(row.id)"
+            >
+              <ChevronRight :size="14" class="queue-folder-chevron" :class="{ expanded: expandedFolders.has(row.id) }" />
+              <Folder :size="15" />
+              <span class="queue-item-name">{{ row.name }}</span>
+            </button>
+            <span class="queue-folder-summary" :data-status="folderStatus(row)">{{ folderSummary(row) }}</span>
+            <button v-if="!importing" class="icon-button subtle" title="移除文件夹" @click="removeFiles(row.fileIndices)"><X :size="14" /></button>
+          </template>
+          <template v-else>
+            <span class="queue-item-icon">
+              <LoaderCircle v-if="fileStatus[row.index] === 'uploading'" :size="14" class="spinning" />
+              <span v-else-if="fileStatus[row.index] === 'done'" class="icon-done">✓</span>
+              <span v-else-if="fileStatus[row.index] === 'failed'" class="icon-fail">✗</span>
+              <span v-else class="icon-queued">—</span>
+            </span>
+            <span class="queue-item-name" :title="row.path">{{ row.name }}</span>
+            <span class="queue-item-status" :data-status="fileStatus[row.index] || 'queued'">
+              {{ queueStatusLabel(fileStatus[row.index]) }}
+            </span>
+            <span v-if="fileErrors[row.index]" class="queue-item-error">{{ fileErrors[row.index] }}</span>
+            <button v-if="!importing" class="icon-button subtle" title="移除" @click="removeFile(row.index)"><X :size="14" /></button>
+          </template>
         </div>
       </div>
       <button class="button primary import-button" :disabled="importing" @click="startImport">

@@ -3,6 +3,7 @@ import { defineStore } from 'pinia'
 import {
   createKnowledgeBase,
   deleteDocument as deleteDocumentRequest,
+  deleteDocumentFolder as deleteDocumentFolderRequest,
   deleteKnowledgeBase as deleteKnowledgeBaseRequest,
   listDocuments,
   listKnowledgeBases,
@@ -69,6 +70,18 @@ export const useKnowledgeBaseStore = defineStore('knowledgeBase', () => {
     }
   }
 
+  async function removeDocumentFolder(knowledgeBaseId, folderPath) {
+    await deleteDocumentFolderRequest(knowledgeBaseId, folderPath)
+    if (selectedId.value === knowledgeBaseId) {
+      const normalizedPath = folderPath.replaceAll('\\', '/').replace(/^\/+|\/+$/g, '')
+      const prefix = `${normalizedPath}/`
+      documents.value = documents.value.filter((document) => {
+        const documentPath = String(document.folder_path || '').replaceAll('\\', '/').replace(/^\/+|\/+$/g, '')
+        return documentPath !== normalizedPath && !documentPath.startsWith(prefix)
+      })
+    }
+  }
+
   function reset() {
     items.value = []
     documents.value = []
@@ -91,6 +104,7 @@ export const useKnowledgeBaseStore = defineStore('knowledgeBase', () => {
     create,
     removeKnowledgeBase,
     removeDocument,
+    removeDocumentFolder,
     reset,
   }
 })

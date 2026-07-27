@@ -1,4 +1,6 @@
 :root {
+  --document-depth: 0;
+  --queue-depth: 0;
   color: #20262e;
   background: #f5f6f8;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -100,6 +102,15 @@ h1, h2, h3, p { margin: 0; }
 .document-name { display: flex; align-items: center; gap: 8px; color: #34404a; font-weight: 600; }
 .document-name svg { color: #b87931; }
 .document-file { display: block; margin-top: 5px; color: #9da5aa; }
+.document-file-row > td:first-child, .document-folder-row > td:first-child { padding-left: calc(16px + var(--document-depth, 0) * 20px); }
+.document-folder-row { background: #fafbfb; }
+.document-folder-row:hover { background: #f5f8f8; }
+.document-folder-button { display: flex; align-items: center; gap: 8px; max-width: 100%; color: #34404a; background: transparent; font-size: 12px; font-weight: 700; text-align: left; }
+.document-folder-button:hover { color: #285f63; }
+.document-folder-button > svg { flex: 0 0 auto; color: #b87931; }
+.document-folder-button > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.document-folder-button > .document-folder-chevron { color: #9aa4a9; transition: transform .16s ease; }
+.document-folder-chevron.expanded { transform: rotate(90deg); }
 .muted { color: #8f999f !important; }
 .status { display: inline-flex; align-items: center; gap: 6px; color: #718079; font-size: 11px; }
 .status i { width: 6px; height: 6px; border-radius: 50%; background: #9ca5a9; }
@@ -131,8 +142,8 @@ h1, h2, h3, p { margin: 0; }
 .queue-header span { color: #9aa4a9; }
 .queue-summary { font-variant-numeric: tabular-nums; }
 .progress-track { height: 5px; margin: 10px 0; overflow: hidden; border-radius: 5px; background: #edf0f1; }.progress-track span { display: block; height: 100%; border-radius: inherit; background: #d28d3b; transition: width .2s ease; }
-.queue-list { max-height: 140px; overflow: auto; }
-.queue-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 0; color: #7f8a91; font-size: 11px; }.queue-item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.queue-list { max-height: 220px; overflow: auto; }
+.queue-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 32px; padding: 4px 0 4px calc(var(--queue-depth, 0) * 18px); color: #7f8a91; font-size: 11px; }.queue-item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .queue-item-done { color: #4a8c5c; }
 .queue-item-failed { color: #b55d5d; }
 .queue-item-icon { flex-shrink: 0; width: 16px; display: grid; place-items: center; }
@@ -145,6 +156,16 @@ h1, h2, h3, p { margin: 0; }
 .queue-item-status[data-status="done"] { color: #4a8c5c; }
 .queue-item-status[data-status="failed"] { color: #b55d5d; }
 .queue-item-error { flex-shrink: 0; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #b55d5d; font-size: 10px; }
+.queue-folder { border-bottom: 1px solid #f0f2f3; color: #59666e; }
+.queue-folder-main { display: flex; align-items: center; gap: 7px; min-width: 0; flex: 1; height: 28px; color: inherit; background: transparent; text-align: left; }
+.queue-folder-main:hover { color: #285f63; }
+.queue-folder-main > svg { flex: 0 0 auto; }
+.queue-folder-chevron { color: #9aa4a9; transition: transform .16s ease; }
+.queue-folder-chevron.expanded { transform: rotate(90deg); }
+.queue-folder-summary { flex: 0 1 auto; max-width: 55%; color: #8b969d; font-variant-numeric: tabular-nums; }
+.queue-folder-summary[data-status="uploading"] { color: #2f75b5; }
+.queue-folder-summary[data-status="done"] { color: #4a8c5c; }
+.queue-folder-summary[data-status="failed"] { color: #b55d5d; }
 .import-warning { display: flex; align-items: center; gap: 8px; margin-top: 14px; padding: 10px 14px; border-radius: 6px; background: #fff8e6; color: #92600a; font-size: 12px; border: 1px solid #f0d78c; }
 .recovery-banner { display: flex; align-items: center; gap: 8px; margin-top: 14px; padding: 10px 14px; border-radius: 6px; background: #e8f0fe; color: #1a56b5; font-size: 12px; border: 1px solid #c4d7f2; }
 .recovery-banner span { flex: 1; }
