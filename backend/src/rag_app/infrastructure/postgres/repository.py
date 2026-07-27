@@ -59,8 +59,8 @@ class PostgresRepository:
             connection.execute(
                 text("""
                     INSERT INTO documents
-                    (id, knowledge_base_id, title, file_name, mime_type, source_object_key, status)
-                    VALUES (:id, :knowledge_base_id, :title, :file_name, :mime_type, :source_object_key, :status)
+                    (id, knowledge_base_id, title, file_name, mime_type, source_object_key, status, folder_path)
+                    VALUES (:id, :knowledge_base_id, :title, :file_name, :mime_type, :source_object_key, :status, :folder_path)
                 """),
                 item,
             )
@@ -104,7 +104,7 @@ class PostgresRepository:
             connection.execute(text("DELETE FROM documents WHERE knowledge_base_id = :id"), parameters)
             connection.execute(text("DELETE FROM knowledge_bases WHERE id = :id"), parameters)
 
-    def replace_chunks(self, document_id: str, knowledge_base_id: str, chunks: list[ParsedChunk]) -> None:
+    def replace_chunks(self, document_id: str, knowledge_base_id: str, chunks: list[ParsedChunk], folder_path: str = "") -> None:
         with self.engine.begin() as connection:
             connection.execute(text("DELETE FROM document_chunks WHERE document_id = :id"), {"id": document_id})
             for chunk in chunks:
@@ -112,8 +112,8 @@ class PostgresRepository:
                 connection.execute(
                     text("""
                         INSERT INTO document_chunks
-                        (id, document_id, knowledge_base_id, chunk_index, text, page_number, section_path, qdrant_point_id)
-                        VALUES (:id, :document_id, :knowledge_base_id, :chunk_index, :text, :page_number, :section_path, :qdrant_point_id)
+                        (id, document_id, knowledge_base_id, chunk_index, text, page_number, section_path, folder_path, qdrant_point_id)
+                        VALUES (:id, :document_id, :knowledge_base_id, :chunk_index, :text, :page_number, :section_path, :folder_path, :qdrant_point_id)
                     """),
                     {
                         "id": chunk_id,
@@ -123,6 +123,7 @@ class PostgresRepository:
                         "text": chunk.text,
                         "page_number": chunk.page_number,
                         "section_path": chunk.section_path,
+                        "folder_path": folder_path,
                         "qdrant_point_id": vector_point_id(chunk_id),
                     },
                 )

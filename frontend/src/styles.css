@@ -132,6 +132,17 @@ h1, h2, h3, p { margin: 0; }
 .progress-track { height: 5px; margin: 10px 0; overflow: hidden; border-radius: 5px; background: #edf0f1; }.progress-track span { display: block; height: 100%; border-radius: inherit; background: #d28d3b; transition: width .2s ease; }
 .queue-list { max-height: 140px; overflow: auto; }
 .queue-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 0; color: #7f8a91; font-size: 11px; }.queue-item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.queue-item-done { color: #4a8c5c; }
+.queue-item-failed { color: #b55d5d; }
+.queue-item-icon { flex-shrink: 0; width: 16px; display: grid; place-items: center; }
+.icon-done { color: #4a8c5c; font-weight: 700; }
+.icon-fail { color: #b55d5d; font-weight: 700; }
+.icon-queued { color: #c0c7cc; }
+.queue-item-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.queue-item-error { flex-shrink: 0; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #b55d5d; font-size: 10px; }
+.import-warning { display: flex; align-items: center; gap: 8px; margin-top: 14px; padding: 10px 14px; border-radius: 6px; background: #fff8e6; color: #92600a; font-size: 12px; border: 1px solid #f0d78c; }
+.recovery-banner { display: flex; align-items: center; gap: 8px; margin-top: 14px; padding: 10px 14px; border-radius: 6px; background: #e8f0fe; color: #1a56b5; font-size: 12px; border: 1px solid #c4d7f2; }
+.recovery-banner span { flex: 1; }
 .import-button { margin-top: 13px; }.error-list { display: grid; gap: 4px; margin-top: 12px; color: #b55d5d; font-size: 11px; }.error-text { margin-top: 9px; color: #b55d5d; font-size: 12px; }
 
 .chat-workspace { display: grid; grid-template-columns: 220px minmax(0, 1fr); width: 100%; max-width: 1180px; flex: 1; min-height: 0; margin: 0 auto; padding: 24px 38px 28px; overflow: hidden; }

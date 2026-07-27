@@ -53,6 +53,7 @@ class QdrantVectorStore:
                 knowledge_base_id=str(point.payload["knowledge_base_id"]),
                 title=str(point.payload["title"]),
                 text=str(point.payload["text"]),
+                folder_path=str(point.payload.get("folder_path", "")),
                 page_number=point.payload.get("page_number"),
                 score=float(point.score),
             )

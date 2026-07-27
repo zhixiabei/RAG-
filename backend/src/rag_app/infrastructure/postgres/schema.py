@@ -30,6 +30,8 @@ SCHEMA_STATEMENTS = (
     "ALTER TABLE knowledge_bases ADD COLUMN IF NOT EXISTS owner_id TEXT NOT NULL DEFAULT 'personal'",
     "ALTER TABLE documents ADD COLUMN IF NOT EXISTS progress INTEGER NOT NULL DEFAULT 0",
     "ALTER TABLE documents ADD COLUMN IF NOT EXISTS stage TEXT NOT NULL DEFAULT 'queued'",
+    "ALTER TABLE documents ADD COLUMN IF NOT EXISTS folder_path TEXT",
+    "ALTER TABLE document_chunks ADD COLUMN IF NOT EXISTS folder_path TEXT",
     """
     CREATE TABLE IF NOT EXISTS document_chunks (
         id TEXT PRIMARY KEY,

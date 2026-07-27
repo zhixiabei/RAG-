@@ -143,48 +143,66 @@ class DocumentParser:
         word = None
         document = None
         pythoncom = None
-        try:
-            import pythoncom
-            from win32com.client import DispatchEx
+        import threading
 
-            pythoncom.CoInitialize()
-            with tempfile.NamedTemporaryFile(suffix=".doc", delete=False) as temporary:
-                temporary.write(content)
-                path = temporary.name
+        result: list[tuple[int | None, str | None, str]] = []
+        error: Exception | None = None
+        done = threading.Event()
 
-            word = DispatchEx("Word.Application")
-            word.Visible = False
-            word.DisplayAlerts = 0
-            word.AutomationSecurity = 3
-            document = word.Documents.Open(
-                path,
-                ConfirmConversions=False,
-                ReadOnly=True,
-                AddToRecentFiles=False,
-                OpenAndRepair=True,
-                NoEncodingDialog=True,
-            )
-            return [(None, None, document.Content.Text)]
-        except Exception:
+        def _com_parse() -> None:
+            nonlocal result, error, word, document, pythoncom
+            try:
+                import pythoncom
+                from win32com.client import DispatchEx
+
+                pythoncom.CoInitialize()
+                with tempfile.NamedTemporaryFile(suffix=".doc", delete=False) as temporary:
+                    temporary.write(content)
+                    path = temporary.name
+
+                word = DispatchEx("Word.Application")
+                word.Visible = False
+                word.DisplayAlerts = 0
+                word.AutomationSecurity = 3
+                document = word.Documents.Open(
+                    path,
+                    ConfirmConversions=False,
+                    ReadOnly=True,
+                    AddToRecentFiles=False,
+                    OpenAndRepair=True,
+                    NoEncodingDialog=True,
+                )
+                result = [(None, None, document.Content.Text)]
+            except Exception as exc:
+                error = exc
+            finally:
+                if document is not None:
+                    try:
+                        document.Close(False)
+                    except Exception:
+                        pass
+                if word is not None:
+                    try:
+                        word.Quit()
+                    except Exception:
+                        pass
+                if path:
+                    try:
+                        os.unlink(path)
+                    except OSError:
+                        pass
+                if pythoncom is not None:
+                    pythoncom.CoUninitialize()
+                done.set()
+
+        thread = threading.Thread(target=_com_parse, daemon=True)
+        thread.start()
+        if not done.wait(timeout=60):
+            # COM 解析超时，回退到二进制提取
             return self._parse_binary("legacy-word.doc", content)
-        finally:
-            if document is not None:
-                try:
-                    document.Close(False)
-                except Exception:
-                    pass
-            if word is not None:
-                try:
-                    word.Quit()
-                except Exception:
-                    pass
-            if path:
-                try:
-                    os.unlink(path)
-                except OSError:
-                    pass
-            if pythoncom is not None:
-                pythoncom.CoUninitialize()
+        if error or not result:
+            return self._parse_binary("legacy-word.doc", content)
+        return result
 
     def _parse_pptx(self, content: bytes) -> list[tuple[int | None, str | None, str]]:
         from pptx import Presentation

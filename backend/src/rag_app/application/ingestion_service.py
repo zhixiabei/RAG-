@@ -12,7 +12,7 @@ class IngestionService:
         self.parser = parser
         self.models = models
 
-    def ingest(self, knowledge_base_id: str, file_name: str, mime_type: str, content: bytes) -> dict:
+    def ingest(self, knowledge_base_id: str, file_name: str, mime_type: str, content: bytes, folder_path: str = "") -> dict:
         knowledge_base = self.repository.get_knowledge_base(knowledge_base_id)
         if not knowledge_base:
             raise ValueError("知识库不存在")
@@ -39,30 +39,38 @@ class IngestionService:
             "mime_type": mime_type,
             "source_object_key": object_key,
             "status": "processing",
+            "folder_path": folder_path,
         })
         try:
             self.repository.update_document(document_id, progress=10, stage="parsing")
             chunks = self.parser.parse(safe_name, content)
             if not chunks:
-                raise ValueError("文档没有可索引的文本")
+                raise ValueError("文档没有可索引的文本内容")
             self.repository.update_document(document_id, progress=35, stage="embedding")
-            embeddings = self.models.embed([chunk.text for chunk in chunks])
+            try:
+                embeddings = self.models.embed([chunk.text for chunk in chunks])
+            except Exception as exc:
+                raise RuntimeError(f"向量化失败（embedding 模型可能未就绪）: {exc}") from exc
             self.repository.update_document(document_id, progress=70, stage="indexing")
-            self.vectors.ensure_collection(len(embeddings[0]))
-            points = [
-                {
-                    "chunk_id": f"{document_id}:{chunk.index}",
-                    "knowledge_base_id": knowledge_base_id,
-                    "document_id": document_id,
-                    "title": title,
-                    "page_number": chunk.page_number,
-                    "text": chunk.text,
-                }
-                for chunk in chunks
-            ]
-            self.vectors.upsert(points, embeddings)
+            try:
+                self.vectors.ensure_collection(len(embeddings[0]))
+                points = [
+                    {
+                        "chunk_id": f"{document_id}:{chunk.index}",
+                        "knowledge_base_id": knowledge_base_id,
+                        "document_id": document_id,
+                        "title": title,
+                        "folder_path": folder_path,
+                        "page_number": chunk.page_number,
+                        "text": chunk.text,
+                    }
+                    for chunk in chunks
+                ]
+                self.vectors.upsert(points, embeddings)
+            except Exception as exc:
+                raise RuntimeError(f"向量索引写入失败: {exc}") from exc
             self.repository.update_document(document_id, progress=90, stage="saving")
-            self.repository.replace_chunks(document_id, knowledge_base_id, chunks)
+            self.repository.replace_chunks(document_id, knowledge_base_id, chunks, folder_path)
             self.repository.update_document(
                 document_id,
                 status="ready",

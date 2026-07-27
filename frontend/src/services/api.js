@@ -57,9 +57,12 @@ export function listDocuments(knowledgeBaseId) {
   return request(`/api/v1/knowledge-bases/${knowledgeBaseId}/documents`)
 }
 
-export function uploadDocument(knowledgeBaseId, file) {
+export function uploadDocument(knowledgeBaseId, file, folderPath = '') {
   const form = new FormData()
   form.append('file', file, file.name)
+  if (folderPath) {
+    form.append('folder_path', folderPath)
+  }
   return request(`/api/v1/knowledge-bases/${knowledgeBaseId}/documents`, { method: 'POST', body: form })
 }
 

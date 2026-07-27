@@ -41,6 +41,6 @@ class Settings(BaseSettings):
     auth_password: str = "admin"
     auth_secret: str = "local-development-secret-change-me"
     auth_owner_id: str = "personal"
-    auth_session_ttl_seconds: int = 7 * 24 * 60 * 60
+    auth_session_ttl_seconds: int = 30 * 24 * 60 * 60
     auth_cookie_secure: bool = False
     cors_origins: str = "http://127.0.0.1:5173,http://localhost:5173"

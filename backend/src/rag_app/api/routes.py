@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from fastapi import APIRouter, File, HTTPException, Request, Response, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, Request, Response, UploadFile
 from fastapi.responses import JSONResponse
 from uuid import uuid4
 
@@ -142,7 +142,7 @@ def list_documents(request: Request, knowledge_base_id: str):
 
 
 @router.post("/api/v1/knowledge-bases/{knowledge_base_id}/documents")
-def upload_document(request: Request, knowledge_base_id: str, file: UploadFile = File(...)):
+def upload_document(request: Request, knowledge_base_id: str, file: UploadFile = File(...), folder_path: str = Form("")):
     service, _, _ = owned_knowledge_base(request, knowledge_base_id)
     if not file.filename:
         raise HTTPException(400, "文件名不能为空")
@@ -155,6 +155,7 @@ def upload_document(request: Request, knowledge_base_id: str, file: UploadFile =
             Path(file.filename).name,
             file.content_type or "application/octet-stream",
             file.file.read(),
+            folder_path,
         )
     except Exception as exc:
         raise HTTPException(500, f"文档入库失败: {exc}") from exc

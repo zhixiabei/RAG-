@@ -8,6 +8,7 @@ class SearchHit(Protocol):
     title: str
     text: str
     score: float
+    folder_path: str
     page_number: int | None
 
 
