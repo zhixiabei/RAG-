@@ -7,6 +7,8 @@ from agent import (
     RelevanceGradingAgent,
     RetrievalDecisionAgent,
 )
+from agent.context import format_knowledge_catalog
+from agent.query_intent import needs_knowledge_catalog
 
 
 class RagService:
@@ -31,6 +33,9 @@ class RagService:
         if not knowledge_base:
             raise ValueError("知识库不存在")
         history = self.repository.list_messages(conversation_id)[-12:]
+        knowledge_catalog = ""
+        if needs_knowledge_catalog(question):
+            knowledge_catalog = format_knowledge_catalog(self.repository.list_documents(knowledge_base_id))
         decision = self.decision_agent.run(question, history)
         retrieval_used = decision.should_retrieve
         retrieved_hits = []
@@ -66,6 +71,7 @@ class RagService:
             retrieval_used,
             model,
             context_texts=compression_result.text_by_chunk_id if compression_result else None,
+            knowledge_catalog=knowledge_catalog,
         )
         self.repository.add_message(conversation_id, knowledge_base_id, question, answer, citations)
         return {
@@ -76,6 +82,7 @@ class RagService:
             "retrieval_used": retrieval_used,
             "retrieved_count": len(retrieved_hits),
             "relevant_count": len(relevant_hits),
+            "catalog_used": bool(knowledge_catalog),
             "agent_trace": [
                 {
                     "agent": self.decision_agent.name,

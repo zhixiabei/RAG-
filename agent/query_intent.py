@@ -17,8 +17,21 @@ _ASSISTANT_IDENTITY_PATTERNS = (
     re.compile(r"\bwho\s+are\s+you\b", re.IGNORECASE),
 )
 
+_KNOWLEDGE_CATALOG_PATTERNS = (
+    re.compile(r"(?:文件夹|目录|路径|子目录)", re.IGNORECASE),
+    re.compile(r"(?:有哪些|列出|查看|显示|所有|多少).{0,10}(?:文件|文档|资料)", re.IGNORECASE),
+    re.compile(r"(?:文件|文档|资料).{0,10}(?:有哪些|清单|列表|目录)", re.IGNORECASE),
+    re.compile(r"\b(?:folder|directory|path|file\s+list|document\s+list)\b", re.IGNORECASE),
+)
+
 
 def is_assistant_identity_question(question: str) -> bool:
     """Return whether the user is asking about this assistant or its active model."""
     normalized = " ".join(question.strip().split())
     return any(pattern.search(normalized) for pattern in _ASSISTANT_IDENTITY_PATTERNS)
+
+
+def needs_knowledge_catalog(question: str) -> bool:
+    """Return whether answering requires knowledge-base folder and file metadata."""
+    normalized = " ".join(question.strip().split())
+    return any(pattern.search(normalized) for pattern in _KNOWLEDGE_CATALOG_PATTERNS)

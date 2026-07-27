@@ -16,12 +16,16 @@ class FakeRepository:
     def __init__(self, history=None):
         self.history = history or []
         self.saved = []
+        self.documents = []
 
     def get_knowledge_base(self, knowledge_base_id):
         return {"id": knowledge_base_id, "embedding_model": "test-embedding"}
 
     def list_messages(self, conversation_id):
         return self.history
+
+    def list_documents(self, knowledge_base_id):
+        return self.documents
 
     def add_message(self, conversation_id, knowledge_base_id, question, answer, citations):
         self.saved.append((conversation_id, knowledge_base_id, question, answer, citations))
@@ -130,6 +134,26 @@ class RagServiceTest(unittest.TestCase):
         self.assertFalse(result["agent_trace"][3]["triggered"])
         self.assertEqual(result["citations"][0]["relevance_score"], 0.9)
         self.assertEqual(len(models.completion_calls), 3)
+
+    def test_folder_question_uses_document_catalog_when_vector_search_is_empty(self):
+        repository = FakeRepository()
+        repository.documents = [
+            {
+                "status": "ready",
+                "folder_path": "井资料/化163-1井",
+                "file_name": "化163-1井示踪剂施工设计.docx",
+            }
+        ]
+        vectors = FakeVectorStore()
+        models = FakeModelGateway(retrieval_needed=True)
+        service = self.build_service(repository, vectors, models)
+
+        result = service.answer("kb-1", "conversation-1", "化163-1井文件夹有哪些文件？")
+
+        self.assertTrue(result["catalog_used"])
+        self.assertEqual(result["answer"], "测试回答")
+        answer_messages = models.completion_calls[-1][0]
+        self.assertIn("井资料/化163-1井/化163-1井示踪剂施工设计.docx", answer_messages[-2]["content"])
 
     def test_returns_no_related_content_when_all_candidates_score_below_threshold(self):
         hit = SearchHit("chunk-1", "doc-1", "kb-1", "制度.pdf", "无关内容", 0.92, 3)

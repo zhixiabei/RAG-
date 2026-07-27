@@ -22,6 +22,23 @@ class AnswerAgentTest(unittest.TestCase):
         self.assertEqual(answer, "知识库中无相关内容。")
         self.assertEqual(models.calls, [])
 
+    def test_answers_folder_question_from_catalog_without_retrieved_chunks(self):
+        models = FakeModels()
+        catalog = "[文件夹]\n- 井资料/化163-1井\n[文件]\n- 井资料/化163-1井/施工设计.docx"
+
+        answer = AnswerAgent(models).run(
+            "化163-1井文件夹里有什么？",
+            [],
+            [],
+            retrieval_used=True,
+            knowledge_catalog=catalog,
+        )
+
+        self.assertEqual(answer, "最终回答")
+        context_message = models.calls[0][0][-2]["content"]
+        self.assertIn("knowledge_base_catalog", context_message)
+        self.assertIn("井资料/化163-1井/施工设计.docx", context_message)
+
     def test_unsuccessful_retrieval_does_not_fall_back_to_unrelated_history(self):
         models = FakeModels()
 
