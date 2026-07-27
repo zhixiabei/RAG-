@@ -69,6 +69,14 @@ class RetrievalDecisionAgentTest(unittest.TestCase):
             "报销制度是什么？",
         )
 
+    def test_preserves_file_suffixes_removed_by_model_rewrite(self):
+        output = '{"decision":"RETRIEVE","search_query":"长63渗透率文件内容"}'
+
+        query = retrieval_search_query(output, "对比长63渗透率.att和长63渗透率.gdb")
+
+        self.assertIn(".att", query)
+        self.assertIn(".gdb", query)
+
     def test_model_identity_question_skips_retrieval_without_completion(self):
         models = FakeModels('{"decision":"RETRIEVE"}')
 

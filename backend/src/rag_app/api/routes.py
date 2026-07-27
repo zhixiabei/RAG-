@@ -157,6 +157,11 @@ def upload_document(request: Request, knowledge_base_id: str, file: UploadFile =
             file.file.read(),
             folder_path,
         )
+    except ValueError as exc:
+        msg = str(exc)
+        if msg.startswith("文件重复"):
+            raise HTTPException(409, msg) from exc
+        raise HTTPException(500, f"文档入库失败: {msg}") from exc
     except Exception as exc:
         raise HTTPException(500, f"文档入库失败: {exc}") from exc
 

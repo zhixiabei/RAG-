@@ -18,8 +18,10 @@ class SearchHit:
     title: str
     text: str
     score: float
-    folder_path: str = ""
     page_number: int | None = None
+    folder_path: str = ""
+    file_name: str = ""
+    relative_path: str = ""
 
 
 @dataclass(frozen=True)

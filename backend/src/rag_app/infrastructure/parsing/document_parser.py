@@ -39,6 +39,8 @@ SUPPORTED_SUFFIXES = frozenset(
         ".ptpt",
         ".jcpt",
         ".stpt",
+        ".ppt",
+        ".lst",
         "",
     }
 )
@@ -106,7 +108,13 @@ class DocumentParser:
             sources = self._parse_html(content)
         elif suffix in {".ptpt", ".jcpt", ".stpt"}:
             sources = self._parse_zip_container(content)
-        elif suffix in {".dll", ".gdb", ".att"}:
+        elif suffix == ".ppt":
+            sources = self._parse_ppt(content)
+        elif suffix == ".lst":
+            sources = [(None, None, _decode_text(content))]
+        elif suffix == ".att":
+            sources = self._parse_without_extension(file_name, content)
+        elif suffix in {".dll", ".gdb"}:
             sources = self._parse_binary(file_name, content)
         elif not suffix:
             sources = self._parse_without_extension(file_name, content)
@@ -202,6 +210,73 @@ class DocumentParser:
             return self._parse_binary("legacy-word.doc", content)
         if error or not result:
             return self._parse_binary("legacy-word.doc", content)
+        return result
+
+    def _parse_ppt(self, content: bytes) -> list[tuple[int | None, str | None, str]]:
+        if sys.platform != "win32":
+            return self._parse_binary("legacy-powerpoint.ppt", content)
+
+        path = ""
+        app = None
+        presentation = None
+        pythoncom = None
+        import threading
+
+        result: list[tuple[int | None, str | None, str]] = []
+        error: Exception | None = None
+        done = threading.Event()
+
+        def _com_parse() -> None:
+            nonlocal result, error, app, presentation, pythoncom
+            try:
+                import pythoncom
+                from win32com.client import DispatchEx
+
+                pythoncom.CoInitialize()
+                with tempfile.NamedTemporaryFile(suffix=".ppt", delete=False) as temporary:
+                    temporary.write(content)
+                    path = temporary.name
+
+                app = DispatchEx("PowerPoint.Application")
+                app.Visible = False
+                app.DisplayAlerts = 0
+                presentation = app.Presentations.Open(path, WithWindow=False)
+                parts: list[str] = []
+                for slide in presentation.Slides:
+                    for shape in slide.Shapes:
+                        if shape.HasTextFrame and shape.TextFrame.HasText:
+                            text = shape.TextFrame.TextRange.Text.strip()
+                            if text:
+                                parts.append(text)
+                result = [(None, None, "\n".join(parts))]
+            except Exception as exc:
+                error = exc
+            finally:
+                if presentation is not None:
+                    try:
+                        presentation.Close()
+                    except Exception:
+                        pass
+                if app is not None:
+                    try:
+                        app.Quit()
+                    except Exception:
+                        pass
+                if path:
+                    try:
+                        os.unlink(path)
+                    except OSError:
+                        pass
+                if pythoncom is not None:
+                    pythoncom.CoUninitialize()
+                done.set()
+
+        thread = threading.Thread(target=_com_parse, daemon=True)
+        thread.start()
+        if not done.wait(timeout=60):
+            return self._parse_binary("legacy-powerpoint.ppt", content)
+        if error or not result:
+            return self._parse_binary("legacy-powerpoint.ppt", content)
         return result
 
     def _parse_pptx(self, content: bytes) -> list[tuple[int | None, str | None, str]]:

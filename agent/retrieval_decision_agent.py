@@ -25,6 +25,7 @@ RETRIEVAL_DECISION_PROMPT = """判断回答当前消息是否需要检索新的�
 - decision 为 RETRIEVE 时，search_query 必须是可脱离对话独立理解的知识库检索词；
 - 结合对话历史补全省略的信息和指代，但不要把此前助手的回答当作新的事实来源；
 - 保留用户真正的信息需求、主题、对象和限定条件，去掉不影响检索的口语套话；
+- 当用户提到文件名或扩展名时，必须原样保留完整文件名及后缀，不得删除或改写后缀；
 - 不得添加用户没有表达的领域、结论或限制；
 - decision 为 SKIP 时，search_query 为空字符串。
 
@@ -81,7 +82,12 @@ def retrieval_search_query(output: str, question: str) -> str:
     if not isinstance(payload, dict) or str(payload.get("decision", "")).strip().upper() == "SKIP":
         return ""
     query = payload.get("search_query")
-    return query.strip() if isinstance(query, str) and query.strip() else question
+    resolved = query.strip() if isinstance(query, str) and query.strip() else question
+    suffixes = dict.fromkeys(
+        re.findall(r"\.[A-Za-z][A-Za-z0-9]{0,9}(?=[^A-Za-z0-9]|$)", question)
+    )
+    missing_suffixes = [suffix for suffix in suffixes if suffix.casefold() not in resolved.casefold()]
+    return " ".join([resolved, *missing_suffixes])
 
 
 @dataclass(frozen=True)

@@ -3,6 +3,7 @@ import json
 import re
 from typing import Sequence
 
+from .context import retrieved_file_path
 from .contracts import ModelGateway, SearchHit
 
 
@@ -122,7 +123,8 @@ class RelevanceGradingAgent:
         candidates = [
             {
                 "chunk_id": alias,
-                "document": hit.title,
+                "document": hit.file_name or hit.title,
+                "relative_path": retrieved_file_path(hit),
                 "content": hit.text,
             }
             for alias, hit in zip(alias_to_chunk_id, hits)

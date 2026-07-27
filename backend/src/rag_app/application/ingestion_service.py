@@ -21,14 +21,27 @@ class IngestionService:
                 f"知识库使用 {knowledge_base['embedding_model']} 建立索引，当前 embedding 模型是 {self.models.embedding_model}，请重新建立知识库并导入文档"
             )
         safe_name = Path(file_name).name
+        folder_parts = []
+        for part in folder_path.replace("\\", "/").split("/"):
+            if not part or part == ".":
+                continue
+            if part == "..":
+                raise ValueError("文件夹路径不能包含 ..")
+            folder_parts.append(part)
+        folder_path = "/".join(folder_parts)
+        relative_path = f"{folder_path}/{safe_name}" if folder_path else safe_name
         if not self.parser.supports(safe_name):
             suffix = Path(safe_name).suffix.lower()
             raise ValueError(f"暂不支持的文件类型: {suffix or '无扩展名'}")
         if not content:
             raise ValueError("文件内容为空")
 
+        if self.repository.document_exists_by_file(knowledge_base_id, safe_name, folder_path):
+            raise ValueError("文件重复：该知识库中已存在相同路径的同名文件")
+
         document_id = str(uuid4())
-        title = Path(safe_name).stem.replace("_", " ").replace("-", " ") or safe_name
+        suffix = Path(safe_name).suffix.lower()
+        title = safe_name
         object_key = f"{knowledge_base_id}/{document_id}/source/{safe_name}"
         self.objects.put_bytes(object_key, content, mime_type)
         self.repository.create_document({
@@ -48,7 +61,10 @@ class IngestionService:
                 raise ValueError("文档没有可索引的文本内容")
             self.repository.update_document(document_id, progress=35, stage="embedding")
             try:
-                embeddings = self.models.embed([chunk.text for chunk in chunks])
+                embeddings = self.models.embed([
+                    f"完整路径: {relative_path}\n文件名: {safe_name}\n文件后缀: {suffix or '无后缀'}\n内容:\n{chunk.text}"
+                    for chunk in chunks
+                ])
             except Exception as exc:
                 raise RuntimeError(f"向量化失败（embedding 模型可能未就绪）: {exc}") from exc
             self.repository.update_document(document_id, progress=70, stage="indexing")
@@ -60,7 +76,9 @@ class IngestionService:
                         "knowledge_base_id": knowledge_base_id,
                         "document_id": document_id,
                         "title": title,
+                        "file_name": safe_name,
                         "folder_path": folder_path,
+                        "relative_path": relative_path,
                         "page_number": chunk.page_number,
                         "text": chunk.text,
                     }

@@ -3,7 +3,7 @@ import json
 import re
 from typing import Sequence
 
-from .context import format_retrieved_context
+from .context import format_retrieved_context, retrieved_file_path
 from .contracts import ModelGateway, SearchHit
 
 
@@ -136,7 +136,9 @@ class ContextCompressionAgent:
                                 "candidates": [
                                     {
                                         "chunk_id": alias,
-                                        "document": hit.title,
+                                        "document": hit.file_name or hit.title,
+                                        "folder_path": hit.folder_path or "",
+                                        "relative_path": retrieved_file_path(hit),
                                         "content": hit.text,
                                     }
                                     for alias, hit in alias_to_hit.items()

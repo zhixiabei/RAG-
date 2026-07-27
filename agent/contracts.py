@@ -6,9 +6,11 @@ class SearchHit(Protocol):
     document_id: str
     knowledge_base_id: str
     title: str
+    file_name: str
     text: str
     score: float
     folder_path: str
+    relative_path: str
     page_number: int | None
 
 

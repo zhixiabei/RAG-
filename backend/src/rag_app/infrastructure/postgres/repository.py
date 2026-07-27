@@ -77,6 +77,21 @@ class PostgresRepository:
         with self.engine.begin() as connection:
             connection.execute(text(f"UPDATE documents SET {', '.join(assignments)} WHERE id = :id"), parameters)
 
+    def document_exists_by_file(self, knowledge_base_id: str, file_name: str, folder_path: str) -> bool:
+        with self.engine.begin() as connection:
+            row = connection.execute(
+                text("""
+                    SELECT 1 FROM documents
+                    WHERE knowledge_base_id = :kb_id
+                      AND file_name = :file_name
+                      AND COALESCE(folder_path, '') = :folder_path
+                      AND status != 'failed'
+                    LIMIT 1
+                """),
+                {"kb_id": knowledge_base_id, "file_name": file_name, "folder_path": folder_path or ""},
+            ).first()
+        return row is not None
+
     def get_document(self, document_id: str) -> dict[str, Any] | None:
         with self.engine.begin() as connection:
             row = connection.execute(text("SELECT * FROM documents WHERE id = :id"), {"id": document_id}).mappings().first()

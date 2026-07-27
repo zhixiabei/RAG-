@@ -127,8 +127,9 @@ h1, h2, h3, p { margin: 0; }
 
 .hidden-input { display: none; }
 .import-queue { margin-top: 18px; padding-top: 15px; border-top: 1px solid #edf0f1; }
-.queue-header { display: flex; justify-content: space-between; color: #647078; font-size: 12px; }
+.queue-header { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 12px; color: #647078; font-size: 12px; }
 .queue-header span { color: #9aa4a9; }
+.queue-summary { font-variant-numeric: tabular-nums; }
 .progress-track { height: 5px; margin: 10px 0; overflow: hidden; border-radius: 5px; background: #edf0f1; }.progress-track span { display: block; height: 100%; border-radius: inherit; background: #d28d3b; transition: width .2s ease; }
 .queue-list { max-height: 140px; overflow: auto; }
 .queue-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 0; color: #7f8a91; font-size: 11px; }.queue-item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -139,6 +140,10 @@ h1, h2, h3, p { margin: 0; }
 .icon-fail { color: #b55d5d; font-weight: 700; }
 .icon-queued { color: #c0c7cc; }
 .queue-item-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.queue-item-status { flex-shrink: 0; min-width: 52px; text-align: right; color: #8b969d; }
+.queue-item-status[data-status="uploading"] { color: #2f75b5; }
+.queue-item-status[data-status="done"] { color: #4a8c5c; }
+.queue-item-status[data-status="failed"] { color: #b55d5d; }
 .queue-item-error { flex-shrink: 0; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #b55d5d; font-size: 10px; }
 .import-warning { display: flex; align-items: center; gap: 8px; margin-top: 14px; padding: 10px 14px; border-radius: 6px; background: #fff8e6; color: #92600a; font-size: 12px; border: 1px solid #f0d78c; }
 .recovery-banner { display: flex; align-items: center; gap: 8px; margin-top: 14px; padding: 10px 14px; border-radius: 6px; background: #e8f0fe; color: #1a56b5; font-size: 12px; border: 1px solid #c4d7f2; }

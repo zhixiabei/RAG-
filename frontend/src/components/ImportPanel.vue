@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { AlertTriangle, FileUp, FolderOpen, LoaderCircle, UploadCloud, X } from 'lucide-vue-next'
 import { uploadDocument } from '../services/api'
 
@@ -14,7 +14,10 @@ const error = ref('')
 const failed = ref([])
 const skippedCount = ref(0)
 const skippedTypes = ref([])
+const importedPaths = ref(new Set())
+const skippedDuplicateCount = ref(0)
 const recoveryMessage = ref('')
+const importGeneration = ref(0)
 
 // 每个文件的状态: queued | uploading | done | failed
 const fileStatus = ref({})
@@ -22,7 +25,11 @@ const fileErrors = ref({})
 const MAX_CONCURRENT = 3
 const MAX_RETRIES = 2
 
-const SESSION_KEY = 'rag-import-queue'
+const SESSION_KEY_PREFIX = 'rag-import-queue'
+
+function sessionKey(kbId) {
+  return `${SESSION_KEY_PREFIX}:${kbId}`
+}
 
 const progress = computed(() => {
   const total = files.value.length
@@ -31,10 +38,27 @@ const progress = computed(() => {
   return Math.round((done / total) * 100)
 })
 
+const queueCounts = computed(() => {
+  const counts = { queued: 0, uploading: 0, done: 0, failed: 0 }
+  Object.values(fileStatus.value).forEach((status) => {
+    if (status in counts) counts[status]++
+  })
+  return counts
+})
+
+function queueStatusLabel(status) {
+  return {
+    queued: '等待导入',
+    uploading: '导入中',
+    done: '已完成',
+    failed: '导入失败',
+  }[status] || '等待导入'
+}
+
 const SUPPORTED_EXTENSIONS = new Set([
   '', '.pdf', '.doc', '.docx', '.pptx', '.xlsx', '.xlsm', '.xls', '.csv',
   '.md', '.markdown', '.txt', '.html', '.htm', '.xml', '.json',
-  '.dll', '.gdb', '.att', '.ptpt', '.jcpt', '.stpt',
+  '.dll', '.gdb', '.att', '.ptpt', '.jcpt', '.stpt', '.ppt', '.lst',
 ])
 
 // beforeunload 始终注册，通过 importing 状态决定是否拦截
@@ -47,10 +71,11 @@ function beforeUnloadHandler(event) {
   }
 }
 
-// ===== sessionStorage 持久化 =====
-function saveQueueSnapshot() {
+// ===== sessionStorage 持久化（按知识库分 key） =====
+function saveQueueSnapshot(kbId) {
+  const key = sessionKey(kbId || props.kbId)
   const snapshot = {
-    kbId: props.kbId,
+    kbId: kbId || props.kbId,
     count: files.value.length,
     importing: importing.value,
     files: files.value.map(f => ({
@@ -60,26 +85,26 @@ function saveQueueSnapshot() {
     })),
     timestamp: Date.now(),
   }
-  try { sessionStorage.setItem(SESSION_KEY, JSON.stringify(snapshot)) } catch { /* quota exceeded */ }
+  try { sessionStorage.setItem(key, JSON.stringify(snapshot)) } catch { /* quota exceeded */ }
 }
 
-function clearQueueSnapshot() {
-  try { sessionStorage.removeItem(SESSION_KEY) } catch { /* ignore */ }
+function clearQueueSnapshot(kbId) {
+  try { sessionStorage.removeItem(sessionKey(kbId || props.kbId)) } catch { /* ignore */ }
 }
 
-function loadQueueSnapshot() {
+function loadQueueSnapshot(kbId) {
   try {
-    const raw = sessionStorage.getItem(SESSION_KEY)
+    const raw = sessionStorage.getItem(sessionKey(kbId || props.kbId))
     if (!raw) return null
     const snapshot = JSON.parse(raw)
     // 只认 1 小时内的快照
     if (Date.now() - snapshot.timestamp > 3600000) {
-      sessionStorage.removeItem(SESSION_KEY)
+      sessionStorage.removeItem(sessionKey(kbId || props.kbId))
       return null
     }
     return snapshot
   } catch {
-    sessionStorage.removeItem(SESSION_KEY)
+    sessionStorage.removeItem(sessionKey(kbId || props.kbId))
     return null
   }
 }
@@ -96,6 +121,39 @@ onMounted(() => {
 onBeforeUnmount(() => {
   window.removeEventListener('beforeunload', beforeUnloadHandler)
   clearQueueSnapshot()
+})
+
+function resetState() {
+  importing.value = false
+  importGeneration.value++
+  files.value = []
+  fileStatus.value = {}
+  fileErrors.value = {}
+  error.value = ''
+  failed.value = []
+  current.value = 0
+  importedPaths.value = new Set()
+  skippedCount.value = 0
+  skippedDuplicateCount.value = 0
+  skippedTypes.value = []
+  recoveryMessage.value = ''
+  if (fileInput.value) fileInput.value.value = ''
+  if (folderInput.value) folderInput.value.value = ''
+}
+
+watch(() => props.kbId, (newId, oldId) => {
+  // 离开旧知识库：保存快照到 sessionStorage
+  if (oldId && files.value.length) {
+    saveQueueSnapshot(oldId)
+  }
+  // 重置面板
+  resetState()
+  // 进入新知识库：尝试恢复快照
+  const snapshot = loadQueueSnapshot(newId)
+  if (snapshot && snapshot.count > 0 && snapshot.kbId === newId) {
+    const status = snapshot.importing ? '导入中断' : '已选择但未导入'
+    recoveryMessage.value = `检测到上次${status}：${snapshot.count} 个文件（${new Date(snapshot.timestamp).toLocaleString()}）。请重新选择文件夹继续导入。`
+  }
 })
 
 function fileExtension(name) {
@@ -121,19 +179,30 @@ function displayName(file) {
   return file.webkitRelativePath || file.name
 }
 
+function fileIdentity(file) {
+  const path = folderPathFor(file)
+  return path ? `${path}/${file.name}` : file.name
+}
+
 function chooseFiles(event) {
   const selected = Array.from(event.target.files || [])
   const typeCounts = new Map()
+  let duplicateCount = 0
   files.value = selected.filter((file) => {
     const extension = fileExtension(file.name)
-    const supported = !isSystemFile(file) && SUPPORTED_EXTENSIONS.has(extension)
-    if (!supported) {
+    if (isSystemFile(file) || !SUPPORTED_EXTENSIONS.has(extension)) {
       const label = isSystemFile(file) ? '系统文件' : (extension || '无扩展名')
       typeCounts.set(label, (typeCounts.get(label) || 0) + 1)
+      return false
     }
-    return supported
+    if (importedPaths.value.has(fileIdentity(file))) {
+      duplicateCount++
+      return false
+    }
+    return true
   })
   skippedCount.value = selected.length - files.value.length
+  skippedDuplicateCount.value = duplicateCount
   skippedTypes.value = Array.from(typeCounts.entries())
     .sort((left, right) => right[1] - left[1])
     .slice(0, 8)
@@ -143,7 +212,7 @@ function chooseFiles(event) {
   fileStatus.value = {}
   fileErrors.value = {}
   files.value.forEach((_, idx) => { fileStatus.value[idx] = 'queued' })
-  error.value = files.value.length ? '' : '所选文件夹中没有可导入的文档'
+  error.value = files.value.length ? '' : (duplicateCount > 0 ? '所选文件均已导入，无需重复导入' : '所选文件夹中没有可导入的文档')
   recoveryMessage.value = ''
   saveQueueSnapshot()
 }
@@ -175,6 +244,7 @@ async function uploadOne(knowledgeBaseId, file, index) {
       await uploadDocument(knowledgeBaseId, file, folderPathFor(file))
       fileStatus.value[index] = 'done'
       fileErrors.value[index] = null
+      importedPaths.value.add(fileIdentity(file))
       return
     } catch (cause) {
       lastError = cause
@@ -194,6 +264,7 @@ async function uploadOne(knowledgeBaseId, file, index) {
 async function startImport() {
   if (!files.value.length || importing.value) return
   importing.value = true
+  const gen = importGeneration.value
   emit('started')
   const knowledgeBaseId = props.kbId
   failed.value = []
@@ -204,33 +275,24 @@ async function startImport() {
   })
 
   saveQueueSnapshot()
-  const pending = files.value.map((file, idx) => ({ file, index: idx }))
-  const running = []
+  const pending = files.value.map((file, index) => ({ file, index }))
+  let nextPendingIndex = 0
 
-  async function runNext() {
-    if (!pending.length) return
-    const { file, index } = pending.shift()
-    const task = uploadOne(knowledgeBaseId, file, index).finally(() => {
-      const pos = running.indexOf(task)
-      if (pos >= 0) running.splice(pos, 1)
-      current.value += 1
-    })
-    running.push(task)
-    if (pending.length && running.length < MAX_CONCURRENT) {
-      runNext()
-    }
-    await task
-    if (pending.length && running.length < MAX_CONCURRENT) {
-      runNext()
+  async function runWorker() {
+    while (importGeneration.value === gen && nextPendingIndex < pending.length) {
+      const item = pending[nextPendingIndex]
+      nextPendingIndex++
+      await uploadOne(knowledgeBaseId, item.file, item.index)
+      current.value++
+      saveQueueSnapshot()
     }
   }
 
-  const initial = Math.min(MAX_CONCURRENT, pending.length)
-  const tasks = []
-  for (let i = 0; i < initial; i++) {
-    tasks.push(runNext())
-  }
-  await Promise.all(tasks)
+  const workerCount = Math.min(MAX_CONCURRENT, pending.length)
+  await Promise.all(Array.from({ length: workerCount }, () => runWorker()))
+
+  // 如果知识库已切换，不再更新后续状态
+  if (importGeneration.value !== gen) return
 
   importing.value = false
 
@@ -290,7 +352,8 @@ async function startImport() {
     </div>
 
     <div v-if="skippedCount" class="skip-summary">
-      <strong>已跳过 {{ skippedCount }} 个不可检索文件</strong>
+      <strong>已跳过 {{ skippedCount }} 个文件</strong>
+      <span v-if="skippedDuplicateCount">（其中 {{ skippedDuplicateCount }} 个已导入）</span>
       <span>{{ skippedTypes.join(' · ') }}</span>
     </div>
 
@@ -307,12 +370,13 @@ async function startImport() {
 
     <div v-if="files.length" class="import-queue">
       <div class="queue-header">
-        <strong>{{ files.length }} 个文件待处理</strong>
-        <span v-if="importing">
-          {{ Object.values(fileStatus).filter(s => s === 'done').length }}/{{ files.length }} 已完成
-          （{{ Object.values(fileStatus).filter(s => s === 'uploading').length }} 上传中）
+        <strong>{{ files.length }} 个文件</strong>
+        <span class="queue-summary">
+          等待 {{ queueCounts.queued }}
+          <template v-if="importing || queueCounts.uploading">· 导入中 {{ queueCounts.uploading }}</template>
+          <template v-if="queueCounts.done">· 完成 {{ queueCounts.done }}</template>
+          <template v-if="queueCounts.failed">· 失败 {{ queueCounts.failed }}</template>
         </span>
-        <span v-else>等待导入</span>
       </div>
       <div class="progress-track"><span :style="{ width: `${progress}%` }" /></div>
       <div class="queue-list">
@@ -329,6 +393,9 @@ async function startImport() {
             <span v-else class="icon-queued">—</span>
           </span>
           <span class="queue-item-name">{{ displayName(file) }}</span>
+          <span class="queue-item-status" :data-status="fileStatus[index] || 'queued'">
+            {{ queueStatusLabel(fileStatus[index]) }}
+          </span>
           <span v-if="fileErrors[index]" class="queue-item-error">{{ fileErrors[index] }}</span>
           <button v-if="!importing" class="icon-button subtle" title="移除" @click="removeFile(index)"><X :size="14" /></button>
         </div>

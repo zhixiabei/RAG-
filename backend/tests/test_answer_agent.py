@@ -48,6 +48,25 @@ class AnswerAgentTest(unittest.TestCase):
         self.assertIn("制度.pdf", messages[-2]["content"])
         self.assertIn("报销上限为 500 元", messages[-2]["content"])
 
+    def test_context_uses_original_file_name_with_suffix(self):
+        models = FakeModels()
+        hit = SearchHit(
+            "chunk-1",
+            "doc-1",
+            "kb-1",
+            "长63渗透率",
+            "渗透率数据",
+            0.9,
+            folder_path="井资料/长63/渗透率",
+            file_name="长63渗透率.gdb",
+        )
+
+        AnswerAgent(models).run("这是什么文件？", [], [hit], retrieval_used=True)
+
+        context_message = models.calls[0][0][-2]["content"]
+        self.assertIn("长63渗透率.gdb", context_message)
+        self.assertIn("井资料/长63/渗透率/长63渗透率.gdb", context_message)
+
     def test_returns_selected_model_for_model_identity_question_without_completion(self):
         models = FakeModels()
 

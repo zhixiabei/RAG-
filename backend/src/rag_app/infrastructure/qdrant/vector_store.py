@@ -56,6 +56,18 @@ class QdrantVectorStore:
                 folder_path=str(point.payload.get("folder_path", "")),
                 page_number=point.payload.get("page_number"),
                 score=float(point.score),
+                file_name=str(point.payload.get("file_name") or point.payload["title"]),
+                relative_path=str(
+                    point.payload.get("relative_path")
+                    or "/".join(
+                        part.strip("/\\")
+                        for part in (
+                            str(point.payload.get("folder_path", "")),
+                            str(point.payload.get("file_name") or point.payload["title"]),
+                        )
+                        if part.strip("/\\")
+                    )
+                ),
             )
             for point in result.points
         ]
