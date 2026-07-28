@@ -5,9 +5,12 @@ from fastapi.responses import JSONResponse
 from uuid import uuid4
 
 from ..application.auth import SESSION_COOKIE_NAME, create_session, credentials_match, verify_session
-from .schemas import ChatRequest, ConversationCreate, ConversationUpdate, KnowledgeBaseCreate, LoginRequest
+from .schemas import ChatRequest, ConversationCreate, ConversationUpdate, KnowledgeBaseCreate, LoginRequest, ParsedAttachmentChatRequest
 
 router = APIRouter()
+
+MAX_CHAT_ATTACHMENTS = 10
+MAX_CHAT_ATTACHMENT_BYTES = 30 * 1024 * 1024
 
 
 def services(request: Request):
@@ -198,6 +201,178 @@ def chat(request: Request, knowledge_base_id: str, payload: ChatRequest):
         raise HTTPException(404, "对话不存在")
     try:
         return service.rag.answer(knowledge_base_id, payload.conversation_id, payload.question, payload.model)
+    except Exception as exc:
+        raise HTTPException(503, f"问答服务不可用: {exc}") from exc
+
+
+@router.post("/api/v1/knowledge-bases/{knowledge_base_id}/chat-attachments/parse")
+def parse_chat_attachment(request: Request, knowledge_base_id: str, file: UploadFile = File(...)):
+    service, _, _ = owned_knowledge_base(request, knowledge_base_id)
+    file_name = Path(file.filename or "").name
+    if not file_name:
+        raise HTTPException(400, "附件文件名不能为空")
+    if not service.ingestion.parser.supports(file_name):
+        suffix = Path(file_name).suffix.lower()
+        raise HTTPException(415, f"暂不支持的文件类型: {suffix or '无扩展名'}")
+    content = file.file.read(MAX_CHAT_ATTACHMENT_BYTES + 1)
+    if len(content) > MAX_CHAT_ATTACHMENT_BYTES:
+        raise HTTPException(413, "单个临时附件不能超过 30 MB")
+    try:
+        chunks = service.ingestion.parser.parse(file_name, content)
+    except Exception as exc:
+        raise HTTPException(422, f"附件解析失败: {exc}") from exc
+    if not chunks:
+        raise HTTPException(422, f"附件没有可读取的文本内容: {file_name}")
+
+    context_parts: list[str] = []
+    citations: list[dict] = []
+    remaining_chars = service.settings.rag_context_max_chars
+    for chunk in chunks:
+        if remaining_chars <= 0:
+            break
+        header = f"[临时附件] {file_name}\n[页码] {chunk.page_number or '未知'}\n[内容] "
+        available = max(0, remaining_chars - len(header) - 2)
+        if not available:
+            break
+        text = chunk.text[:available]
+        context_parts.append(f"{header}{text}")
+        citations.append({
+            "document_id": None,
+            "chunk_id": f"attachment:0:{chunk.index}",
+            "title": file_name,
+            "page_number": chunk.page_number,
+            "score": 1.0,
+            "relevance_score": None,
+            "temporary": True,
+        })
+        remaining_chars -= len(header) + len(text) + 2
+    return {
+        "name": file_name,
+        "context": "\n\n".join(context_parts),
+        "citations": citations,
+        "chunk_count": len(chunks),
+    }
+
+
+@router.post("/api/v1/knowledge-bases/{knowledge_base_id}/chat-with-parsed-attachments")
+def chat_with_parsed_attachments(
+    request: Request,
+    knowledge_base_id: str,
+    payload: ParsedAttachmentChatRequest,
+):
+    service, user, _ = owned_knowledge_base(request, knowledge_base_id)
+    conversation = service.repository.get_conversation(payload.conversation_id, user["owner_id"])
+    if not conversation or conversation["knowledge_base_id"] != knowledge_base_id:
+        raise HTTPException(404, "对话不存在")
+
+    remaining_chars = service.settings.rag_context_max_chars
+    context_parts: list[str] = []
+    citations: list[dict] = []
+    attachment_names: list[str] = []
+    for attachment_index, attachment in enumerate(payload.attachments):
+        if remaining_chars <= 0:
+            break
+        context = attachment.context[:remaining_chars]
+        context_parts.append(context)
+        remaining_chars -= len(context) + 2
+        attachment_names.append(attachment.name)
+        for citation in attachment.citations:
+            normalized = dict(citation)
+            normalized["chunk_id"] = f"attachment:{attachment_index}:{citation.get('chunk_id', len(citations))}"
+            normalized["title"] = attachment.name
+            normalized["temporary"] = True
+            citations.append(normalized)
+
+    question_with_attachments = f"{payload.question}\n\n附件：{'、'.join(attachment_names)}"
+    try:
+        return service.rag.answer(
+            knowledge_base_id,
+            payload.conversation_id,
+            question_with_attachments,
+            payload.model,
+            attachment_context="\n\n".join(context_parts),
+            attachment_citations=citations,
+        )
+    except Exception as exc:
+        raise HTTPException(503, f"问答服务不可用: {exc}") from exc
+
+
+@router.post("/api/v1/knowledge-bases/{knowledge_base_id}/chat-with-attachments")
+def chat_with_attachments(
+    request: Request,
+    knowledge_base_id: str,
+    conversation_id: str = Form(...),
+    question: str = Form(...),
+    model: str | None = Form(None),
+    files: list[UploadFile] = File(...),
+):
+    service, user, _ = owned_knowledge_base(request, knowledge_base_id)
+    conversation = service.repository.get_conversation(conversation_id, user["owner_id"])
+    if not conversation or conversation["knowledge_base_id"] != knowledge_base_id:
+        raise HTTPException(404, "对话不存在")
+    try:
+        payload = ChatRequest(conversation_id=conversation_id, question=question, model=model or None)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    if not files or len(files) > MAX_CHAT_ATTACHMENTS:
+        raise HTTPException(400, f"每次可上传 1 至 {MAX_CHAT_ATTACHMENTS} 个临时附件")
+
+    context_parts: list[str] = []
+    citations: list[dict] = []
+    total_bytes = 0
+    remaining_chars = service.settings.rag_context_max_chars
+    try:
+        for file_index, file in enumerate(files):
+            file_name = Path(file.filename or "").name
+            if not file_name:
+                raise HTTPException(400, "附件文件名不能为空")
+            if not service.ingestion.parser.supports(file_name):
+                suffix = Path(file_name).suffix.lower()
+                raise HTTPException(415, f"暂不支持的文件类型: {suffix or '无扩展名'}")
+            remaining_bytes = MAX_CHAT_ATTACHMENT_BYTES - total_bytes
+            content = file.file.read(remaining_bytes + 1)
+            total_bytes += len(content)
+            if total_bytes > MAX_CHAT_ATTACHMENT_BYTES:
+                raise HTTPException(413, "临时附件总大小不能超过 30 MB")
+            chunks = service.ingestion.parser.parse(file_name, content)
+            if not chunks:
+                raise HTTPException(422, f"附件没有可读取的文本内容: {file_name}")
+            for chunk in chunks:
+                if remaining_chars <= 0:
+                    break
+                header = f"[临时附件] {file_name}\n[页码] {chunk.page_number or '未知'}\n[内容] "
+                available = max(0, remaining_chars - len(header) - 2)
+                if not available:
+                    break
+                text = chunk.text[:available]
+                context_parts.append(f"{header}{text}")
+                chunk_id = f"attachment:{file_index}:{chunk.index}"
+                citations.append({
+                    "document_id": None,
+                    "chunk_id": chunk_id,
+                    "title": file_name,
+                    "page_number": chunk.page_number,
+                    "score": 1.0,
+                    "relevance_score": None,
+                    "temporary": True,
+                })
+                remaining_chars -= len(header) + len(text) + 2
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(422, f"附件解析失败: {exc}") from exc
+
+    try:
+        attachment_names = "、".join(Path(file.filename or "").name for file in files)
+        question_with_attachments = f"{payload.question}\n\n附件：{attachment_names}"
+        return service.rag.answer(
+            knowledge_base_id,
+            payload.conversation_id,
+            question_with_attachments,
+            payload.model,
+            attachment_context="\n\n".join(context_parts),
+            attachment_citations=citations,
+        )
     except Exception as exc:
         raise HTTPException(503, f"问答服务不可用: {exc}") from exc
 

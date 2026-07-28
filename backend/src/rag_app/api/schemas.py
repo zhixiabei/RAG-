@@ -17,6 +17,16 @@ class ChatRequest(BaseModel):
     model: str | None = Field(default=None, min_length=1, max_length=200)
 
 
+class ParsedChatAttachment(BaseModel):
+    name: str = Field(min_length=1, max_length=255)
+    context: str = Field(min_length=1, max_length=12000)
+    citations: list[dict] = Field(default_factory=list, max_length=200)
+
+
+class ParsedAttachmentChatRequest(ChatRequest):
+    attachments: list[ParsedChatAttachment] = Field(min_length=1, max_length=10)
+
+
 class ConversationCreate(BaseModel):
     title: str = Field(default="新对话", min_length=1, max_length=200)
 

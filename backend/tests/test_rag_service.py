@@ -183,6 +183,26 @@ class RagServiceTest(unittest.TestCase):
         self.assertEqual(result["citations"], [])
         self.assertEqual(len(models.completion_calls), 2)
 
+    def test_temporary_attachment_is_answered_when_knowledge_retrieval_is_empty(self):
+        repository = FakeRepository()
+        vectors = FakeVectorStore()
+        models = FakeModelGateway(retrieval_needed=True)
+        service = self.build_service(repository, vectors, models)
+
+        result = service.answer(
+            "kb-1",
+            "conversation-1",
+            "总结附件",
+            attachment_context="[临时附件] notes.txt\n[内容] temporary evidence",
+            attachment_citations=[{"chunk_id": "attachment:0:0", "title": "notes.txt"}],
+        )
+
+        self.assertEqual(result["answer"], "测试回答")
+        self.assertTrue(result["attachments_used"])
+        self.assertEqual(result["citations"][0]["title"], "notes.txt")
+        answer_payload = json.loads(models.completion_calls[-1][0][-2]["content"].split("\n", 1)[1])
+        self.assertIn("temporary evidence", answer_payload["temporary_attachment_context"])
+
     def test_model_identity_question_does_not_retrieve_and_reports_selected_model(self):
         repository = FakeRepository([{"role": "assistant", "content": "旧的文档回答"}])
         vectors = FakeVectorStore()

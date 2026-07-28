@@ -23,6 +23,11 @@ class FakeRepository:
             return None
         return conversation
 
+    def get_knowledge_base(self, knowledge_base_id, owner_id=None):
+        if knowledge_base_id == "kb-1" and owner_id in {None, "personal"}:
+            return {"id": knowledge_base_id}
+        return None
+
     def update_conversation_title(self, conversation_id, title):
         self.conversations[conversation_id]["title"] = title
         return self.conversations[conversation_id]
@@ -36,8 +41,20 @@ class ConversationRoutesTest(unittest.TestCase):
         self.repository = FakeRepository()
         app = FastAPI()
         app.state.startup_error = None
+        parser = SimpleNamespace(
+            supports=lambda file_name: file_name.endswith(".txt"),
+            parse=lambda file_name, content: [SimpleNamespace(index=0, text=content.decode(), page_number=None)],
+        )
+        self.rag_calls = []
+
+        def answer(*args, **kwargs):
+            self.rag_calls.append((args, kwargs))
+            return {"answer": "附件回答", "citations": kwargs["attachment_citations"]}
+
         app.state.services = SimpleNamespace(
             repository=self.repository,
+            ingestion=SimpleNamespace(parser=parser),
+            rag=SimpleNamespace(answer=answer),
             settings=SimpleNamespace(
                 auth_username="admin",
                 auth_password="test-password",
@@ -45,6 +62,7 @@ class ConversationRoutesTest(unittest.TestCase):
                 auth_owner_id="personal",
                 auth_session_ttl_seconds=3600,
                 auth_cookie_secure=False,
+                rag_context_max_chars=12000,
             ),
         )
         app.include_router(router)
@@ -83,6 +101,53 @@ class ConversationRoutesTest(unittest.TestCase):
 
         self.assertEqual(response.status_code, 422)
         self.assertEqual(self.repository.get_conversation("conversation-1")["title"], "原名称")
+
+    def test_answers_with_temporary_attachment_without_ingesting_it(self):
+        response = self.client.post(
+            "/api/v1/knowledge-bases/kb-1/chat-with-attachments",
+            data={"conversation_id": "conversation-1", "question": "总结附件"},
+            files=[("files", ("notes.txt", b"temporary evidence", "text/plain"))],
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["answer"], "附件回答")
+        args, kwargs = self.rag_calls[0]
+        self.assertIn("附件：notes.txt", args[2])
+        self.assertIn("temporary evidence", kwargs["attachment_context"])
+        self.assertTrue(kwargs["attachment_citations"][0]["temporary"])
+
+    def test_parses_attachment_before_chat(self):
+        response = self.client.post(
+            "/api/v1/knowledge-bases/kb-1/chat-attachments/parse",
+            files={"file": ("notes.txt", b"temporary evidence", "text/plain")},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["name"], "notes.txt")
+        self.assertIn("temporary evidence", response.json()["context"])
+        self.assertEqual(response.json()["chunk_count"], 1)
+        self.assertEqual(self.rag_calls, [])
+
+    def test_answers_with_preparsed_attachment(self):
+        response = self.client.post(
+            "/api/v1/knowledge-bases/kb-1/chat-with-parsed-attachments",
+            json={
+                "conversation_id": "conversation-1",
+                "question": "总结附件",
+                "model": None,
+                "attachments": [{
+                    "name": "notes.txt",
+                    "context": "[临时附件] notes.txt\n[内容] temporary evidence",
+                    "citations": [{"chunk_id": "attachment:0:0", "title": "notes.txt"}],
+                }],
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        args, kwargs = self.rag_calls[0]
+        self.assertIn("附件：notes.txt", args[2])
+        self.assertIn("temporary evidence", kwargs["attachment_context"])
+        self.assertTrue(kwargs["attachment_citations"][0]["temporary"])
 
 
 if __name__ == "__main__":

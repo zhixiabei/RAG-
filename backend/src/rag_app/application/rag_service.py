@@ -28,14 +28,22 @@ class RagService:
         self.compression_agent = compression_agent
         self.answer_agent = answer_agent
 
-    def answer(self, knowledge_base_id: str, conversation_id: str, question: str, model: str | None = None) -> dict:
+    def answer(
+        self,
+        knowledge_base_id: str,
+        conversation_id: str,
+        question: str,
+        model: str | None = None,
+        attachment_context: str = "",
+        attachment_citations: list[dict] | None = None,
+    ) -> dict:
         knowledge_base = self.repository.get_knowledge_base(knowledge_base_id)
         if not knowledge_base:
             raise ValueError("知识库不存在")
         history = self.repository.list_messages(conversation_id)[-12:]
         knowledge_catalog = ""
         catalog_answer = ""
-        inventory_question = is_knowledge_catalog_inventory_question(question)
+        inventory_question = is_knowledge_catalog_inventory_question(question) and not attachment_context
         if needs_knowledge_catalog(question) or inventory_question:
             documents = self.repository.list_documents(knowledge_base_id)
             knowledge_catalog = format_knowledge_catalog(documents)
@@ -69,6 +77,7 @@ class RagService:
             ).as_dict()
             for hit in hits
         ]
+        citations.extend(attachment_citations or [])
         answer = self.answer_agent.run(
             question,
             history,
@@ -78,6 +87,7 @@ class RagService:
             context_texts=compression_result.text_by_chunk_id if compression_result else None,
             knowledge_catalog=knowledge_catalog,
             catalog_answer=catalog_answer,
+            attachment_context=attachment_context,
         )
         self.repository.add_message(conversation_id, knowledge_base_id, question, answer, citations)
         return {
@@ -89,6 +99,7 @@ class RagService:
             "retrieved_count": len(retrieved_hits),
             "relevant_count": len(relevant_hits),
             "catalog_used": bool(knowledge_catalog),
+            "attachments_used": bool(attachment_context),
             "agent_trace": [
                 {
                     "agent": self.decision_agent.name,

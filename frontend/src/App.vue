@@ -12,7 +12,8 @@ import { getCurrentUser, login, logout } from './services/api'
 import { useKnowledgeBaseStore } from './stores/knowledgeBase'
 
 const store = useKnowledgeBaseStore()
-const activeTab = ref('documents')
+const activeTab = ref('chat')
+const sidebarCollapsed = ref(localStorage.getItem('rag-sidebar-collapsed') === 'true')
 const createDialogOpen = ref(false)
 const creating = ref(false)
 const documentQuery = ref('')
@@ -70,6 +71,11 @@ function clearSession() {
   store.reset()
   importActive.value = false
   stopDocumentPolling()
+}
+
+function toggleSidebar() {
+  sidebarCollapsed.value = !sidebarCollapsed.value
+  localStorage.setItem('rag-sidebar-collapsed', String(sidebarCollapsed.value))
 }
 
 function stopDocumentPolling() {
@@ -221,16 +227,22 @@ async function confirmDelete() {
       :items="store.items"
       :selected-id="store.selectedId"
       :loading="store.loading"
+      :collapsed="sidebarCollapsed"
       :deleting-id="deleteTarget?.type === 'knowledge-base' ? deletingId : null"
       @select="store.select"
       @create="createDialogOpen = true"
       @refresh="store.load"
       @delete="requestKnowledgeBaseDelete"
+      @toggle="toggleSidebar"
     />
 
     <main class="main-area">
       <header class="topbar">
         <div class="breadcrumb"><span>工作区</span><span class="breadcrumb-separator">/</span><strong>{{ store.selected?.name || '未选择知识库' }}</strong></div>
+        <nav v-if="store.selected" class="workspace-switcher" aria-label="知识库视图">
+          <button :class="{ active: activeTab === 'chat' }" @click="activeTab = 'chat'"><MessageSquareText :size="15" />对话</button>
+          <button :class="{ active: activeTab === 'documents' }" @click="activeTab = 'documents'"><FileStack :size="15" />文档</button>
+        </nav>
         <div class="account-menu">
           <span>{{ authUser.username }}</span>
           <button class="icon-button" title="退出登录" aria-label="退出登录" @click="signOut"><LogOut :size="16" /></button>
@@ -238,7 +250,7 @@ async function confirmDelete() {
       </header>
 
       <template v-if="store.selected">
-        <section class="content-header">
+        <section v-show="activeTab === 'documents'" class="content-header">
           <div>
             <span class="eyebrow">KNOWLEDGE BASE</span>
             <h1>{{ store.selected.name }}</h1>
@@ -246,11 +258,6 @@ async function confirmDelete() {
           </div>
           <button class="button primary" @click="createDialogOpen = true"><Plus :size="16" />新建知识库</button>
         </section>
-
-        <nav class="view-tabs" aria-label="知识库视图">
-          <button :class="{ active: activeTab === 'documents' }" @click="activeTab = 'documents'"><FileStack :size="16" />文档</button>
-          <button :class="{ active: activeTab === 'chat' }" @click="activeTab = 'chat'"><MessageSquareText :size="16" />问答</button>
-        </nav>
 
         <section v-show="activeTab === 'documents'" class="document-view">
           <ImportPanel :kb-id="store.selected.id" @started="trackImport" @completed="refreshDocuments" />
@@ -276,7 +283,7 @@ async function confirmDelete() {
           />
         </section>
 
-        <ChatWorkspace v-show="activeTab === 'chat'" :key="store.selected.id" :kb-id="store.selected.id" />
+        <ChatWorkspace v-show="activeTab === 'chat'" :key="store.selected.id" :kb-id="store.selected.id" @documents-updated="refreshDocuments" />
       </template>
 
       <section v-else class="empty-workspace">

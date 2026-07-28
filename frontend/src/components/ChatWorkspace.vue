@@ -1,19 +1,23 @@
 <script setup>
-import { nextTick, ref, watch } from 'vue'
-import { Bot, BrainCircuit, Check, LoaderCircle, MessageSquareText, Pencil, Plus, Send, Trash2, UserRound, X } from 'lucide-vue-next'
+import { computed, nextTick, ref, watch } from 'vue'
+import { Bot, BrainCircuit, Check, FileText, LoaderCircle, MessageSquareText, Paperclip, Pencil, Plus, RefreshCw, Send, Trash2, UserRound, X } from 'lucide-vue-next'
 import DeleteConfirmDialog from './DeleteConfirmDialog.vue'
 import { renderMarkdown } from '../utils/markdown'
 import {
   askKnowledgeBase,
+  askKnowledgeBaseWithParsedAttachments,
   createConversation,
   deleteConversation,
   listChatModels,
   listConversationMessages,
   listConversations,
+  parseChatAttachment,
   renameConversation,
+  uploadDocument,
 } from '../services/api'
 
 const props = defineProps({ kbId: { type: String, required: true } })
+const emit = defineEmits(['documents-updated'])
 const conversations = ref([])
 const activeConversationId = ref(null)
 const messages = ref([])
@@ -32,8 +36,85 @@ const savingRename = ref(false)
 const conversationDeleteTarget = ref(null)
 const deletingConversation = ref(false)
 const conversationDeleteError = ref('')
+const attachmentInput = ref(null)
+const attachments = ref([])
+const saveAttachments = ref(false)
+const attachmentNotice = ref('')
 let conversationRequestId = 0
 let messageRequestId = 0
+
+const parsingAttachmentCount = computed(() => attachments.value.filter((item) => item.status === 'parsing').length)
+const attachmentsReady = computed(() => attachments.value.every((item) => item.status === 'ready'))
+const canSend = computed(() => (
+  Boolean(question.value.trim())
+  && !sending.value
+  && !loadingMessages.value
+  && attachmentsReady.value
+))
+
+const SUPPORTED_EXTENSIONS = new Set([
+  '', '.pdf', '.doc', '.docx', '.pptx', '.xlsx', '.xlsm', '.xls', '.csv',
+  '.md', '.markdown', '.txt', '.html', '.htm', '.xml', '.json',
+  '.dll', '.gdb', '.att', '.ptpt', '.jcpt', '.stpt', '.ppt', '.lst',
+])
+
+function fileExtension(name) {
+  const index = name.lastIndexOf('.')
+  return index > 0 ? name.slice(index).toLowerCase() : ''
+}
+
+async function parseAttachment(entry, knowledgeBaseId) {
+  try {
+    const parsed = await parseChatAttachment(knowledgeBaseId, entry.file)
+    if (knowledgeBaseId !== props.kbId || !attachments.value.includes(entry)) return
+    entry.parsed = parsed
+    entry.status = 'ready'
+  } catch (cause) {
+    if (knowledgeBaseId !== props.kbId || !attachments.value.includes(entry)) return
+    entry.status = 'failed'
+    entry.error = cause instanceof Error ? cause.message : '附件解析失败'
+  }
+}
+
+function chooseAttachments(event) {
+  const selected = Array.from(event.target.files || [])
+  const existing = new Set(attachments.value.map((item) => item.id))
+  const next = []
+  let skipped = 0
+  for (const file of selected) {
+    const identity = `${file.name}:${file.size}:${file.lastModified}`
+    if (!SUPPORTED_EXTENSIONS.has(fileExtension(file.name)) || existing.has(identity) || attachments.value.length + next.length >= 10) {
+      skipped++
+      continue
+    }
+    existing.add(identity)
+    next.push({ id: identity, file, status: 'parsing', parsed: null, error: '' })
+  }
+  attachments.value = [...attachments.value, ...next]
+  attachmentNotice.value = skipped ? `已跳过 ${skipped} 个不支持、重复或超出数量限制的文件` : ''
+  if (attachmentInput.value) attachmentInput.value.value = ''
+  const knowledgeBaseId = props.kbId
+  next.forEach((entry) => parseAttachment(entry, knowledgeBaseId))
+}
+
+function removeAttachment(index) {
+  attachments.value = attachments.value.filter((_, itemIndex) => itemIndex !== index)
+  attachmentNotice.value = ''
+}
+
+function retryAttachment(entry) {
+  entry.status = 'parsing'
+  entry.error = ''
+  entry.parsed = null
+  parseAttachment(entry, props.kbId)
+}
+
+async function persistAttachments(knowledgeBaseId, entries) {
+  const results = await Promise.allSettled(entries.map((entry) => uploadDocument(knowledgeBaseId, entry.file)))
+  emit('documents-updated')
+  const failures = results.filter((result) => result.status === 'rejected' && result.reason?.status !== 409)
+  return failures.length
+}
 
 async function scrollToBottom(behavior = 'auto') {
   await nextTick()
@@ -82,6 +163,8 @@ function startNewConversation() {
   activeConversationId.value = null
   messages.value = []
   question.value = ''
+  attachments.value = []
+  attachmentNotice.value = ''
   error.value = ''
   loadingMessages.value = false
 }
@@ -170,6 +253,8 @@ async function loadWorkspace(knowledgeBaseId) {
   activeConversationId.value = null
   messages.value = []
   question.value = ''
+  attachments.value = []
+  attachmentNotice.value = ''
   error.value = ''
   sending.value = false
   renamingId.value = null
@@ -202,8 +287,9 @@ watch(() => props.kbId, loadWorkspace, { immediate: true })
 
 async function send() {
   const value = question.value.trim()
-  if (!value || sending.value || loadingMessages.value) return
+  if (!canSend.value) return
   const knowledgeBaseId = props.kbId
+  let sentAttachments = []
   sending.value = true
   error.value = ''
 
@@ -217,11 +303,27 @@ async function send() {
       conversations.value = [conversation, ...conversations.value]
     }
 
-    messages.value.push({ id: `pending:user:${Date.now()}`, role: 'user', content: value })
+    const entries = [...attachments.value]
+    sentAttachments = entries
+    const userContent = entries.length ? `${value}\n\n附件：${entries.map((entry) => entry.file.name).join('、')}` : value
+    messages.value.push({ id: `pending:user:${Date.now()}`, role: 'user', content: userContent })
     question.value = ''
+    attachments.value = []
+    attachmentNotice.value = ''
     await scrollToBottom('smooth')
 
-    const result = await askKnowledgeBase(knowledgeBaseId, conversationId, value, selectedModel.value)
+    const parsedAttachments = entries.map((entry) => ({
+      name: entry.parsed.name,
+      context: entry.parsed.context,
+      citations: entry.parsed.citations,
+    }))
+    const answerRequest = entries.length
+      ? askKnowledgeBaseWithParsedAttachments(knowledgeBaseId, conversationId, value, selectedModel.value, parsedAttachments)
+      : askKnowledgeBase(knowledgeBaseId, conversationId, value, selectedModel.value)
+    const saveRequest = entries.length && saveAttachments.value
+      ? persistAttachments(knowledgeBaseId, entries)
+      : Promise.resolve(0)
+    const [result, saveFailureCount] = await Promise.all([answerRequest, saveRequest])
     if (knowledgeBaseId !== props.kbId || activeConversationId.value !== conversationId) return
     messages.value.push({
       id: `pending:assistant:${Date.now()}`,
@@ -229,9 +331,11 @@ async function send() {
       content: result.answer,
       citations: result.citations || [],
     })
+    if (saveFailureCount) attachmentNotice.value = `${saveFailureCount} 个附件未能保存到知识库，但已用于本次回答`
     await refreshConversations(knowledgeBaseId)
   } catch (cause) {
     if (knowledgeBaseId === props.kbId) {
+      if (sentAttachments.length && !attachments.value.length) attachments.value = sentAttachments
       error.value = cause instanceof Error ? cause.message : '问答失败'
     }
   } finally {
@@ -323,19 +427,45 @@ async function send() {
         <div v-if="sending" class="typing"><span /><span /><span />正在判断和组织答案</div>
       </div>
       <div class="chat-composer">
+        <input ref="attachmentInput" class="hidden-input" type="file" multiple @change="chooseAttachments" />
+        <div v-if="attachments.length" class="attachment-list">
+          <div v-for="(attachment, index) in attachments" :key="attachment.id" class="attachment-chip" :class="`attachment-${attachment.status}`">
+            <LoaderCircle v-if="attachment.status === 'parsing'" :size="14" class="spinning" />
+            <FileText v-else :size="14" />
+            <span class="attachment-name" :title="attachment.file.name">{{ attachment.file.name }}</span>
+            <small v-if="attachment.status === 'parsing'" class="attachment-status">解析中</small>
+            <small v-else-if="attachment.status === 'ready'" class="attachment-status">已解析</small>
+            <small v-else class="attachment-status" :title="attachment.error">解析失败</small>
+            <button v-if="attachment.status === 'failed'" type="button" title="重新解析" aria-label="重新解析" :disabled="sending" @click="retryAttachment(attachment)"><RefreshCw :size="13" /></button>
+            <button type="button" :title="`移除 ${attachment.file.name}`" :aria-label="`移除 ${attachment.file.name}`" :disabled="sending" @click="removeAttachment(index)"><X :size="13" /></button>
+          </div>
+        </div>
         <textarea v-model="question" rows="3" placeholder="输入你的问题" :disabled="sending || loadingMessages" @keydown.enter.exact.prevent="send" />
         <div class="composer-footer">
-          <label class="model-picker" title="选择回答模型">
-            <BrainCircuit :size="14" />
-            <select v-model="selectedModel" aria-label="选择回答模型" :disabled="sending || !models.length">
-              <option v-if="!models.length" value="">默认模型</option>
-              <option v-for="model in models" :key="model.id" :value="model.id">
-                {{ model.provider }} · {{ model.name }}{{ model.is_default ? '（默认）' : '' }}
-              </option>
-            </select>
-          </label>
-          <button class="icon-button send-button" title="发送问题" :disabled="sending || loadingMessages || !question.trim()" @click="send"><Send :size="17" /></button>
+          <div class="composer-tools">
+            <label class="model-picker" title="选择回答模型">
+              <BrainCircuit :size="14" />
+              <select v-model="selectedModel" aria-label="选择回答模型" :disabled="sending || !models.length">
+                <option v-if="!models.length" value="">默认模型</option>
+                <option v-for="model in models" :key="model.id" :value="model.id">
+                  {{ model.provider }} · {{ model.name }}{{ model.is_default ? '（默认）' : '' }}
+                </option>
+              </select>
+            </label>
+            <label v-if="attachments.length" class="save-attachment-toggle">
+              <input v-model="saveAttachments" type="checkbox" :disabled="sending" />
+              <span class="toggle-track"><i /></span>
+              保存到当前知识库
+            </label>
+          </div>
+          <div class="composer-actions">
+            <button class="icon-button attach-button" type="button" title="添加文档" aria-label="添加文档" :disabled="sending" @click="attachmentInput?.click()"><Paperclip :size="16" /></button>
+            <button class="icon-button send-button" title="发送问题" :disabled="!canSend" @click="send"><Send :size="17" /></button>
+          </div>
         </div>
+        <p v-if="parsingAttachmentCount" class="attachment-notice">正在解析 {{ parsingAttachmentCount }} 个附件，完成后可发送。</p>
+        <p v-if="attachments.length && !saveAttachments" class="attachment-scope">附件仅用于本次提问，不会保存。</p>
+        <p v-if="attachmentNotice" class="attachment-notice">{{ attachmentNotice }}</p>
         <p v-if="error" class="error-text">{{ error }}</p>
       </div>
     </section>

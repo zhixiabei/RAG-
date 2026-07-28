@@ -87,6 +87,40 @@ export function askKnowledgeBase(knowledgeBaseId, conversationId, question, mode
   })
 }
 
+export function askKnowledgeBaseWithAttachments(knowledgeBaseId, conversationId, question, model, files) {
+  const form = new FormData()
+  form.append('conversation_id', conversationId)
+  form.append('question', question)
+  if (model) form.append('model', model)
+  files.forEach((file) => form.append('files', file, file.name))
+  return request(`/api/v1/knowledge-bases/${knowledgeBaseId}/chat-with-attachments`, {
+    method: 'POST',
+    body: form,
+  })
+}
+
+export function parseChatAttachment(knowledgeBaseId, file) {
+  const form = new FormData()
+  form.append('file', file, file.name)
+  return request(`/api/v1/knowledge-bases/${knowledgeBaseId}/chat-attachments/parse`, {
+    method: 'POST',
+    body: form,
+  })
+}
+
+export function askKnowledgeBaseWithParsedAttachments(knowledgeBaseId, conversationId, question, model, attachments) {
+  return request(`/api/v1/knowledge-bases/${knowledgeBaseId}/chat-with-parsed-attachments`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      conversation_id: conversationId,
+      question,
+      model: model || null,
+      attachments,
+    }),
+  })
+}
+
 export function listConversations(knowledgeBaseId) {
   return request(`/api/v1/knowledge-bases/${knowledgeBaseId}/conversations`)
 }
