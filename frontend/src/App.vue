@@ -148,7 +148,12 @@ watch(() => store.selectedId, () => {
 })
 
 watch(
-  () => [authUser.value?.username, store.selectedId, store.hasProcessingDocuments, importActive.value],
+  [
+    () => authUser.value?.username,
+    () => store.selectedId,
+    () => store.hasProcessingDocuments,
+    () => importActive.value,
+  ],
   scheduleDocumentPolling,
 )
 

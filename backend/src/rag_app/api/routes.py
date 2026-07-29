@@ -1,6 +1,8 @@
 from pathlib import Path
 
 from fastapi import APIRouter, File, Form, HTTPException, Request, Response, UploadFile
+
+from ..application.ingestion_service import DocumentTooLargeError
 from fastapi.responses import JSONResponse
 from uuid import uuid4
 
@@ -153,13 +155,16 @@ def upload_document(request: Request, knowledge_base_id: str, file: UploadFile =
         suffix = Path(file.filename).suffix.lower()
         raise HTTPException(415, f"暂不支持的文件类型: {suffix or '无扩展名'}")
     try:
-        return service.ingestion.ingest(
+        return service.ingestion.ingest_stream(
             knowledge_base_id,
             Path(file.filename).name,
             file.content_type or "application/octet-stream",
-            file.file.read(),
+            file.file,
+            service.settings.max_document_bytes,
             folder_path,
         )
+    except DocumentTooLargeError as exc:
+        raise HTTPException(413, str(exc)) from exc
     except ValueError as exc:
         msg = str(exc)
         if msg.startswith("文件重复"):
@@ -214,11 +219,10 @@ def parse_chat_attachment(request: Request, knowledge_base_id: str, file: Upload
     if not service.ingestion.parser.supports(file_name):
         suffix = Path(file_name).suffix.lower()
         raise HTTPException(415, f"暂不支持的文件类型: {suffix or '无扩展名'}")
-    content = file.file.read(MAX_CHAT_ATTACHMENT_BYTES + 1)
-    if len(content) > MAX_CHAT_ATTACHMENT_BYTES:
-        raise HTTPException(413, "单个临时附件不能超过 30 MB")
     try:
-        chunks = service.ingestion.parser.parse(file_name, content)
+        chunks = service.ingestion.parse_stream(file_name, file.file, MAX_CHAT_ATTACHMENT_BYTES)
+    except DocumentTooLargeError as exc:
+        raise HTTPException(413, str(exc)) from exc
     except Exception as exc:
         raise HTTPException(422, f"附件解析失败: {exc}") from exc
     if not chunks:

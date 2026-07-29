@@ -15,6 +15,7 @@ export const useKnowledgeBaseStore = defineStore('knowledgeBase', () => {
   const selectedId = ref(null)
   const loading = ref(false)
   const error = ref('')
+  const documentRequests = new Map()
   const selected = computed(() => items.value.find((item) => item.id === selectedId.value) || null)
   const hasProcessingDocuments = computed(() => documents.value.some((document) => document.status === 'processing'))
 
@@ -37,7 +38,14 @@ export const useKnowledgeBaseStore = defineStore('knowledgeBase', () => {
       documents.value = []
       return
     }
-    const result = await listDocuments(knowledgeBaseId)
+    let request = documentRequests.get(knowledgeBaseId)
+    if (!request) {
+      request = listDocuments(knowledgeBaseId).finally(() => {
+        if (documentRequests.get(knowledgeBaseId) === request) documentRequests.delete(knowledgeBaseId)
+      })
+      documentRequests.set(knowledgeBaseId, request)
+    }
+    const result = await request
     if (selectedId.value === knowledgeBaseId) documents.value = result
   }
 

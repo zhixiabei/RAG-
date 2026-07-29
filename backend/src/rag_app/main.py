@@ -95,7 +95,16 @@ def build_services(settings: Settings) -> Services:
         objects=objects,
         vectors=vectors,
         models=models,
-        ingestion=IngestionService(repository, objects, vectors, DocumentParser(), models),
+        ingestion=IngestionService(
+            repository,
+            objects,
+            vectors,
+            DocumentParser(),
+            models,
+            max_concurrency=settings.ingestion_max_concurrency,
+            embedding_max_concurrency=settings.ingestion_embedding_max_concurrency,
+            embedding_batch_size=settings.ingestion_embedding_batch_size,
+        ),
         deletion=DeletionService(repository, objects, vectors),
         rag=RagService(repository, decision_agent, retrieval_agent, relevance_agent, compression_agent, answer_agent),
     )

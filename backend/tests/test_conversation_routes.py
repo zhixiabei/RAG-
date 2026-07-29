@@ -53,7 +53,13 @@ class ConversationRoutesTest(unittest.TestCase):
 
         app.state.services = SimpleNamespace(
             repository=self.repository,
-            ingestion=SimpleNamespace(parser=parser),
+            ingestion=SimpleNamespace(
+                parser=parser,
+                parse_stream=lambda file_name, stream, max_bytes: parser.parse(
+                    file_name,
+                    stream.read(max_bytes + 1),
+                ),
+            ),
             rag=SimpleNamespace(answer=answer),
             settings=SimpleNamespace(
                 auth_username="admin",

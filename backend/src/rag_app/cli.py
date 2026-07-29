@@ -34,12 +34,14 @@ def import_folder(knowledge_base_id: str, folder: Path) -> int:
         failed = 0
         for path in files:
             try:
-                services.ingestion.ingest(
-                    knowledge_base_id,
-                    path.name,
-                    "application/octet-stream",
-                    path.read_bytes(),
-                )
+                with path.open("rb") as stream:
+                    services.ingestion.ingest_stream(
+                        knowledge_base_id,
+                        path.name,
+                        "application/octet-stream",
+                        stream,
+                        settings.max_document_bytes,
+                    )
                 succeeded += 1
                 print(f"[ready] {path}")
             except Exception as exc:

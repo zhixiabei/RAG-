@@ -1,6 +1,7 @@
 import unittest
+from io import BytesIO
 
-from rag_app.application.ingestion_service import IngestionService
+from rag_app.application.ingestion_service import DocumentTooLargeError, IngestionService
 from rag_app.domain.models import ParsedChunk
 
 
@@ -38,19 +39,36 @@ class FakeObjects:
     def put_bytes(self, object_key, content, content_type):
         self.items.append((object_key, content, content_type))
 
+    def put_stream(self, object_key, stream, length, content_type):
+        content = stream.read()
+        if len(content) != length:
+            raise AssertionError("stream length mismatch")
+        self.items.append((object_key, content, content_type))
+
 
 class FakeVectors:
+    def __init__(self):
+        self.points = []
+        self.vectors = []
+        self.upsert_batch_sizes = []
+        self.deleted_documents = []
+
     def ensure_collection(self, vector_size):
         self.vector_size = vector_size
 
     def upsert(self, points, vectors):
-        self.points = points
-        self.vectors = vectors
+        self.points.extend(points)
+        self.vectors.extend(vectors)
+        self.upsert_batch_sizes.append(len(points))
+
+    def delete_document(self, document_id):
+        self.deleted_documents.append(document_id)
 
 
 class FakeParser:
-    def __init__(self, failure=None):
+    def __init__(self, failure=None, chunks=None):
         self.failure = failure
+        self.chunks = chunks
 
     def supports(self, file_name):
         return True
@@ -58,7 +76,10 @@ class FakeParser:
     def parse(self, file_name, content):
         if self.failure:
             raise self.failure
-        return [ParsedChunk(0, "知识内容", 1)]
+        return self.chunks or [ParsedChunk(0, "知识内容", 1)]
+
+    def parse_stream(self, file_name, stream):
+        return self.parse(file_name, stream.read())
 
 
 class FakeModels:
@@ -66,14 +87,16 @@ class FakeModels:
 
     def __init__(self):
         self.embedded_texts = []
+        self.embed_batch_sizes = []
 
     def embed(self, texts):
         self.embedded_texts.extend(texts)
+        self.embed_batch_sizes.append(len(texts))
         return [[0.1, 0.2] for _ in texts]
 
 
 class IngestionServiceTest(unittest.TestCase):
-    def build_service(self, parser):
+    def build_service(self, parser, **kwargs):
         self.repository = FakeRepository()
         return IngestionService(
             self.repository,
@@ -81,6 +104,7 @@ class IngestionServiceTest(unittest.TestCase):
             FakeVectors(),
             parser,
             FakeModels(),
+            **kwargs,
         )
 
     def test_persists_progress_through_each_ingestion_stage(self):
@@ -128,6 +152,44 @@ class IngestionServiceTest(unittest.TestCase):
         self.assertIn("完整路径: 井资料/长63/渗透率/长63渗透率.att", service.models.embedded_texts[0])
         self.assertIn("长63渗透率.att", service.models.embedded_texts[0])
         self.assertIn("文件后缀: .att", service.models.embedded_texts[0])
+
+    def test_batches_embeddings_and_vector_upserts(self):
+        chunks = [ParsedChunk(index, f"知识内容 {index}", index + 1) for index in range(5)]
+        service = self.build_service(FakeParser(chunks=chunks), embedding_batch_size=2)
+
+        service.ingest("kb-1", "制度.pdf", "application/pdf", b"content")
+
+        self.assertEqual(service.models.embed_batch_sizes, [2, 2, 1])
+        self.assertEqual(service.vectors.upsert_batch_sizes, [2, 2, 1])
+        self.assertEqual(len(service.vectors.points), 5)
+
+    def test_rejects_oversized_stream_before_creating_document(self):
+        service = self.build_service(FakeParser())
+
+        with self.assertRaisesRegex(DocumentTooLargeError, "不能超过"):
+            service.ingest_stream(
+                "kb-1",
+                "large.pdf",
+                "application/pdf",
+                BytesIO(b"12345"),
+                max_bytes=4,
+            )
+
+        self.assertIsNone(self.repository.document)
+
+    def test_zero_size_limit_accepts_document_stream(self):
+        service = self.build_service(FakeParser())
+
+        result = service.ingest_stream(
+            "kb-1",
+            "large.pptx",
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            BytesIO(b"12345"),
+            max_bytes=0,
+        )
+
+        self.assertEqual(result["status"], "ready")
+        self.assertEqual(service.objects.items[0][1], b"12345")
 
 
 if __name__ == "__main__":

@@ -12,6 +12,40 @@ class DocumentParserSpecialExtensionTest(unittest.TestCase):
     def setUp(self):
         self.parser = DocumentParser()
 
+    def test_pptx_stream_reads_slide_text_in_order_without_loading_media(self):
+        presentation = b"""<?xml version="1.0" encoding="UTF-8"?>
+<p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+ xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <p:sldIdLst><p:sldId id="256" r:id="rId2"/><p:sldId id="257" r:id="rId1"/></p:sldIdLst>
+</p:presentation>"""
+        relationships = b"""<?xml version="1.0" encoding="UTF-8"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide1.xml"/>
+  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide2.xml"/>
+</Relationships>"""
+
+        def slide_xml(text):
+            return f"""<?xml version="1.0" encoding="UTF-8"?>
+<p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+ xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+  <p:cSld><p:spTree><p:sp><p:txBody><a:p><a:r><a:t>{text}</a:t></a:r></a:p></p:txBody></p:sp></p:spTree></p:cSld>
+</p:sld>""".encode()
+
+        stream = BytesIO()
+        with ZipFile(stream, "w") as archive:
+            archive.writestr("ppt/presentation.xml", presentation)
+            archive.writestr("ppt/_rels/presentation.xml.rels", relationships)
+            archive.writestr("ppt/slides/slide1.xml", slide_xml("second"))
+            archive.writestr("ppt/slides/slide2.xml", slide_xml("first"))
+            archive.writestr("ppt/media/video1.mp4", b"x" * (2 * 1024 * 1024))
+        stream.seek(0)
+
+        chunks = self.parser.parse_stream("large-media.pptx", stream)
+
+        self.assertEqual([chunk.page_number for chunk in chunks], [1, 2])
+        self.assertIn("first", chunks[0].text)
+        self.assertIn("second", chunks[1].text)
+
     def test_att_text_file_is_supported_and_parsed(self):
         chunks = self.parser.parse("长63渗透率.att", "渗透率 12.5 mD".encode("utf-8"))
 

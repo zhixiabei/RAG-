@@ -11,7 +11,7 @@ import re
 import struct
 import sys
 import tempfile
-from typing import Any, Iterable
+from typing import Any, BinaryIO, Iterable
 from xml.etree import ElementTree
 from zipfile import BadZipFile, ZipFile
 
@@ -62,6 +62,10 @@ GEOMAP_LAYER_STYLE_TEXT_SLOTS = (
 GEOMAP_ALBUM_MAGIC = b"GeoMap Album Information\n"
 GEOMAP_ALBUM_TREE_OFFSET = 2048
 PACKAGE_RELATIONSHIPS_NAMESPACE = "http://schemas.openxmlformats.org/package/2006/relationships"
+OFFICE_RELATIONSHIPS_NAMESPACE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+PRESENTATIONML_NAMESPACE = "http://schemas.openxmlformats.org/presentationml/2006/main"
+DRAWINGML_NAMESPACE = "http://schemas.openxmlformats.org/drawingml/2006/main"
+PPTX_MAX_SLIDE_XML_BYTES = 32 * 1024 * 1024
 OPTIONAL_OFFICE_UI_PART_PREFIXES = ("customUI/", "userCustomization/")
 
 
@@ -159,61 +163,73 @@ class DocumentParser:
         return Path(file_name).suffix.lower() in SUPPORTED_SUFFIXES
 
     def parse(self, file_name: str, content: bytes) -> list[ParsedChunk]:
+        return self.parse_stream(file_name, BytesIO(content))
+
+    def parse_stream(self, file_name: str, stream: BinaryIO) -> list[ParsedChunk]:
         suffix = Path(file_name).suffix.lower()
         if suffix not in SUPPORTED_SUFFIXES:
             raise UnsupportedDocumentTypeError(f"暂不支持的文件类型: {suffix or '无扩展名'}")
 
+        stream.seek(0)
         if suffix == ".pdf":
-            sources = self._parse_pdf(content)
+            sources = self._parse_pdf_stream(stream)
         elif suffix == ".docx":
-            sources = self._parse_docx(content)
+            sources = self._parse_docx_stream(stream)
         elif suffix == ".doc":
-            sources = self._parse_doc(content)
+            sources = self._parse_doc(stream.read())
         elif suffix == ".pptx":
-            sources = self._parse_pptx(content)
+            sources = self._parse_pptx_stream(stream)
         elif suffix in {".xlsx", ".xlsm"}:
-            sources = self._parse_xlsx(content)
+            sources = self._parse_xlsx_stream(stream)
         elif suffix == ".xls":
-            sources = self._parse_xls(content)
+            sources = self._parse_xls(stream.read())
         elif suffix == ".csv":
-            sources = self._parse_csv(content)
+            sources = self._parse_csv(stream.read())
         elif suffix == ".json":
-            sources = self._parse_json(content)
+            sources = self._parse_json(stream.read())
         elif suffix == ".xml":
-            sources = self._parse_xml(content)
+            sources = self._parse_xml(stream.read())
         elif suffix in {".html", ".htm"}:
-            sources = self._parse_html(content)
+            sources = self._parse_html(stream.read())
         elif suffix in {".ptpt", ".jcpt", ".stpt"}:
-            sources = self._parse_zip_container(content)
+            sources = self._parse_zip_container_stream(stream)
         elif suffix == ".ppt":
-            sources = self._parse_ppt(content)
+            sources = self._parse_ppt(stream.read())
         elif suffix == ".lst":
-            sources = self._parse_lst(file_name, content)
+            sources = self._parse_lst(file_name, stream.read())
         elif suffix == ".att":
-            sources = self._parse_att(file_name, content)
+            sources = self._parse_att(file_name, stream.read())
         elif suffix in {".dll", ".gdb"}:
-            sources = self._parse_binary(file_name, content)
+            sources = self._parse_binary(file_name, stream.read())
         elif not suffix:
-            sources = self._parse_without_extension(file_name, content)
+            sources = self._parse_without_extension(file_name, stream.read())
         else:
-            sources = [(None, None, _decode_text(content))]
+            sources = [(None, None, _decode_text(stream.read()))]
 
         return self._chunk_sources(sources)
 
     def _parse_pdf(self, content: bytes) -> list[tuple[int | None, str | None, str]]:
+        return self._parse_pdf_stream(BytesIO(content))
+
+    def _parse_pdf_stream(self, stream: BinaryIO) -> list[tuple[int | None, str | None, str]]:
         from pypdf import PdfReader
 
         return [
             (index + 1, None, page.extract_text() or "")
-            for index, page in enumerate(PdfReader(BytesIO(content)).pages)
+            for index, page in enumerate(PdfReader(stream).pages)
         ]
 
     def _parse_docx(self, content: bytes) -> list[tuple[int | None, str | None, str]]:
+        return self._parse_docx_stream(BytesIO(content))
+
+    def _parse_docx_stream(self, stream: BinaryIO) -> list[tuple[int | None, str | None, str]]:
         from docx import Document
 
         try:
-            document = Document(BytesIO(content))
+            document = Document(stream)
         except KeyError:
+            stream.seek(0)
+            content = stream.read()
             repaired_content = _repair_missing_optional_docx_parts(content)
             if repaired_content is content:
                 raise
@@ -363,28 +379,82 @@ class DocumentParser:
         return result
 
     def _parse_pptx(self, content: bytes) -> list[tuple[int | None, str | None, str]]:
-        from pptx import Presentation
+        return self._parse_pptx_stream(BytesIO(content))
 
-        sources = []
-        for slide_number, slide in enumerate(Presentation(BytesIO(content)).slides, start=1):
-            parts: list[str] = []
-            for shape in slide.shapes:
-                if getattr(shape, "has_text_frame", False):
-                    text = shape.text.strip()
-                    if text:
-                        parts.append(text)
-                if getattr(shape, "has_table", False):
-                    for row in shape.table.rows:
-                        values = [cell.text.strip() for cell in row.cells]
-                        if any(values):
-                            parts.append("\t".join(values))
-            sources.append((slide_number, f"第 {slide_number} 页", "\n".join(parts)))
-        return sources
+    def _parse_pptx_stream(self, stream: BinaryIO) -> list[tuple[int | None, str | None, str]]:
+        try:
+            with ZipFile(stream) as archive:
+                sources = []
+                for slide_number, slide_name in enumerate(self._pptx_slide_names(archive), start=1):
+                    info = archive.getinfo(slide_name)
+                    if info.file_size > PPTX_MAX_SLIDE_XML_BYTES:
+                        raise ValueError(
+                            f"PPTX 第 {slide_number} 页 XML 过大: {info.file_size // (1024 * 1024)} MB"
+                        )
+                    root = ElementTree.fromstring(archive.read(info))
+                    parts = []
+                    for paragraph in root.iter(f"{{{DRAWINGML_NAMESPACE}}}p"):
+                        text_parts = []
+                        for element in paragraph.iter():
+                            if element.tag == f"{{{DRAWINGML_NAMESPACE}}}t" and element.text:
+                                text_parts.append(element.text)
+                            elif element.tag == f"{{{DRAWINGML_NAMESPACE}}}tab":
+                                text_parts.append("\t")
+                            elif element.tag == f"{{{DRAWINGML_NAMESPACE}}}br":
+                                text_parts.append("\n")
+                        text = "".join(text_parts).strip()
+                        if text:
+                            parts.append(text)
+                    sources.append((slide_number, f"第 {slide_number} 页", "\n".join(parts)))
+                return sources
+        except BadZipFile as exc:
+            raise ValueError("PPTX 文件损坏或格式不兼容") from exc
+
+    @staticmethod
+    def _pptx_slide_names(archive: ZipFile) -> list[str]:
+        try:
+            presentation = ElementTree.fromstring(archive.read("ppt/presentation.xml"))
+            relationships = ElementTree.fromstring(archive.read("ppt/_rels/presentation.xml.rels"))
+            targets = {
+                relationship.get("Id"): posixpath.normpath(
+                    posixpath.join("ppt", relationship.get("Target", "").replace("\\", "/"))
+                )
+                for relationship in relationships
+                if relationship.tag == f"{{{PACKAGE_RELATIONSHIPS_NAMESPACE}}}Relationship"
+                and relationship.get("TargetMode") != "External"
+                and relationship.get("Type", "").endswith("/slide")
+            }
+            slide_names = []
+            relationship_id_key = f"{{{OFFICE_RELATIONSHIPS_NAMESPACE}}}id"
+            for slide_id in presentation.iter(f"{{{PRESENTATIONML_NAMESPACE}}}sldId"):
+                target = targets.get(slide_id.get(relationship_id_key))
+                if target and target in archive.NameToInfo:
+                    slide_names.append(target)
+            if slide_names:
+                return slide_names
+        except (KeyError, ElementTree.ParseError):
+            pass
+
+        def slide_number(name: str) -> int:
+            match = re.search(r"slide(\d+)\.xml$", name)
+            return int(match.group(1)) if match else sys.maxsize
+
+        return sorted(
+            (
+                name
+                for name in archive.namelist()
+                if name.startswith("ppt/slides/slide") and name.endswith(".xml")
+            ),
+            key=slide_number,
+        )
 
     def _parse_xlsx(self, content: bytes) -> list[tuple[int | None, str | None, str]]:
+        return self._parse_xlsx_stream(BytesIO(content))
+
+    def _parse_xlsx_stream(self, stream: BinaryIO) -> list[tuple[int | None, str | None, str]]:
         from openpyxl import load_workbook
 
-        workbook = load_workbook(BytesIO(content), read_only=True, data_only=True)
+        workbook = load_workbook(stream, read_only=True, data_only=True)
         try:
             sources = []
             for worksheet in workbook.worksheets:
@@ -445,10 +515,13 @@ class DocumentParser:
         return [(None, None, "\n".join(extractor.parts))]
 
     def _parse_zip_container(self, content: bytes) -> list[tuple[int | None, str | None, str]]:
+        return self._parse_zip_container_stream(BytesIO(content))
+
+    def _parse_zip_container_stream(self, stream: BinaryIO) -> list[tuple[int | None, str | None, str]]:
         sources = []
         total_size = 0
         try:
-            with ZipFile(BytesIO(content)) as archive:
+            with ZipFile(stream) as archive:
                 for entry in archive.infolist()[:200]:
                     if entry.is_dir() or entry.file_size > 20 * 1024 * 1024:
                         continue

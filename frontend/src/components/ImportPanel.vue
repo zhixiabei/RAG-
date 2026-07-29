@@ -23,8 +23,7 @@ const expandedFolders = ref(new Set())
 // 每个文件的状态: queued | uploading | done | failed
 const fileStatus = ref({})
 const fileErrors = ref({})
-const MAX_CONCURRENT = 3
-const MAX_RETRIES = 2
+const MAX_CONCURRENT = 2
 
 const SESSION_KEY_PREFIX = 'rag-import-queue'
 
@@ -342,27 +341,16 @@ function removeFile(index) {
 
 async function uploadOne(knowledgeBaseId, file, index) {
   fileStatus.value[index] = 'uploading'
-  let lastError = null
-  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-    try {
-      await uploadDocument(knowledgeBaseId, file, folderPathFor(file))
-      fileStatus.value[index] = 'done'
-      fileErrors.value[index] = null
-      importedPaths.value.add(fileIdentity(file))
-      return
-    } catch (cause) {
-      lastError = cause
-      if (cause.status && (cause.status < 500 || cause.status >= 600)) {
-        break
-      }
-      if (attempt < MAX_RETRIES) {
-        await new Promise(r => setTimeout(r, 1000 * (2 ** attempt)))
-      }
-    }
+  try {
+    await uploadDocument(knowledgeBaseId, file, folderPathFor(file))
+    fileStatus.value[index] = 'done'
+    fileErrors.value[index] = null
+    importedPaths.value.add(fileIdentity(file))
+  } catch (cause) {
+    fileStatus.value[index] = 'failed'
+    fileErrors.value[index] = cause instanceof Error ? cause.message : '导入失败'
+    failed.value.push({ name: file.name, message: cause instanceof Error ? cause.message : '导入失败' })
   }
-  fileStatus.value[index] = 'failed'
-  fileErrors.value[index] = lastError instanceof Error ? lastError.message : '导入失败'
-  failed.value.push({ name: file.name, message: lastError instanceof Error ? lastError.message : '导入失败' })
 }
 
 async function startImport() {

@@ -42,6 +42,7 @@ const saveAttachments = ref(false)
 const attachmentNotice = ref('')
 let conversationRequestId = 0
 let messageRequestId = 0
+const MAX_ATTACHMENT_CONCURRENCY = 1
 
 const parsingAttachmentCount = computed(() => attachments.value.filter((item) => item.status === 'parsing').length)
 const attachmentsReady = computed(() => attachments.value.every((item) => item.status === 'ready'))
@@ -76,6 +77,19 @@ async function parseAttachment(entry, knowledgeBaseId) {
   }
 }
 
+async function parseAttachmentQueue(entries, knowledgeBaseId) {
+  let nextIndex = 0
+  async function runWorker() {
+    while (nextIndex < entries.length) {
+      const entry = entries[nextIndex]
+      nextIndex++
+      await parseAttachment(entry, knowledgeBaseId)
+    }
+  }
+  const workerCount = Math.min(MAX_ATTACHMENT_CONCURRENCY, entries.length)
+  await Promise.all(Array.from({ length: workerCount }, () => runWorker()))
+}
+
 function chooseAttachments(event) {
   const selected = Array.from(event.target.files || [])
   const existing = new Set(attachments.value.map((item) => item.id))
@@ -94,7 +108,7 @@ function chooseAttachments(event) {
   attachmentNotice.value = skipped ? `已跳过 ${skipped} 个不支持、重复或超出数量限制的文件` : ''
   if (attachmentInput.value) attachmentInput.value.value = ''
   const knowledgeBaseId = props.kbId
-  next.forEach((entry) => parseAttachment(entry, knowledgeBaseId))
+  parseAttachmentQueue(next, knowledgeBaseId)
 }
 
 function removeAttachment(index) {
@@ -110,7 +124,14 @@ function retryAttachment(entry) {
 }
 
 async function persistAttachments(knowledgeBaseId, entries) {
-  const results = await Promise.allSettled(entries.map((entry) => uploadDocument(knowledgeBaseId, entry.file)))
+  const results = []
+  for (const entry of entries) {
+    try {
+      results.push({ status: 'fulfilled', value: await uploadDocument(knowledgeBaseId, entry.file) })
+    } catch (reason) {
+      results.push({ status: 'rejected', reason })
+    }
+  }
   emit('documents-updated')
   const failures = results.filter((result) => result.status === 'rejected' && result.reason?.status !== 409)
   return failures.length

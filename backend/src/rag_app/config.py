@@ -20,6 +20,10 @@ class Settings(BaseSettings):
     minio_bucket: str = "rag-documents"
     qdrant_url: str
     qdrant_collection: str
+    ingestion_max_concurrency: int = 2
+    ingestion_embedding_max_concurrency: int = 1
+    ingestion_embedding_batch_size: int = 32
+    max_document_bytes: int = 0
     model_mode: str = "local"
     ollama_url: str = "http://127.0.0.1:11434"
     ollama_chat_model: str = "qwen3:4b"

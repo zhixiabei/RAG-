@@ -67,6 +67,8 @@ AUTH_OWNER_ID=personal
 
 文档导入进度保存在 `documents.progress` 和 `documents.stage` 中。切换到问答界面不会中断当前上传；退出后重新登录时，文档列表会恢复后台正在处理的文件并自动刷新状态。尚未发送到后端的本地文件选择不会跨登录保存。
 
+文档默认允许两个任务同时上传和解析，embedding 阶段保持单并发，并以 32 个文本块为一批写入向量库，兼顾批量导入速度和本地模型稳定性。知识库文档默认没有大小上限（`MAX_DOCUMENT_BYTES=0`）；大体积 PPTX 使用流式上传并逐页读取 XML，不会把图片、音频和视频加载到内存。可通过 `INGESTION_MAX_CONCURRENCY`、`INGESTION_EMBEDDING_MAX_CONCURRENCY`、`INGESTION_EMBEDDING_BATCH_SIZE` 和 `MAX_DOCUMENT_BYTES` 调整。聊天临时附件仍保留独立的 30 MB 限制。使用本地模型时不要同时启动多个 Uvicorn worker，否则每个进程都有独立的导入并发限制。
+
 如果当前终端位于 `frontend`，先回到项目根目录：
 
 ```powershell
