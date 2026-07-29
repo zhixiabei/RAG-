@@ -62,7 +62,13 @@ def build_services(settings: Settings) -> Services:
         settings.minio_secure,
         settings.minio_bucket,
     )
-    vectors = QdrantVectorStore(settings.qdrant_url, settings.qdrant_collection)
+    vectors = QdrantVectorStore(
+        settings.qdrant_url,
+        settings.qdrant_collection,
+        timeout_seconds=settings.qdrant_timeout_seconds,
+        upsert_batch_size=settings.qdrant_upsert_batch_size,
+        upsert_max_retries=settings.qdrant_upsert_max_retries,
+    )
     if settings.model_mode == "local":
         models = OllamaGateway(settings.ollama_url, settings.ollama_chat_model, settings.ollama_embedding_model)
     elif settings.model_mode == "remote":

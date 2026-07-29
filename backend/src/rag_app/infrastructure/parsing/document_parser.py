@@ -467,7 +467,11 @@ class DocumentParser:
     def _parse_xls(self, content: bytes) -> list[tuple[int | None, str | None, str]]:
         import xlrd
 
-        workbook = xlrd.open_workbook(file_contents=content, on_demand=True)
+        try:
+            workbook = xlrd.open_workbook(file_contents=content, on_demand=True)
+        except Exception:
+            sources = self._parse_xls_with_excel(content)
+            return sources or self._parse_binary("legacy-excel.xls", content)
         try:
             sources = []
             for worksheet in workbook.sheets():
@@ -479,6 +483,80 @@ class DocumentParser:
             return sources
         finally:
             workbook.release_resources()
+
+    def _parse_xls_with_excel(self, content: bytes) -> list[tuple[int | None, str | None, str]]:
+        if sys.platform != "win32":
+            return []
+
+        import threading
+
+        result: list[tuple[int | None, str | None, str]] = []
+        done = threading.Event()
+
+        def _com_parse() -> None:
+            path = ""
+            excel = None
+            workbook = None
+            pythoncom = None
+            try:
+                import pythoncom
+                from win32com.client import DispatchEx
+
+                pythoncom.CoInitialize()
+                with tempfile.NamedTemporaryFile(suffix=".xls", delete=False) as temporary:
+                    temporary.write(content)
+                    path = temporary.name
+
+                excel = DispatchEx("Excel.Application")
+                excel.Visible = False
+                excel.DisplayAlerts = False
+                excel.AutomationSecurity = 3
+                workbook = excel.Workbooks.Open(
+                    path,
+                    UpdateLinks=0,
+                    ReadOnly=True,
+                    IgnoreReadOnlyRecommended=True,
+                    AddToMru=False,
+                    Notify=False,
+                )
+                for worksheet in workbook.Worksheets:
+                    values = worksheet.UsedRange.Value2
+                    if values is None:
+                        rows = []
+                    elif isinstance(values, tuple) and values and isinstance(values[0], tuple):
+                        rows = values
+                    elif isinstance(values, tuple):
+                        rows = [values]
+                    else:
+                        rows = [(values,)]
+                    result.append((None, str(worksheet.Name), "\n".join(self._tabular_rows(rows))))
+            except Exception:
+                result.clear()
+            finally:
+                if workbook is not None:
+                    try:
+                        workbook.Close(False)
+                    except Exception:
+                        pass
+                if excel is not None:
+                    try:
+                        excel.Quit()
+                    except Exception:
+                        pass
+                if path:
+                    try:
+                        os.unlink(path)
+                    except OSError:
+                        pass
+                if pythoncom is not None:
+                    pythoncom.CoUninitialize()
+                done.set()
+
+        thread = threading.Thread(target=_com_parse, daemon=True)
+        thread.start()
+        if not done.wait(timeout=60):
+            return []
+        return result
 
     def _parse_csv(self, content: bytes) -> list[tuple[int | None, str | None, str]]:
         text = _decode_text(content)

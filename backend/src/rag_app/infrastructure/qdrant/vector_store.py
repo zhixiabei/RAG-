@@ -1,15 +1,26 @@
+import time
 from typing import Any
 
 from qdrant_client import QdrantClient, models
+from qdrant_client.http.exceptions import ResponseHandlingException
 
 from ...domain.ids import vector_point_id
 from ...domain.models import SearchHit
 
 
 class QdrantVectorStore:
-    def __init__(self, url: str, collection: str):
+    def __init__(
+        self,
+        url: str,
+        collection: str,
+        timeout_seconds: float = 30.0,
+        upsert_batch_size: int = 32,
+        upsert_max_retries: int = 2,
+    ):
         self.collection = collection
-        self.client = QdrantClient(url=url, timeout=3)
+        self.client = QdrantClient(url=url, timeout=timeout_seconds)
+        self.upsert_batch_size = max(1, upsert_batch_size)
+        self.upsert_max_retries = max(0, upsert_max_retries)
 
     def check_connection(self) -> None:
         self.client.get_collections()
@@ -26,17 +37,27 @@ class QdrantVectorStore:
             raise RuntimeError("Qdrant collection 向量维度与 embedding 模型不一致")
 
     def upsert(self, points: list[dict[str, Any]], vectors: list[list[float]]) -> None:
-        batch_size = 256
-        for start in range(0, len(points), batch_size):
-            point_batch = points[start:start + batch_size]
-            self.client.upsert(
-                collection_name=self.collection,
-                points=models.Batch(
-                    ids=[vector_point_id(point["chunk_id"]) for point in point_batch],
-                    vectors=vectors[start:start + batch_size],
-                    payloads=point_batch,
-                ),
-            )
+        for start in range(0, len(points), self.upsert_batch_size):
+            point_batch = points[start:start + self.upsert_batch_size]
+            vector_batch = vectors[start:start + self.upsert_batch_size]
+            for attempt in range(self.upsert_max_retries + 1):
+                try:
+                    self.client.upsert(
+                        collection_name=self.collection,
+                        points=models.Batch(
+                            ids=[vector_point_id(point["chunk_id"]) for point in point_batch],
+                            vectors=vector_batch,
+                            payloads=point_batch,
+                        ),
+                        # Stable point IDs make retries idempotent. Acknowledgement is enough
+                        # here; waiting for indexing can exceed the HTTP timeout under load.
+                        wait=False,
+                    )
+                    break
+                except ResponseHandlingException:
+                    if attempt >= self.upsert_max_retries:
+                        raise
+                    time.sleep(0.5 * (2 ** attempt))
 
     def search(self, knowledge_base_id: str, vector: list[float], limit: int) -> list[SearchHit]:
         result = self.client.query_points(
@@ -88,5 +109,8 @@ class QdrantVectorStore:
                     must=[models.FieldCondition(key=field, match=models.MatchValue(value=value))]
                 )
             ),
-            wait=True,
+            # Qdrant has accepted the durable delete operation at this point. Waiting for
+            # every matching point to be physically removed makes large-document deletes
+            # block the API until the HTTP client times out.
+            wait=False,
         )

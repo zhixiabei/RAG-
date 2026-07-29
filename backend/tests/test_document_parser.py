@@ -1,6 +1,7 @@
 import unittest
 from io import BytesIO
 import struct
+from unittest.mock import patch
 from xml.etree import ElementTree
 from zipfile import ZipFile
 
@@ -146,6 +147,20 @@ class DocumentParserSpecialExtensionTest(unittest.TestCase):
         self.assertIn("图册名: 黑山梁数据体", text)
         self.assertIn("分类: 渗透率", text)
         self.assertIn("完整相对路径: MAPS/长63渗透率.GDB", text)
+
+    def test_xls_uses_excel_compatibility_fallback_when_xlrd_cannot_decode(self):
+        fallback = [(None, "年度数据", "井号\t产量")]
+        decode_error = UnicodeDecodeError("utf-16-le", b"\x00\xd8", 0, 2, "illegal encoding")
+
+        with (
+            patch("xlrd.open_workbook", side_effect=decode_error),
+            patch.object(self.parser, "_parse_xls_with_excel", return_value=fallback) as excel_fallback,
+        ):
+            chunks = self.parser.parse("2008.12.30.xls", b"legacy workbook")
+
+        excel_fallback.assert_called_once_with(b"legacy workbook")
+        self.assertEqual(chunks[0].section_path, "年度数据")
+        self.assertIn("井号 产量", chunks[0].text)
 
 
 if __name__ == "__main__":

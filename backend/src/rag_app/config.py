@@ -20,6 +20,9 @@ class Settings(BaseSettings):
     minio_bucket: str = "rag-documents"
     qdrant_url: str
     qdrant_collection: str
+    qdrant_timeout_seconds: float = 30.0
+    qdrant_upsert_batch_size: int = 32
+    qdrant_upsert_max_retries: int = 2
     ingestion_max_concurrency: int = 2
     ingestion_embedding_max_concurrency: int = 1
     ingestion_embedding_batch_size: int = 32
