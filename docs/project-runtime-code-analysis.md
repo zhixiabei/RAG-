@@ -356,6 +356,7 @@ sequenceDiagram
 | `run_all.py` | 检查 8080/5173 端口，启动 Docker 三服务、Uvicorn 和 Vite，并统一清理子进程。 |
 | `run_all.cmd` | Windows 双击入口，切到项目根目录后执行 `run_all.py`。 |
 | `scripts/start-local.ps1` | 只启动 Docker 基础设施和后端。 |
+| `scripts/start-server.sh` | 在 Linux 服务器启动原生 PostgreSQL、Qdrant、MinIO，并用 Conda 环境统一看护 8080 后端和 6008 前端。 |
 | `docker-compose.yml` | PostgreSQL 16、Qdrant 1.14.1、MinIO 及持久卷。 |
 | `.env.example` | 无密钥的配置模板；实际 `.env` 被 gitignore。 |
 | `requirements.txt` / `backend/pyproject.toml` | Python 运行依赖和包元数据。 |

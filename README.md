@@ -50,6 +50,35 @@ python -m uvicorn rag_app.main:app --app-dir backend/src --host 127.0.0.1 --port
 
 上面的命令必须在项目根目录 `D:\startwell\RAG` 执行。`python -m uvicorn --help` 只会显示帮助，不会启动后端。
 
+### Linux 服务器一键启动
+
+服务器使用原生 PostgreSQL、Qdrant、MinIO 和 Conda 环境时，在项目根目录执行：
+
+```bash
+bash scripts/start-server.sh
+```
+
+脚本默认使用以下路径和配置：
+
+```text
+项目目录       ~/startwork/RAG
+基础服务目录   /root/autodl-tmp/rag-services
+Conda 环境     rag
+后端           http://127.0.0.1:8080
+前端           http://127.0.0.1:6008
+```
+
+如服务器目录不同，可在启动时覆盖：
+
+```bash
+RAG_PROJECT_DIR=/path/to/RAG \
+RAG_SERVICES_DIR=/path/to/rag-services \
+CONDA_ENV_NAME=rag \
+bash scripts/start-server.sh
+```
+
+脚本会启动 PostgreSQL，并以后台进程启动 Qdrant 和 MinIO；已监听的服务不会重复启动。Uvicorn 和 Vite 由脚本统一看护，按 `Ctrl+C` 会停止前后端，PostgreSQL、Qdrant 和 MinIO 会继续运行。Qdrant 和 MinIO 的日志分别写入各自目录下的 `qdrant.log` 和 `minio.log`。
+
 ## 个人登录
 
 系统提供一个由环境变量配置的个人账号。首次使用前建议在 `.env` 中设置：

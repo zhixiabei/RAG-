@@ -47,6 +47,14 @@ SUPPORTED_SUFFIXES = frozenset(
     }
 )
 
+GEOMAP_MAP_MAGIC = b"Geomap v3.60 Map\x00"
+GEOMAP_LAYER_MAGIC = b"Geomap v3.60 Layer\x00\x00"
+GEOMAP_LAYER_HEADER_SIZE = 2048
+GEOMAP_LAYER_NAME_LENGTH_OFFSET = 0x362
+GEOMAP_LAYER_NAME_OFFSET = 0x366
+GEOMAP_OBJECT_TEXT_MARKER = b"\x2f\x3d\x50\x75"
+GEOMAP_MAX_TEXT_FIELD_BYTES = 1024
+GEOMAP_MAX_ATTRIBUTE_ROWS = 100_000
 GEOMAP_LAYER_STYLE_MAGIC = b"Geomap v3.60 LayerStyle\x00"
 GEOMAP_LAYER_STYLE_HEADER_SIZE = 516
 GEOMAP_LAYER_STYLE_RECORD_SIZE = 524
@@ -171,6 +179,7 @@ class DocumentParser:
             raise UnsupportedDocumentTypeError(f"暂不支持的文件类型: {suffix or '无扩展名'}")
 
         stream.seek(0)
+        preserve_source_boundaries = False
         if suffix == ".pdf":
             sources = self._parse_pdf_stream(stream)
         elif suffix == ".docx":
@@ -198,14 +207,22 @@ class DocumentParser:
         elif suffix == ".lst":
             sources = self._parse_lst(file_name, stream.read())
         elif suffix == ".att":
-            sources = self._parse_att(file_name, stream.read())
-        elif suffix in {".dll", ".gdb"}:
+            content = stream.read()
+            preserve_source_boundaries = content.startswith(GEOMAP_LAYER_STYLE_MAGIC)
+            sources = self._parse_att(file_name, content)
+        elif suffix == ".gdb":
+            content = stream.read()
+            preserve_source_boundaries = content.startswith(GEOMAP_MAP_MAGIC)
+            sources = self._parse_gdb(file_name, content)
+        elif suffix == ".dll":
             sources = self._parse_binary(file_name, stream.read())
         elif not suffix:
             sources = self._parse_without_extension(file_name, stream.read())
         else:
             sources = [(None, None, _decode_text(stream.read()))]
 
+        if preserve_source_boundaries:
+            return self._preserve_source_chunks(sources)
         return self._chunk_sources(sources)
 
     def _parse_pdf(self, content: bytes) -> list[tuple[int | None, str | None, str]]:
@@ -640,6 +657,11 @@ class DocumentParser:
             return self._parse_geomap_layer_style(file_name, content)
         return self._parse_without_extension(file_name, content)
 
+    def _parse_gdb(self, file_name: str, content: bytes) -> list[tuple[int | None, str | None, str]]:
+        if content.startswith(GEOMAP_MAP_MAGIC):
+            return self._parse_geomap_map(file_name, content)
+        return self._parse_binary(file_name, content)
+
     def _parse_lst(self, file_name: str, content: bytes) -> list[tuple[int | None, str | None, str]]:
         if content.startswith(GEOMAP_ALBUM_MAGIC):
             return self._parse_geomap_album(file_name, content)
@@ -761,41 +783,233 @@ class DocumentParser:
             )
 
         record_count = body_size // GEOMAP_LAYER_STYLE_RECORD_SIZE
-        sources: list[tuple[int | None, str | None, str]] = [
-            (
-                None,
-                "Geomap v3.60 LayerStyle",
-                "\n".join(
-                    (
-                        f"文件名: {file_name}",
-                        "格式: Geomap v3.60 LayerStyle 属性文件",
-                        "字符编码: GBK/GB18030",
-                        f"LayerStyle 记录数: {record_count}",
-                        f"固定记录长度: {GEOMAP_LAYER_STYLE_RECORD_SIZE} 字节",
-                    )
-                ),
+        declared_record_count = struct.unpack_from("<I", content, 512)[0]
+        if declared_record_count not in {0, record_count}:
+            raise ValueError(
+                "Geomap v3.60 LayerStyle 文件损坏："
+                f"文件头记录数为 {declared_record_count}，实际记录数为 {record_count}"
             )
-        ]
+
+        table_rows = ["记录号\t图层或属性组\t属性字段1\t属性字段2\t属性字段3\t属性字段4\t属性字段5\t属性字段6"]
 
         for index in range(record_count):
             start = GEOMAP_LAYER_STYLE_HEADER_SIZE + index * GEOMAP_LAYER_STYLE_RECORD_SIZE
             record = content[start:start + GEOMAP_LAYER_STYLE_RECORD_SIZE]
             fields = [
-                value
+                self._decode_geomap_text_slot(record[offset:offset + width])
                 for offset, width in GEOMAP_LAYER_STYLE_TEXT_SLOTS
-                if (value := self._decode_geomap_text_slot(record[offset:offset + width]))
             ]
+            while fields and not fields[-1]:
+                fields.pop()
             if not fields:
-                continue
-            group_name = fields[0]
-            lines = [
-                f"LayerStyle 记录: {index + 1}/{record_count}",
-                f"图层、对象或属性组: {group_name}",
-            ]
-            if len(fields) > 1:
-                lines.append("原始字段序列: " + " | ".join(fields[1:]))
-            sources.append((None, f"LayerStyle/{index + 1:03d}/{group_name}", "\n".join(lines)))
+                fields = [f"图层_{index + 1}"]
+            table_rows.append("\t".join((str(index + 1), *fields)))
+
+        return [
+            (
+                None,
+                "GeoMap属性表/LayerStyle",
+                "\n".join(
+                    (
+                        f"文件名: {file_name}",
+                        "格式: Geomap v3.60 LayerStyle 属性数据表",
+                        "字符编码: GBK/GB18030",
+                        f"LayerStyle 记录数: {record_count}",
+                        f"固定记录长度: {GEOMAP_LAYER_STYLE_RECORD_SIZE} 字节",
+                        "说明: 每行对应同序号 GDB 图层的样式或属性字段定义。",
+                        "属性数据表:",
+                        *table_rows,
+                    )
+                ),
+            )
+        ]
+
+    def _parse_geomap_map(
+        self,
+        file_name: str,
+        content: bytes,
+    ) -> list[tuple[int | None, str | None, str]]:
+        layer_offsets = [match.start() for match in re.finditer(re.escape(GEOMAP_LAYER_MAGIC), content)]
+        if not layer_offsets:
+            raise ValueError("Geomap v3.60 Map 文件损坏：没有找到图层数据")
+
+        map_name = self._decode_geomap_text_slot(content[0x204:0x304]) or Path(file_name).stem
+        layers: list[tuple[str, list[str]]] = []
+        total_attributes = 0
+
+        for index, layer_offset in enumerate(layer_offsets):
+            layer_end = layer_offsets[index + 1] if index + 1 < len(layer_offsets) else len(content)
+            layer_size = layer_end - layer_offset
+            minimum_named_header_size = GEOMAP_LAYER_NAME_OFFSET
+            if layer_size < minimum_named_header_size:
+                raise ValueError(
+                    f"Geomap v3.60 Map 文件损坏：第 {index + 1} 个图层缺少名称字段"
+                )
+
+            name_length = struct.unpack_from(
+                "<I",
+                content,
+                layer_offset + GEOMAP_LAYER_NAME_LENGTH_OFFSET,
+            )[0]
+            if not 0 < name_length <= 256:
+                raise ValueError(
+                    f"Geomap v3.60 Map 文件损坏：第 {index + 1} 个图层名称长度非法: {name_length}"
+                )
+            name_start = layer_offset + GEOMAP_LAYER_NAME_OFFSET
+            name_end = name_start + name_length
+            if name_end > min(layer_offset + GEOMAP_LAYER_HEADER_SIZE, layer_end):
+                raise ValueError(f"Geomap v3.60 Map 文件损坏：第 {index + 1} 个图层名称越界")
+            try:
+                layer_name = content[name_start:name_end].decode("gb18030").strip()
+            except UnicodeDecodeError as exc:
+                raise ValueError(
+                    f"Geomap v3.60 Map 文件损坏：第 {index + 1} 个图层名称不是有效的 GBK/GB18030"
+                ) from exc
+            if not layer_name:
+                layer_name = f"图层_{index + 1}"
+
+            is_final_layer = index + 1 == len(layer_offsets)
+            if layer_size < GEOMAP_LAYER_HEADER_SIZE and not is_final_layer:
+                raise ValueError(
+                    f"Geomap v3.60 Map 文件损坏：第 {index + 1} 个中间图层短于 "
+                    f"{GEOMAP_LAYER_HEADER_SIZE} 字节"
+                )
+
+            attributes = self._extract_geomap_layer_attributes(
+                content,
+                min(layer_offset + GEOMAP_LAYER_HEADER_SIZE, layer_end),
+                layer_end,
+            )
+            total_attributes += len(attributes)
+            if total_attributes > GEOMAP_MAX_ATTRIBUTE_ROWS:
+                raise ValueError(
+                    f"Geomap v3.60 Map 可提取属性超过 {GEOMAP_MAX_ATTRIBUTE_ROWS} 行，已停止解析"
+                )
+            layers.append((layer_name, attributes))
+
+        sources: list[tuple[int | None, str | None, str]] = [
+            (
+                None,
+                "GeoMap属性表/概览",
+                "\n".join(
+                    (
+                        f"文件名: {file_name}",
+                        "格式: Geomap v3.60 Map 属性数据表",
+                        "字符编码: GBK/GB18030",
+                        f"图名: {map_name}",
+                        f"图层数: {len(layers)}",
+                        f"提取的文本或数值属性记录数: {total_attributes}",
+                        "说明: 仅提取图层名称及对象中的文本、数值属性；图形坐标和二进制样式不作为文本入库。",
+                    )
+                ),
+            )
+        ]
+        for index, (layer_name, attributes) in enumerate(layers, start=1):
+            rows = ["记录号\t属性值"]
+            rows.extend(f"{row_index}\t{value}" for row_index, value in enumerate(attributes, start=1))
+            if not attributes:
+                rows.append("-\t本图层没有可直接提取的文本或数值属性")
+            sources.append(
+                (
+                    None,
+                    f"GeoMap属性表/{index:03d}/{layer_name}",
+                    "\n".join(
+                        (
+                            "GeoMap 图层属性数据表",
+                            f"图层序号: {index}/{len(layers)}",
+                            f"图层名称: {layer_name}",
+                            f"属性记录数: {len(attributes)}",
+                            *rows,
+                        )
+                    ),
+                )
+            )
         return sources
+
+    def _extract_geomap_layer_attributes(
+        self,
+        content: bytes,
+        body_start: int,
+        body_end: int,
+    ) -> list[str]:
+        high_confidence_offsets: set[int] = set()
+        marker_offset = content.find(GEOMAP_OBJECT_TEXT_MARKER, body_start, body_end)
+        while marker_offset >= 0:
+            high_confidence_offsets.update((marker_offset + 4, marker_offset + 12))
+            marker_offset = content.find(
+                GEOMAP_OBJECT_TEXT_MARKER,
+                marker_offset + len(GEOMAP_OBJECT_TEXT_MARKER),
+                body_end,
+            )
+
+        candidates: list[tuple[int, int, str, bool]] = []
+        offset = body_start
+        while offset + 4 <= body_end:
+            value = self._decode_geomap_length_prefixed_text(content, offset, body_end)
+            if value is None:
+                offset += 1
+                continue
+            byte_length, text = value
+            high_confidence = offset in high_confidence_offsets
+            if high_confidence or self._looks_like_geomap_attribute(text):
+                candidates.append((offset + 4, offset + 4 + byte_length, text, high_confidence))
+                offset += 4 + byte_length
+            else:
+                offset += 1
+
+        # Marker-backed fields win if a looser scan found an overlapping binary lookalike.
+        candidates.sort(key=lambda item: (item[0], item[1]))
+        selected: list[tuple[int, int, str, bool]] = []
+        for candidate in candidates:
+            start, _end, _text, high_confidence = candidate
+            if selected and start < selected[-1][1]:
+                if high_confidence and not selected[-1][3]:
+                    selected[-1] = candidate
+                continue
+            selected.append(candidate)
+        return [text for _start, _end, text, _high_confidence in selected]
+
+    @staticmethod
+    def _decode_geomap_length_prefixed_text(
+        content: bytes,
+        length_offset: int,
+        end: int,
+    ) -> tuple[int, str] | None:
+        byte_length = struct.unpack_from("<I", content, length_offset)[0]
+        if not 0 < byte_length <= GEOMAP_MAX_TEXT_FIELD_BYTES:
+            return None
+        value_start = length_offset + 4
+        value_end = value_start + byte_length
+        if value_end > end:
+            return None
+        raw = content[value_start:value_end]
+        if any(byte < 32 for byte in raw):
+            return None
+        try:
+            value = raw.decode("gb18030")
+        except UnicodeDecodeError:
+            return None
+        value = re.sub(r"\s+", " ", value).strip()
+        if not value or any(not character.isprintable() for character in value):
+            return None
+        meaningful = sum(
+            character.isalnum()
+            or "\u4e00" <= character <= "\u9fff"
+            or character in " ._-/|#()（）+%"
+            for character in value
+        )
+        if meaningful / len(value) < 0.85:
+            return None
+        return byte_length, value
+
+    @staticmethod
+    def _looks_like_geomap_attribute(value: str) -> bool:
+        chinese_count = sum("\u4e00" <= character <= "\u9fff" for character in value)
+        if chinese_count >= 2:
+            return True
+        if re.fullmatch(r"[-+]?\d+(?:\.\d+)?(?:[|/]\d+)*", value):
+            return True
+        return bool(re.fullmatch(r"[A-Za-z][A-Za-z0-9_.-]{2,}", value))
 
     @staticmethod
     def _decode_geomap_text_slot(slot: bytes) -> str:
@@ -903,4 +1117,26 @@ class DocumentParser:
                 if end >= len(text):
                     break
                 start = max(start + 1, end - 240)
+        return chunks
+
+    def _preserve_source_chunks(
+        self,
+        sources: Iterable[tuple[int | None, str | None, str]],
+    ) -> list[ParsedChunk]:
+        chunks: list[ParsedChunk] = []
+        for page_number, section_path, raw_text in sources:
+            text = re.sub(
+                r"\n{3,}",
+                "\n\n",
+                re.sub(r" +", " ", raw_text.replace("\x00", "")),
+            ).strip()
+            if text:
+                chunks.append(
+                    ParsedChunk(
+                        index=len(chunks),
+                        text=text,
+                        page_number=page_number,
+                        section_path=section_path,
+                    )
+                )
         return chunks

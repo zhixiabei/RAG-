@@ -59,8 +59,8 @@ class PostgresRepository:
             connection.execute(
                 text("""
                     INSERT INTO documents
-                    (id, knowledge_base_id, title, file_name, mime_type, source_object_key, status, folder_path)
-                    VALUES (:id, :knowledge_base_id, :title, :file_name, :mime_type, :source_object_key, :status, :folder_path)
+                    (id, knowledge_base_id, title, file_name, mime_type, source_object_key, status, folder_path, content_hash)
+                    VALUES (:id, :knowledge_base_id, :title, :file_name, :mime_type, :source_object_key, :status, :folder_path, :content_hash)
                 """),
                 item,
             )
@@ -91,6 +91,34 @@ class PostgresRepository:
                 {"kb_id": knowledge_base_id, "file_name": file_name, "folder_path": folder_path or ""},
             ).first()
         return row is not None
+
+    def document_exists_by_content_hash(self, knowledge_base_id: str, content_hash: str) -> bool:
+        with self.engine.begin() as connection:
+            row = connection.execute(
+                text("""
+                    SELECT 1 FROM documents
+                    WHERE knowledge_base_id = :kb_id
+                      AND content_hash = :content_hash
+                      AND status != 'failed'
+                    LIMIT 1
+                """),
+                {"kb_id": knowledge_base_id, "content_hash": content_hash},
+            ).first()
+        return row is not None
+
+    def list_documents_without_content_hash(self, knowledge_base_id: str) -> list[dict[str, Any]]:
+        with self.engine.begin() as connection:
+            rows = connection.execute(
+                text("""
+                    SELECT id, knowledge_base_id, source_object_key
+                    FROM documents
+                    WHERE knowledge_base_id = :kb_id
+                      AND content_hash IS NULL
+                      AND status != 'failed'
+                """),
+                {"kb_id": knowledge_base_id},
+            ).mappings().all()
+        return [dict(row) for row in rows]
 
     def get_document(self, document_id: str) -> dict[str, Any] | None:
         with self.engine.begin() as connection:

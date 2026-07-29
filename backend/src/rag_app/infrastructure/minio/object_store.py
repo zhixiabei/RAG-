@@ -1,3 +1,4 @@
+from hashlib import sha256
 from io import BytesIO
 from typing import BinaryIO
 
@@ -26,6 +27,17 @@ class MinioObjectStore:
 
     def put_stream(self, object_key: str, stream: BinaryIO, length: int, content_type: str) -> None:
         self.client.put_object(self.bucket, object_key, stream, length, content_type=content_type)
+
+    def calculate_hash(self, object_key: str) -> str:
+        response = self.client.get_object(self.bucket, object_key)
+        digest = sha256()
+        try:
+            for chunk in response.stream(amt=1024 * 1024):
+                digest.update(chunk)
+        finally:
+            response.close()
+            response.release_conn()
+        return digest.hexdigest()
 
     def delete_object(self, object_key: str) -> None:
         self.client.remove_object(self.bucket, object_key)

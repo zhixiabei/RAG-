@@ -90,6 +90,7 @@ class DocumentParserSpecialExtensionTest(unittest.TestCase):
     def test_geomap_v360_layer_style_is_parsed_as_structured_records(self):
         header = bytearray(516)
         header[:24] = b"Geomap v3.60 LayerStyle\x00"
+        struct.pack_into("<I", header, 512, 1)
         record = bytearray(524)
         values = ["渗透率填色", "符号", "符号大小", "前景色", "背景色", "边界光滑", "光滑系数"]
         slots = ((0, 64), (80, 64), (160, 64), (240, 64), (320, 64), (400, 64), (480, 32))
@@ -103,9 +104,64 @@ class DocumentParserSpecialExtensionTest(unittest.TestCase):
 
         self.assertIn("Geomap v3.60 LayerStyle", text)
         self.assertIn("LayerStyle 记录数: 1", text)
+        self.assertIn("属性数据表", text)
+        self.assertEqual(len(chunks), 1)
         self.assertIn("渗透率填色", text)
         self.assertIn("符号大小", text)
         self.assertIn("光滑系数", text)
+
+    def test_geomap_v360_map_extracts_layer_attribute_tables_without_character_chunking(self):
+        content = bytearray(2048)
+        content[:17] = b"Geomap v3.60 Map\x00"
+        map_name = "长611渗透率".encode("gb18030")
+        content[0x204:0x204 + len(map_name)] = map_name
+
+        def append_layer(name, values):
+            header = bytearray(2048)
+            header[:18] = b"Geomap v3.60 Layer"
+            encoded_name = name.encode("gb18030")
+            struct.pack_into("<I", header, 0x362, len(encoded_name))
+            header[0x366:0x366 + len(encoded_name)] = encoded_name
+            content.extend(header)
+            for value in values:
+                encoded_value = value.encode("gb18030")
+                content.extend(b"\x2f\x3d\x50\x75")
+                content.extend(struct.pack("<I", len(encoded_value)))
+                content.extend(encoded_value)
+                content.extend(b"\x1e\x00\x00\x00")
+
+        well_names = [f"化{i}-1" for i in range(1, 301)]
+        append_layer("井位", well_names)
+        append_layer("渗透率", ["0.2", "0.4", "1.3"])
+
+        chunks = self.parser.parse("长611渗透率.gdb", bytes(content))
+        text = "\n".join(chunk.text for chunk in chunks)
+
+        self.assertEqual(len(chunks), 3)
+        self.assertGreater(len(chunks[1].text), 1800)
+        self.assertIn("格式: Geomap v3.60 Map 属性数据表", chunks[0].text)
+        self.assertIn("图层名称: 井位", chunks[1].text)
+        self.assertIn("300\t化300-1", chunks[1].text)
+        self.assertIn("图层名称: 渗透率", chunks[2].text)
+        self.assertIn("0.2", text)
+        self.assertNotIn("二进制内容", text)
+
+    def test_geomap_v360_map_accepts_final_metadata_only_short_layer(self):
+        content = bytearray(2048)
+        content[:17] = b"Geomap v3.60 Map\x00"
+        short_layer = bytearray(916)
+        short_layer[:18] = b"Geomap v3.60 Layer"
+        layer_name = "比例尺".encode("gb18030")
+        struct.pack_into("<I", short_layer, 0x362, len(layer_name))
+        short_layer[0x366:0x366 + len(layer_name)] = layer_name
+        content.extend(short_layer)
+
+        chunks = self.parser.parse("长612砂体厚度图.GDB", bytes(content))
+
+        self.assertEqual(len(chunks), 2)
+        self.assertIn("图层数: 1", chunks[0].text)
+        self.assertIn("图层名称: 比例尺", chunks[1].text)
+        self.assertIn("属性记录数: 0", chunks[1].text)
 
     def test_gdb_binary_file_is_supported_and_keeps_file_name(self):
         chunks = self.parser.parse("长63渗透率.gdb", b"\x00\x01permeability=12.5\x00\x02")

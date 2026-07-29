@@ -23,6 +23,7 @@ SCHEMA_STATEMENTS = (
         stage TEXT NOT NULL DEFAULT 'queued',
         chunk_count INTEGER NOT NULL DEFAULT 0,
         error_message TEXT,
+        content_hash TEXT,
         created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
     )
@@ -31,6 +32,7 @@ SCHEMA_STATEMENTS = (
     "ALTER TABLE documents ADD COLUMN IF NOT EXISTS progress INTEGER NOT NULL DEFAULT 0",
     "ALTER TABLE documents ADD COLUMN IF NOT EXISTS stage TEXT NOT NULL DEFAULT 'queued'",
     "ALTER TABLE documents ADD COLUMN IF NOT EXISTS folder_path TEXT",
+    "ALTER TABLE documents ADD COLUMN IF NOT EXISTS content_hash TEXT",
     "ALTER TABLE document_chunks ADD COLUMN IF NOT EXISTS folder_path TEXT",
     """
     CREATE TABLE IF NOT EXISTS document_chunks (
@@ -86,6 +88,7 @@ SCHEMA_STATEMENTS = (
     """,
     "ALTER TABLE messages ALTER COLUMN conversation_id SET NOT NULL",
     "CREATE INDEX IF NOT EXISTS idx_documents_kb ON documents(knowledge_base_id)",
+    "CREATE INDEX IF NOT EXISTS idx_documents_kb_content_hash ON documents(knowledge_base_id, content_hash)",
     "CREATE INDEX IF NOT EXISTS idx_knowledge_bases_owner ON knowledge_bases(owner_id)",
     "CREATE INDEX IF NOT EXISTS idx_chunks_document ON document_chunks(document_id)",
     "CREATE INDEX IF NOT EXISTS idx_conversations_kb_updated ON conversations(knowledge_base_id, updated_at DESC)",

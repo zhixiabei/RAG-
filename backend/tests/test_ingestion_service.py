@@ -1,7 +1,7 @@
 import unittest
 from io import BytesIO
 
-from rag_app.application.ingestion_service import DocumentTooLargeError, IngestionService
+from rag_app.application.ingestion_service import DocumentTooLargeError, DuplicateDocumentError, IngestionService
 from rag_app.domain.models import ParsedChunk
 
 
@@ -11,16 +11,28 @@ class FakeRepository:
         self.updates = []
         self.replaced_chunks = []
         self._existing_files = set()
+        self._existing_hashes = set()
+        self._missing_hash_documents = []
 
     def get_knowledge_base(self, knowledge_base_id):
         return {"id": knowledge_base_id, "embedding_model": "test-embedding"}
 
     def create_document(self, item):
         self.document = {**item, "progress": 0, "stage": "queued", "chunk_count": 0}
+        self._existing_files.add((item["knowledge_base_id"], item["file_name"], item.get("folder_path") or ""))
+        self._existing_hashes.add((item["knowledge_base_id"], item["content_hash"]))
 
     def update_document(self, document_id, **fields):
         self.updates.append(fields)
-        self.document.update(fields)
+        if self.document and self.document["id"] == document_id:
+            self.document.update(fields)
+            return
+        for document in self._missing_hash_documents:
+            if document["id"] == document_id:
+                document.update(fields)
+                if content_hash := fields.get("content_hash"):
+                    self._existing_hashes.add((document["knowledge_base_id"], content_hash))
+                return
 
     def replace_chunks(self, document_id, knowledge_base_id, chunks, folder_path=""):
         self.replaced_chunks = chunks
@@ -30,6 +42,16 @@ class FakeRepository:
 
     def document_exists_by_file(self, knowledge_base_id, file_name, folder_path):
         return (knowledge_base_id, file_name, folder_path or "") in self._existing_files
+
+    def document_exists_by_content_hash(self, knowledge_base_id, content_hash):
+        return (knowledge_base_id, content_hash) in self._existing_hashes
+
+    def list_documents_without_content_hash(self, knowledge_base_id):
+        return [
+            document
+            for document in self._missing_hash_documents
+            if document["knowledge_base_id"] == knowledge_base_id and not document.get("content_hash")
+        ]
 
 
 class FakeObjects:
@@ -44,6 +66,12 @@ class FakeObjects:
         if len(content) != length:
             raise AssertionError("stream length mismatch")
         self.items.append((object_key, content, content_type))
+
+    def calculate_hash(self, object_key):
+        from hashlib import sha256
+
+        content = next(item[1] for item in self.items if item[0] == object_key)
+        return sha256(content).hexdigest()
 
 
 class FakeVectors:
@@ -162,6 +190,54 @@ class IngestionServiceTest(unittest.TestCase):
         self.assertEqual(service.models.embed_batch_sizes, [2, 2, 1])
         self.assertEqual(service.vectors.upsert_batch_sizes, [2, 2, 1])
         self.assertEqual(len(service.vectors.points), 5)
+
+    def test_skips_same_path_without_storing_or_parsing_again(self):
+        service = self.build_service(FakeParser())
+        self.repository._existing_files.add(("kb-1", "制度.pdf", "项目/制度"))
+
+        with self.assertRaisesRegex(DuplicateDocumentError, "相同路径") as raised:
+            service.ingest("kb-1", "制度.pdf", "application/pdf", b"content", "项目/制度")
+
+        self.assertEqual(raised.exception.kind, "path")
+        self.assertEqual(service.objects.items, [])
+        self.assertIsNone(self.repository.document)
+
+    def test_continues_ingesting_after_skipping_a_duplicate(self):
+        service = self.build_service(FakeParser())
+        self.repository._existing_files.add(("kb-1", "重复.pdf", "资料"))
+
+        with self.assertRaises(DuplicateDocumentError):
+            service.ingest("kb-1", "重复.pdf", "application/pdf", b"duplicate", "资料")
+        result = service.ingest("kb-1", "新文件.pdf", "application/pdf", b"new content", "资料")
+
+        self.assertEqual(result["status"], "ready")
+        self.assertEqual(len(service.objects.items), 1)
+
+    def test_skips_same_content_at_a_different_path(self):
+        service = self.build_service(FakeParser())
+
+        first = service.ingest("kb-1", "制度.pdf", "application/pdf", b"same content", "旧目录")
+        with self.assertRaisesRegex(DuplicateDocumentError, "内容相同") as raised:
+            service.ingest("kb-1", "副本.pdf", "application/pdf", b"same content", "新目录")
+
+        self.assertEqual(raised.exception.kind, "content")
+        self.assertEqual(len(service.objects.items), 1)
+        self.assertEqual(first["content_hash"], self.repository.document["content_hash"])
+
+    def test_backfills_existing_hashes_without_holding_up_ingestion(self):
+        service = self.build_service(FakeParser())
+        object_key = "kb-1/legacy/source/制度.pdf"
+        service.objects.items.append((object_key, b"legacy content", "application/pdf"))
+        self.repository._missing_hash_documents.append({
+            "id": "legacy",
+            "knowledge_base_id": "kb-1",
+            "source_object_key": object_key,
+        })
+
+        service._backfill_content_hashes("kb-1")
+
+        self.assertIsNotNone(self.repository._missing_hash_documents[0].get("content_hash"))
+        self.assertEqual(len(service.objects.items), 1)
 
     def test_rejects_oversized_stream_before_creating_document(self):
         service = self.build_service(FakeParser())

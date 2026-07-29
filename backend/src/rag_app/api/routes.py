@@ -2,7 +2,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, File, Form, HTTPException, Request, Response, UploadFile
 
-from ..application.ingestion_service import DocumentTooLargeError
+from ..application.ingestion_service import DocumentTooLargeError, DuplicateDocumentError
 from fastapi.responses import JSONResponse
 from uuid import uuid4
 
@@ -165,11 +165,15 @@ def upload_document(request: Request, knowledge_base_id: str, file: UploadFile =
         )
     except DocumentTooLargeError as exc:
         raise HTTPException(413, str(exc)) from exc
+    except DuplicateDocumentError as exc:
+        return JSONResponse({
+            "status": "skipped",
+            "reason": "duplicate",
+            "duplicate_kind": exc.kind,
+            "detail": str(exc),
+        })
     except ValueError as exc:
-        msg = str(exc)
-        if msg.startswith("文件重复"):
-            raise HTTPException(409, msg) from exc
-        raise HTTPException(500, f"文档入库失败: {msg}") from exc
+        raise HTTPException(500, f"文档入库失败: {exc}") from exc
     except Exception as exc:
         raise HTTPException(500, f"文档入库失败: {exc}") from exc
 

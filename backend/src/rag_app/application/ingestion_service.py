@@ -1,6 +1,7 @@
+from hashlib import sha256
 from io import BytesIO, SEEK_END
 from pathlib import Path
-from threading import BoundedSemaphore
+from threading import BoundedSemaphore, Lock, Thread
 from typing import BinaryIO
 from uuid import uuid4
 
@@ -9,6 +10,12 @@ from ..domain.ports import DocumentParser, MetadataRepository, ModelGateway, Obj
 
 class DocumentTooLargeError(ValueError):
     pass
+
+
+class DuplicateDocumentError(ValueError):
+    def __init__(self, kind: str, message: str):
+        super().__init__(message)
+        self.kind = kind
 
 
 class IngestionService:
@@ -31,6 +38,9 @@ class IngestionService:
         self.models = models
         self._ingestion_slots = BoundedSemaphore(max(1, max_concurrency))
         self._embedding_slots = BoundedSemaphore(max(1, embedding_max_concurrency))
+        self._deduplication_lock = Lock()
+        self._backfill_lock = Lock()
+        self._backfill_started: set[str] = set()
         self.embedding_batch_size = max(1, embedding_batch_size)
 
     def ingest_stream(
@@ -83,6 +93,38 @@ class IngestionService:
             raise ValueError("上传文件流必须支持定位") from exc
         return content_length
 
+    @staticmethod
+    def _content_hash(stream: BinaryIO) -> str:
+        digest = sha256()
+        try:
+            stream.seek(0)
+            while chunk := stream.read(1024 * 1024):
+                digest.update(chunk)
+            stream.seek(0)
+        except (AttributeError, OSError) as exc:
+            raise ValueError("上传文件流必须支持定位") from exc
+        return digest.hexdigest()
+
+    def _backfill_content_hashes(self, knowledge_base_id: str) -> None:
+        for document in self.repository.list_documents_without_content_hash(knowledge_base_id):
+            try:
+                existing_hash = self.objects.calculate_hash(document["source_object_key"])
+            except Exception:
+                continue
+            self.repository.update_document(document["id"], content_hash=existing_hash)
+
+    def _start_content_hash_backfill(self, knowledge_base_id: str) -> None:
+        with self._backfill_lock:
+            if knowledge_base_id in self._backfill_started:
+                return
+            self._backfill_started.add(knowledge_base_id)
+        Thread(
+            target=self._backfill_content_hashes,
+            args=(knowledge_base_id,),
+            name=f"content-hash-backfill-{knowledge_base_id}",
+            daemon=True,
+        ).start()
+
     def _ingest_stream(
         self,
         knowledge_base_id: str,
@@ -115,27 +157,36 @@ class IngestionService:
         if content_length <= 0:
             raise ValueError("文件内容为空")
 
-        if self.repository.document_exists_by_file(knowledge_base_id, safe_name, folder_path):
-            raise ValueError("文件重复：该知识库中已存在相同路径的同名文件")
-
         document_id = str(uuid4())
         suffix = Path(safe_name).suffix.lower()
         title = safe_name
         object_key = f"{knowledge_base_id}/{document_id}/source/{safe_name}"
-        stream.seek(0)
-        self.objects.put_stream(object_key, stream, content_length, mime_type)
-        stream.seek(0)
-        self.repository.create_document({
-            "id": document_id,
-            "knowledge_base_id": knowledge_base_id,
-            "title": title,
-            "file_name": safe_name,
-            "mime_type": mime_type,
-            "source_object_key": object_key,
-            "status": "processing",
-            "folder_path": folder_path,
-        })
+        with self._deduplication_lock:
+            if self.repository.document_exists_by_file(knowledge_base_id, safe_name, folder_path):
+                raise DuplicateDocumentError("path", "文件重复：该知识库中已存在相同路径的同名文件")
+
+        content_hash = self._content_hash(stream)
+        self._start_content_hash_backfill(knowledge_base_id)
+        with self._deduplication_lock:
+            if self.repository.document_exists_by_file(knowledge_base_id, safe_name, folder_path):
+                raise DuplicateDocumentError("path", "文件重复：该知识库中已存在相同路径的同名文件")
+            if self.repository.document_exists_by_content_hash(knowledge_base_id, content_hash):
+                raise DuplicateDocumentError("content", "文件重复：该知识库中已存在内容相同的文件")
+            self.repository.create_document({
+                "id": document_id,
+                "knowledge_base_id": knowledge_base_id,
+                "title": title,
+                "file_name": safe_name,
+                "mime_type": mime_type,
+                "source_object_key": object_key,
+                "status": "processing",
+                "folder_path": folder_path,
+                "content_hash": content_hash,
+            })
         try:
+            stream.seek(0)
+            self.objects.put_stream(object_key, stream, content_length, mime_type)
+            stream.seek(0)
             self.repository.update_document(document_id, progress=10, stage="parsing")
             chunks = self.parser.parse_stream(safe_name, stream)
             if not chunks:

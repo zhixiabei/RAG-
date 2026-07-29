@@ -20,7 +20,7 @@ const recoveryMessage = ref('')
 const importGeneration = ref(0)
 const expandedFolders = ref(new Set())
 
-// 每个文件的状态: queued | uploading | done | failed
+// 每个文件的状态: queued | uploading | done | skipped | failed
 const fileStatus = ref({})
 const fileErrors = ref({})
 const MAX_CONCURRENT = 2
@@ -34,12 +34,12 @@ function sessionKey(kbId) {
 const progress = computed(() => {
   const total = files.value.length
   if (!total) return 0
-  const done = Object.values(fileStatus.value).filter(s => s === 'done').length
+  const done = Object.values(fileStatus.value).filter(s => s === 'done' || s === 'skipped').length
   return Math.round((done / total) * 100)
 })
 
 const queueCounts = computed(() => {
-  const counts = { queued: 0, uploading: 0, done: 0, failed: 0 }
+  const counts = { queued: 0, uploading: 0, done: 0, skipped: 0, failed: 0 }
   Object.values(fileStatus.value).forEach((status) => {
     if (status in counts) counts[status]++
   })
@@ -81,7 +81,7 @@ const queueRows = computed(() => {
   })
 
   function summarize(node) {
-    const counts = { queued: 0, uploading: 0, done: 0, failed: 0 }
+    const counts = { queued: 0, uploading: 0, done: 0, skipped: 0, failed: 0 }
     const fileIndices = []
 
     node.folders.forEach((folder) => {
@@ -122,6 +122,7 @@ function queueStatusLabel(status) {
     queued: '等待导入',
     uploading: '导入中',
     done: '已完成',
+    skipped: '已跳过',
     failed: '导入失败',
   }[status] || '等待导入'
 }
@@ -129,7 +130,9 @@ function queueStatusLabel(status) {
 function folderStatus(folder) {
   if (folder.counts.uploading) return 'uploading'
   if (folder.counts.failed) return 'failed'
-  if (folder.counts.done === folder.fileCount) return 'done'
+  if (folder.counts.done + folder.counts.skipped === folder.fileCount) {
+    return folder.counts.done ? 'done' : 'skipped'
+  }
   return 'queued'
 }
 
@@ -138,6 +141,7 @@ function folderSummary(folder) {
   if (folder.counts.queued) parts.push(`等待 ${folder.counts.queued}`)
   if (folder.counts.uploading) parts.push(`导入中 ${folder.counts.uploading}`)
   if (folder.counts.done) parts.push(`完成 ${folder.counts.done}`)
+  if (folder.counts.skipped) parts.push(`跳过 ${folder.counts.skipped}`)
   if (folder.counts.failed) parts.push(`失败 ${folder.counts.failed}`)
   return parts.join(' · ')
 }
@@ -342,11 +346,27 @@ function removeFile(index) {
 async function uploadOne(knowledgeBaseId, file, index) {
   fileStatus.value[index] = 'uploading'
   try {
-    await uploadDocument(knowledgeBaseId, file, folderPathFor(file))
+    const result = await uploadDocument(knowledgeBaseId, file, folderPathFor(file))
+    if (result?.status === 'skipped') {
+      fileStatus.value[index] = 'skipped'
+      fileErrors.value[index] = null
+      skippedCount.value++
+      skippedDuplicateCount.value++
+      importedPaths.value.add(fileIdentity(file))
+      return
+    }
     fileStatus.value[index] = 'done'
     fileErrors.value[index] = null
     importedPaths.value.add(fileIdentity(file))
   } catch (cause) {
+    if (cause?.status === 409) {
+      fileStatus.value[index] = 'skipped'
+      fileErrors.value[index] = null
+      skippedCount.value++
+      skippedDuplicateCount.value++
+      importedPaths.value.add(fileIdentity(file))
+      return
+    }
     fileStatus.value[index] = 'failed'
     fileErrors.value[index] = cause instanceof Error ? cause.message : '导入失败'
     failed.value.push({ name: file.name, message: cause instanceof Error ? cause.message : '导入失败' })
@@ -445,7 +465,7 @@ async function startImport() {
 
     <div v-if="skippedCount" class="skip-summary">
       <strong>已跳过 {{ skippedCount }} 个文件</strong>
-      <span v-if="skippedDuplicateCount">（其中 {{ skippedDuplicateCount }} 个已导入）</span>
+      <span v-if="skippedDuplicateCount">（其中 {{ skippedDuplicateCount }} 个重复文件）</span>
       <span>{{ skippedTypes.join(' · ') }}</span>
     </div>
 
@@ -467,6 +487,7 @@ async function startImport() {
           等待 {{ queueCounts.queued }}
           <template v-if="importing || queueCounts.uploading">· 导入中 {{ queueCounts.uploading }}</template>
           <template v-if="queueCounts.done">· 完成 {{ queueCounts.done }}</template>
+          <template v-if="queueCounts.skipped">· 跳过 {{ queueCounts.skipped }}</template>
           <template v-if="queueCounts.failed">· 失败 {{ queueCounts.failed }}</template>
         </span>
       </div>
@@ -478,7 +499,7 @@ async function startImport() {
           class="queue-item"
           :class="{
             'queue-folder': row.type === 'folder',
-            'queue-item-done': row.type === 'folder' ? folderStatus(row) === 'done' : fileStatus[row.index] === 'done',
+            'queue-item-done': row.type === 'folder' ? ['done', 'skipped'].includes(folderStatus(row)) : ['done', 'skipped'].includes(fileStatus[row.index]),
             'queue-item-failed': row.type === 'folder' ? folderStatus(row) === 'failed' : fileStatus[row.index] === 'failed',
           }"
           :style="{ '--queue-depth': row.depth }"
@@ -502,6 +523,7 @@ async function startImport() {
             <span class="queue-item-icon">
               <LoaderCircle v-if="fileStatus[row.index] === 'uploading'" :size="14" class="spinning" />
               <span v-else-if="fileStatus[row.index] === 'done'" class="icon-done">✓</span>
+              <span v-else-if="fileStatus[row.index] === 'skipped'" class="icon-queued">—</span>
               <span v-else-if="fileStatus[row.index] === 'failed'" class="icon-fail">✗</span>
               <span v-else class="icon-queued">—</span>
             </span>
