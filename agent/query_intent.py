@@ -19,16 +19,23 @@ _ASSISTANT_IDENTITY_PATTERNS = (
 
 _KNOWLEDGE_CATALOG_PATTERNS = (
     re.compile(r"(?:文件夹|目录|路径|子目录)", re.IGNORECASE),
-    re.compile(r"(?:有哪些|列出|查看|显示|所有|多少).{0,10}(?:文件|文档|资料)", re.IGNORECASE),
-    re.compile(r"(?:文件|文档|资料).{0,10}(?:有哪些|清单|列表|目录)", re.IGNORECASE),
+    re.compile(r"(?:有哪些|列出|查看|显示|所有|多少).{0,10}(?:文件|文档)", re.IGNORECASE),
+    re.compile(r"(?:文件|文档).{0,10}(?:有哪些|清单|列表|目录)", re.IGNORECASE),
     re.compile(r"\b(?:folder|directory|path|file\s+list|document\s+list)\b", re.IGNORECASE),
 )
 
 _KNOWLEDGE_CATALOG_INVENTORY_PATTERNS = (
     re.compile(r"(?:文件夹|目录).{0,12}(?:有哪些|有什么|有啥|包含哪些|列出|多少(?:个)?).{0,8}(?:文件|文档|资料)?", re.IGNORECASE),
-    re.compile(r"(?:有哪些|有什么|有啥|列出|显示|多少(?:个)?).{0,10}(?:文件|文档|资料)", re.IGNORECASE),
-    re.compile(r"(?:文件|文档|资料).{0,10}(?:清单|列表|有哪些|有多少)", re.IGNORECASE),
+    re.compile(r"(?:有哪些|有什么|有啥|列出|显示|多少(?:个)?).{0,10}(?:文件|文档)", re.IGNORECASE),
+    re.compile(r"(?:文件|文档).{0,10}(?:清单|列表|有哪些|有多少)", re.IGNORECASE),
+    re.compile(r"(?:能否|能不能|可以|可否|能|是否).{0,8}(?:找到|查到|检索到|搜到|存在).{0,8}(?:文件|文档)", re.IGNORECASE),
+    re.compile(r"(?:文件|文档).{0,12}(?:存在吗|在吗|有没有|找得到吗|能找到吗)", re.IGNORECASE),
     re.compile(r"\b(?:list|show|count)\b.{0,20}\b(?:files?|documents?)\b", re.IGNORECASE),
+)
+
+_KNOWLEDGE_CATALOG_FILE_LOOKUP_PATTERNS = (
+    re.compile(r"(?:能否|能不能|可以|可否|能|是否).{0,8}(?:找到|查到|检索到|搜到|存在).{0,8}(?:文件|文档)"),
+    re.compile(r"(?:文件|文档).{0,12}(?:存在吗|在吗|有没有|找得到吗|能找到吗)"),
 )
 
 _KNOWLEDGE_CATALOG_CONTENT_ACTIONS = re.compile(
@@ -55,3 +62,9 @@ def is_knowledge_catalog_inventory_question(question: str) -> bool:
     if _KNOWLEDGE_CATALOG_CONTENT_ACTIONS.search(normalized):
         return False
     return any(pattern.search(normalized) for pattern in _KNOWLEDGE_CATALOG_INVENTORY_PATTERNS)
+
+
+def is_knowledge_catalog_file_lookup_question(question: str) -> bool:
+    """Return whether the user asks if a particular file exists in the catalog."""
+    normalized = " ".join(question.strip().split())
+    return any(pattern.search(normalized) for pattern in _KNOWLEDGE_CATALOG_FILE_LOOKUP_PATTERNS)

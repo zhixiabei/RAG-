@@ -95,23 +95,24 @@ def build_services(settings: Settings) -> Services:
     relevance_agent = RelevanceGradingAgent(models, settings.rag_relevance_threshold)
     compression_agent = ContextCompressionAgent(models, settings.rag_context_max_chars)
     answer_agent = AnswerAgent(models)
+    ingestion = IngestionService(
+        repository,
+        objects,
+        vectors,
+        DocumentParser(),
+        models,
+        max_concurrency=settings.ingestion_max_concurrency,
+        embedding_max_concurrency=settings.ingestion_embedding_max_concurrency,
+        embedding_batch_size=settings.ingestion_embedding_batch_size,
+    )
     return Services(
         settings=settings,
         repository=repository,
         objects=objects,
         vectors=vectors,
         models=models,
-        ingestion=IngestionService(
-            repository,
-            objects,
-            vectors,
-            DocumentParser(),
-            models,
-            max_concurrency=settings.ingestion_max_concurrency,
-            embedding_max_concurrency=settings.ingestion_embedding_max_concurrency,
-            embedding_batch_size=settings.ingestion_embedding_batch_size,
-        ),
-        deletion=DeletionService(repository, objects, vectors),
+        ingestion=ingestion,
+        deletion=DeletionService(repository, objects, vectors, ingestion.cancel),
         rag=RagService(repository, decision_agent, retrieval_agent, relevance_agent, compression_agent, answer_agent),
     )
 

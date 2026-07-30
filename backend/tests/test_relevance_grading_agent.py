@@ -31,6 +31,7 @@ class RelevanceGradingAgentTest(unittest.TestCase):
         self.assertEqual([hit.chunk_id for hit in result.relevant_hits], ["chunk-1"])
         self.assertEqual(result.score_for("chunk-1"), 0.92)
         self.assertEqual(result.score_for("chunk-2"), 0.12)
+        self.assertTrue(result.grading_complete)
         self.assertEqual(models.calls[0][2:5], (0, None, False))
         self.assertEqual(models.calls[0][5]["required"], ["items"])
         self.assertIn('"resolved_search_query": "报销制度 核心规则"', models.calls[0][0][-1]["content"])
@@ -44,6 +45,7 @@ class RelevanceGradingAgentTest(unittest.TestCase):
 
         self.assertEqual(result.relevant_hits, ())
         self.assertEqual(result.score_for("chunk-1"), 0.0)
+        self.assertFalse(result.grading_complete)
 
     def test_parses_scores_object_from_remote_model(self):
         hit = SearchHit("chunk-1", "doc-1", "kb-1", "doc.pdf", "content", 0.91)
@@ -65,6 +67,19 @@ class RelevanceGradingAgentTest(unittest.TestCase):
         self.assertEqual([hit.chunk_id for hit in result.relevant_hits], ["chunk-1"])
         self.assertEqual(result.score_for("chunk-1"), 0.9)
         self.assertEqual(result.score_for("chunk-2"), 0.0)
+        self.assertFalse(result.grading_complete)
+
+    def test_grades_large_candidate_sets_in_bounded_batches(self):
+        hits = [
+            SearchHit(f"chunk-{index}", "doc-1", "kb-1", "课程.pdf", f"知识点 {index}", 0.9)
+            for index in range(21)
+        ]
+        models = FakeModels('{"items":[]}')
+
+        result = RelevanceGradingAgent(models).run("总结课程", hits)
+
+        self.assertEqual(len(models.calls), 2)
+        self.assertFalse(result.grading_complete)
 
     def test_empty_candidates_do_not_call_model(self):
         models = FakeModels("unused")

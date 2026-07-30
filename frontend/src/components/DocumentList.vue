@@ -92,6 +92,21 @@ function toggleFolder(folderId) {
   expandedFolders.value = next
 }
 
+function requestDocumentDelete(document) {
+  if (props.deletingId) return
+  emit('delete', document)
+}
+
+function requestFolderDelete(folder) {
+  if (props.deletingId) return
+  emit('delete-folder', {
+    id: folder.id,
+    name: folder.name,
+    path: folder.path,
+    documentCount: folder.documentCount,
+  })
+}
+
 function statusText(status) {
   return { ready: '已就绪', processing: '处理中', failed: '失败' }[status] || status
 }
@@ -165,8 +180,8 @@ function formatDate(value) {
                 class="icon-button danger-icon"
                 :title="`删除文件夹 ${row.name}`"
                 :aria-label="`删除文件夹 ${row.name} 及其中 ${row.documentCount} 个文档`"
-                :disabled="Boolean(deletingId)"
-                @click="emit('delete-folder', { id: row.id, name: row.name, path: row.path, documentCount: row.documentCount })"
+                :aria-busy="deletingId === row.id"
+                @click="requestFolderDelete(row)"
               >
                 <LoaderCircle v-if="deletingId === row.id" :size="15" class="spinning" />
                 <Trash2 v-else :size="15" />
@@ -193,8 +208,8 @@ function formatDate(value) {
                 class="icon-button danger-icon"
                 :title="`删除文档 ${row.document.title}`"
                 :aria-label="`删除文档 ${row.document.title}`"
-                :disabled="Boolean(deletingId)"
-                @click="emit('delete', row.document)"
+                :aria-busy="deletingId === row.document.id"
+                @click="requestDocumentDelete(row.document)"
               >
                 <LoaderCircle v-if="deletingId === row.document.id" :size="15" class="spinning" />
                 <Trash2 v-else :size="15" />

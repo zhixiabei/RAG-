@@ -146,7 +146,16 @@ def list_documents(request: Request, knowledge_base_id: str):
     return service.repository.list_documents(knowledge_base_id)
 
 
-@router.post("/api/v1/knowledge-bases/{knowledge_base_id}/documents")
+@router.get("/api/v1/knowledge-bases/{knowledge_base_id}/documents/{document_id}")
+def get_document(request: Request, knowledge_base_id: str, document_id: str):
+    service, _, _ = owned_knowledge_base(request, knowledge_base_id)
+    document = service.repository.get_document(document_id)
+    if not document or document["knowledge_base_id"] != knowledge_base_id:
+        raise HTTPException(404, "文档不存在")
+    return document
+
+
+@router.post("/api/v1/knowledge-bases/{knowledge_base_id}/documents", status_code=202)
 def upload_document(request: Request, knowledge_base_id: str, file: UploadFile = File(...), folder_path: str = Form("")):
     service, _, _ = owned_knowledge_base(request, knowledge_base_id)
     if not file.filename:
@@ -155,7 +164,7 @@ def upload_document(request: Request, knowledge_base_id: str, file: UploadFile =
         suffix = Path(file.filename).suffix.lower()
         raise HTTPException(415, f"暂不支持的文件类型: {suffix or '无扩展名'}")
     try:
-        return service.ingestion.ingest_stream(
+        return service.ingestion.enqueue_stream(
             knowledge_base_id,
             Path(file.filename).name,
             file.content_type or "application/octet-stream",

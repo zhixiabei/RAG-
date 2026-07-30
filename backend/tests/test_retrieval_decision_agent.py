@@ -6,6 +6,7 @@ from agent.retrieval_decision_agent import (
     retrieval_search_query,
     should_retrieve,
 )
+from agent.query_intent import is_knowledge_catalog_inventory_question, needs_knowledge_catalog
 
 
 class FakeModels:
@@ -84,6 +85,17 @@ class RetrievalDecisionAgentTest(unittest.TestCase):
 
         self.assertFalse(decision.should_retrieve)
         self.assertEqual(models.calls, [])
+
+    def test_requested_materials_checklist_retrieves_document_content(self):
+        question = "黑山梁化学驱方案所需资料清单帮我列出来"
+        models = FakeModels('{"decision":"RETRIEVE","search_query":"黑山梁化学驱方案 所需资料清单"}')
+
+        decision = RetrievalDecisionAgent(models).run(question, [])
+
+        self.assertFalse(needs_knowledge_catalog(question))
+        self.assertFalse(is_knowledge_catalog_inventory_question(question))
+        self.assertTrue(decision.should_retrieve)
+        self.assertEqual(len(models.calls), 1)
 
 
 if __name__ == "__main__":

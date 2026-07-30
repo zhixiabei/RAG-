@@ -6,7 +6,7 @@ from typing import Any
 from sqlalchemy import create_engine, text
 
 from ...domain.ids import vector_point_id
-from ...domain.models import ParsedChunk
+from ...domain.models import ParsedChunk, SearchHit
 from .schema import SCHEMA_STATEMENTS
 
 
@@ -132,6 +132,66 @@ class PostgresRepository:
                 {"id": knowledge_base_id},
             ).mappings().all()
         return [dict(row) for row in rows]
+
+    def search_document_chunks(self, knowledge_base_id: str, terms: list[str], limit: int) -> list[SearchHit]:
+        normalized_terms = list(dict.fromkeys(term.strip() for term in terms if term.strip()))[:16]
+        if not normalized_terms:
+            return []
+
+        parameters: dict[str, Any] = {"kb_id": knowledge_base_id, "limit": max(1, limit)}
+        conditions = []
+        rank_parts = []
+        for index, term in enumerate(normalized_terms):
+            key = f"term_{index}"
+            parameters[key] = f"%{term}%"
+            condition = (
+                f"(document_chunks.text ILIKE :{key} OR documents.file_name ILIKE :{key} "
+                f"OR COALESCE(documents.folder_path, '') ILIKE :{key})"
+            )
+            conditions.append(condition)
+            rank_parts.append(f"CASE WHEN {condition} THEN 1 ELSE 0 END")
+
+        rank_expression = " + ".join(rank_parts)
+        with self.engine.begin() as connection:
+            rows = connection.execute(
+                text(f"""
+                    SELECT
+                        document_chunks.id AS chunk_id,
+                        document_chunks.document_id,
+                        document_chunks.knowledge_base_id,
+                        documents.title,
+                        documents.file_name,
+                        COALESCE(documents.folder_path, '') AS folder_path,
+                        document_chunks.text,
+                        document_chunks.page_number,
+                        ({rank_expression}) AS lexical_rank
+                    FROM document_chunks
+                    JOIN documents ON documents.id = document_chunks.document_id
+                    WHERE document_chunks.knowledge_base_id = :kb_id
+                      AND documents.status = 'ready'
+                      AND ({' OR '.join(conditions)})
+                    ORDER BY lexical_rank DESC, documents.created_at DESC, document_chunks.chunk_index
+                    LIMIT :limit
+                """),
+                parameters,
+            ).mappings().all()
+        return [
+            SearchHit(
+                chunk_id=str(row["chunk_id"]),
+                document_id=str(row["document_id"]),
+                knowledge_base_id=str(row["knowledge_base_id"]),
+                title=str(row["title"]),
+                text=str(row["text"]),
+                score=min(0.89, 0.45 + 0.08 * int(row["lexical_rank"])),
+                page_number=row["page_number"],
+                folder_path=str(row["folder_path"]),
+                file_name=str(row["file_name"]),
+                relative_path="/".join(
+                    part for part in (str(row["folder_path"]).strip("/"), str(row["file_name"])) if part
+                ),
+            )
+            for row in rows
+        ]
 
     def delete_document(self, document_id: str) -> None:
         with self.engine.begin() as connection:

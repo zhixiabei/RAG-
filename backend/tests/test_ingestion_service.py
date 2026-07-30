@@ -1,6 +1,8 @@
 import unittest
 from io import BytesIO
+from threading import Event
 
+from rag_app.application.deletion_service import DeletionService
 from rag_app.application.ingestion_service import DocumentTooLargeError, DuplicateDocumentError, IngestionService
 from rag_app.domain.models import ParsedChunk
 
@@ -40,6 +42,10 @@ class FakeRepository:
     def get_document(self, document_id):
         return self.document
 
+    def delete_document(self, document_id):
+        if self.document and self.document["id"] == document_id:
+            self.document = None
+
     def document_exists_by_file(self, knowledge_base_id, file_name, folder_path):
         return (knowledge_base_id, file_name, folder_path or "") in self._existing_files
 
@@ -73,6 +79,13 @@ class FakeObjects:
         content = next(item[1] for item in self.items if item[0] == object_key)
         return sha256(content).hexdigest()
 
+    def open_stream(self, object_key):
+        content = next(item[1] for item in self.items if item[0] == object_key)
+        return BytesIO(content)
+
+    def delete_object(self, object_key):
+        self.items = [item for item in self.items if item[0] != object_key]
+
 
 class FakeVectors:
     def __init__(self):
@@ -91,6 +104,19 @@ class FakeVectors:
 
     def delete_document(self, document_id):
         self.deleted_documents.append(document_id)
+        self.points = [point for point in self.points if point["document_id"] != document_id]
+
+
+class BlockingVectors(FakeVectors):
+    def __init__(self):
+        super().__init__()
+        self.upsert_started = Event()
+        self.upsert_release = Event()
+
+    def upsert(self, points, vectors):
+        self.upsert_started.set()
+        self.upsert_release.wait(timeout=2)
+        super().upsert(points, vectors)
 
 
 class FakeParser:
@@ -110,6 +136,18 @@ class FakeParser:
         return self.parse(file_name, stream.read())
 
 
+class BlockingParser(FakeParser):
+    def __init__(self):
+        super().__init__()
+        self.started = Event()
+        self.release = Event()
+
+    def parse_stream(self, file_name, stream):
+        self.started.set()
+        self.release.wait(timeout=2)
+        return super().parse_stream(file_name, stream)
+
+
 class FakeModels:
     embedding_model = "test-embedding"
 
@@ -124,14 +162,14 @@ class FakeModels:
 
 
 class IngestionServiceTest(unittest.TestCase):
-    def build_service(self, parser, **kwargs):
+    def build_service(self, parser, *, vectors=None, models=None, **kwargs):
         self.repository = FakeRepository()
         return IngestionService(
             self.repository,
             FakeObjects(),
-            FakeVectors(),
+            vectors or FakeVectors(),
             parser,
-            FakeModels(),
+            models or FakeModels(),
             **kwargs,
         )
 
@@ -266,6 +304,72 @@ class IngestionServiceTest(unittest.TestCase):
 
         self.assertEqual(result["status"], "ready")
         self.assertEqual(service.objects.items[0][1], b"12345")
+
+    def test_enqueue_returns_before_background_parsing_finishes(self):
+        parser = BlockingParser()
+        service = self.build_service(parser, max_concurrency=1)
+
+        result = service.enqueue_stream(
+            "kb-1",
+            "large.pdf",
+            "application/pdf",
+            BytesIO(b"content"),
+        )
+
+        self.assertEqual(result["status"], "processing")
+        self.assertEqual(result["progress"], 10)
+        self.assertTrue(parser.started.wait(timeout=1))
+        self.assertEqual(self.repository.document["status"], "processing")
+        self.assertTrue(service.is_pending(result["id"]))
+
+        parser.release.set()
+        service.wait_for_pending()
+        self.assertEqual(self.repository.document["status"], "ready")
+        self.assertFalse(service.is_pending(result["id"]))
+
+    def test_delete_cancels_background_ingestion_and_cleans_external_data(self):
+        parser = BlockingParser()
+        service = self.build_service(parser, max_concurrency=1)
+        deletion = DeletionService(service.repository, service.objects, service.vectors, service.cancel)
+
+        result = service.enqueue_stream(
+            "kb-1",
+            "cancelled.pdf",
+            "application/pdf",
+            BytesIO(b"content"),
+        )
+        self.assertTrue(parser.started.wait(timeout=1))
+
+        self.assertTrue(deletion.delete_document("kb-1", result["id"]))
+        self.assertIsNone(self.repository.document)
+        parser.release.set()
+        service.wait_for_pending()
+
+        self.assertFalse(service.is_pending(result["id"]))
+        self.assertIsNone(self.repository.document)
+        self.assertEqual(service.vectors.deleted_documents, [result["id"]])
+        self.assertEqual(service.objects.items, [])
+
+    def test_delete_during_upsert_removes_vectors_written_after_cancellation(self):
+        vectors = BlockingVectors()
+        service = self.build_service(FakeParser(), vectors=vectors, max_concurrency=1)
+        deletion = DeletionService(service.repository, service.objects, service.vectors, service.cancel)
+
+        result = service.enqueue_stream(
+            "kb-1",
+            "upserting.pdf",
+            "application/pdf",
+            BytesIO(b"content"),
+        )
+        self.assertTrue(vectors.upsert_started.wait(timeout=1))
+
+        self.assertTrue(deletion.delete_document("kb-1", result["id"]))
+        vectors.upsert_release.set()
+        service.wait_for_pending()
+
+        self.assertIsNone(self.repository.document)
+        self.assertEqual(vectors.points, [])
+        self.assertEqual(vectors.deleted_documents, [result["id"]])
 
 
 if __name__ == "__main__":

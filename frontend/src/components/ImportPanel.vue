@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { AlertTriangle, ChevronRight, FileUp, Folder, FolderOpen, LoaderCircle, UploadCloud, X } from 'lucide-vue-next'
-import { uploadDocument } from '../services/api'
+import { getDocument, uploadDocument } from '../services/api'
 
 const props = defineProps({ kbId: { type: String, required: true } })
 const emit = defineEmits(['started', 'completed'])
@@ -24,6 +24,7 @@ const expandedFolders = ref(new Set())
 const fileStatus = ref({})
 const fileErrors = ref({})
 const MAX_CONCURRENT = 2
+const DOCUMENT_POLL_INTERVAL_MS = 1500
 
 const SESSION_KEY_PREFIX = 'rag-import-queue'
 
@@ -343,7 +344,23 @@ function removeFile(index) {
   removeFiles([index])
 }
 
-async function uploadOne(knowledgeBaseId, file, index) {
+function wait(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds))
+}
+
+async function waitForDocumentCompletion(knowledgeBaseId, documentId, generation) {
+  while (importGeneration.value === generation && props.kbId === knowledgeBaseId) {
+    const document = await getDocument(knowledgeBaseId, documentId)
+    if (document.status === 'ready') return document
+    if (document.status === 'failed') {
+      throw new Error(document.error_message || '文档后台处理失败')
+    }
+    await wait(DOCUMENT_POLL_INTERVAL_MS)
+  }
+  return null
+}
+
+async function uploadOne(knowledgeBaseId, file, index, generation) {
   fileStatus.value[index] = 'uploading'
   try {
     const result = await uploadDocument(knowledgeBaseId, file, folderPathFor(file))
@@ -355,6 +372,11 @@ async function uploadOne(knowledgeBaseId, file, index) {
       importedPaths.value.add(fileIdentity(file))
       return
     }
+    if (result?.status === 'processing' && result.id) {
+      const completed = await waitForDocumentCompletion(knowledgeBaseId, result.id, generation)
+      if (!completed) return
+    }
+    if (importGeneration.value !== generation || props.kbId !== knowledgeBaseId) return
     fileStatus.value[index] = 'done'
     fileErrors.value[index] = null
     importedPaths.value.add(fileIdentity(file))
@@ -394,7 +416,7 @@ async function startImport() {
     while (importGeneration.value === gen && nextPendingIndex < pending.length) {
       const item = pending[nextPendingIndex]
       nextPendingIndex++
-      await uploadOne(knowledgeBaseId, item.file, item.index)
+      await uploadOne(knowledgeBaseId, item.file, item.index, gen)
       current.value++
       saveQueueSnapshot()
     }

@@ -12,12 +12,14 @@ class FakeRepository:
                 "knowledge_base_id": "kb-1",
                 "source_object_key": "kb-1/doc-1/source/test.pdf",
                 "folder_path": "project/reports",
+                "status": "ready",
             },
             "doc-2": {
                 "id": "doc-2",
                 "knowledge_base_id": "kb-1",
                 "source_object_key": "kb-1/doc-2/source/other.pdf",
                 "folder_path": "project/data",
+                "status": "ready",
             },
         }
         self.deleted_documents = []
@@ -85,6 +87,40 @@ class DeletionServiceTest(unittest.TestCase):
         self.assertEqual(self.objects.deleted, [])
         self.assertEqual(self.repository.deleted_documents, [])
 
+    def test_cancels_active_ingestion_and_deletes_database_record_immediately(self):
+        self.repository.documents["doc-1"]["status"] = "processing"
+        cancelled = []
+        service = DeletionService(
+            self.repository,
+            self.objects,
+            self.vectors,
+            cancel_ingestion=lambda document_id: cancelled.append(document_id) or True,
+        )
+
+        deleted = service.delete_document("kb-1", "doc-1")
+
+        self.assertTrue(deleted)
+        self.assertEqual(cancelled, ["doc-1"])
+        self.assertEqual(self.vectors.deleted_documents, [])
+        self.assertEqual(self.objects.deleted, [])
+        self.assertEqual(self.repository.deleted_documents, ["doc-1"])
+
+    def test_deletes_stale_processing_document_not_in_current_queue(self):
+        self.repository.documents["doc-1"]["status"] = "processing"
+        service = DeletionService(
+            self.repository,
+            self.objects,
+            self.vectors,
+            cancel_ingestion=lambda _document_id: False,
+        )
+
+        deleted = service.delete_document("kb-1", "doc-1")
+
+        self.assertTrue(deleted)
+        self.assertEqual(self.vectors.deleted_documents, ["doc-1"])
+        self.assertEqual(self.objects.deleted, ["kb-1/doc-1/source/test.pdf"])
+        self.assertEqual(self.repository.deleted_documents, ["doc-1"])
+
     def test_keeps_database_record_when_external_cleanup_fails(self):
         self.objects.failure = RuntimeError("MinIO unavailable")
 
@@ -104,6 +140,22 @@ class DeletionServiceTest(unittest.TestCase):
         )
         self.assertEqual(self.repository.deleted_documents, ["doc-1", "doc-2"])
 
+    def test_folder_delete_cancels_active_documents(self):
+        self.repository.documents["doc-2"]["status"] = "processing"
+        service = DeletionService(
+            self.repository,
+            self.objects,
+            self.vectors,
+            cancel_ingestion=lambda document_id: document_id == "doc-2",
+        )
+
+        deleted_count = service.delete_document_folder("kb-1", "project")
+
+        self.assertEqual(deleted_count, 2)
+        self.assertEqual(self.vectors.deleted_documents, ["doc-1"])
+        self.assertEqual(self.objects.deleted, ["kb-1/doc-1/source/test.pdf"])
+        self.assertEqual(self.repository.deleted_documents, ["doc-1", "doc-2"])
+
     def test_does_not_treat_parent_path_as_a_folder(self):
         self.assertEqual(self.service.delete_document_folder("kb-1", ".."), 0)
         self.assertEqual(self.repository.deleted_documents, [])
@@ -112,6 +164,27 @@ class DeletionServiceTest(unittest.TestCase):
         deleted = self.service.delete_knowledge_base("kb-1")
 
         self.assertTrue(deleted)
+        self.assertEqual(self.vectors.deleted_knowledge_bases, ["kb-1"])
+        self.assertEqual(
+            self.objects.deleted,
+            ["kb-1/doc-1/source/test.pdf", "kb-1/doc-2/source/other.pdf"],
+        )
+        self.assertEqual(self.repository.deleted_knowledge_bases, ["kb-1"])
+
+    def test_knowledge_base_delete_cancels_active_documents(self):
+        self.repository.documents["doc-1"]["status"] = "processing"
+        cancelled = []
+        service = DeletionService(
+            self.repository,
+            self.objects,
+            self.vectors,
+            cancel_ingestion=lambda document_id: cancelled.append(document_id) or document_id == "doc-1",
+        )
+
+        deleted = service.delete_knowledge_base("kb-1")
+
+        self.assertTrue(deleted)
+        self.assertEqual(cancelled, ["doc-1", "doc-2"])
         self.assertEqual(self.vectors.deleted_knowledge_bases, ["kb-1"])
         self.assertEqual(
             self.objects.deleted,

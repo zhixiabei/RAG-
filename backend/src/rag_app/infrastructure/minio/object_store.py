@@ -1,5 +1,6 @@
 from hashlib import sha256
 from io import BytesIO
+import tempfile
 from typing import BinaryIO
 
 from minio import Minio
@@ -27,6 +28,21 @@ class MinioObjectStore:
 
     def put_stream(self, object_key: str, stream: BinaryIO, length: int, content_type: str) -> None:
         self.client.put_object(self.bucket, object_key, stream, length, content_type=content_type)
+
+    def open_stream(self, object_key: str) -> BinaryIO:
+        response = self.client.get_object(self.bucket, object_key)
+        stream = tempfile.TemporaryFile()
+        try:
+            while chunk := response.read(1024 * 1024):
+                stream.write(chunk)
+            stream.seek(0)
+            return stream
+        except Exception:
+            stream.close()
+            raise
+        finally:
+            response.close()
+            response.release_conn()
 
     def calculate_hash(self, object_key: str) -> str:
         response = self.client.get_object(self.bucket, object_key)

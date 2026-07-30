@@ -9,6 +9,15 @@ from rag_app.api.routes import router
 
 class FakeRepository:
     def __init__(self):
+        self.documents = {
+            "document-1": {
+                "id": "document-1",
+                "knowledge_base_id": "kb-1",
+                "status": "processing",
+                "progress": 35,
+                "stage": "embedding",
+            }
+        }
         self.conversations = {
             "conversation-1": {
                 "id": "conversation-1",
@@ -28,6 +37,9 @@ class FakeRepository:
             return {"id": knowledge_base_id}
         return None
 
+    def get_document(self, document_id):
+        return self.documents.get(document_id)
+
     def update_conversation_title(self, conversation_id, title):
         self.conversations[conversation_id]["title"] = title
         return self.conversations[conversation_id]
@@ -46,15 +58,21 @@ class ConversationRoutesTest(unittest.TestCase):
             parse=lambda file_name, content: [SimpleNamespace(index=0, text=content.decode(), page_number=None)],
         )
         self.rag_calls = []
+        self.ingestion_calls = []
 
         def answer(*args, **kwargs):
             self.rag_calls.append((args, kwargs))
             return {"answer": "附件回答", "citations": kwargs["attachment_citations"]}
 
+        def enqueue_stream(*args, **kwargs):
+            self.ingestion_calls.append((args, kwargs))
+            return {"id": "document-1", "status": "processing", "progress": 10, "stage": "parsing"}
+
         app.state.services = SimpleNamespace(
             repository=self.repository,
             ingestion=SimpleNamespace(
                 parser=parser,
+                enqueue_stream=enqueue_stream,
                 parse_stream=lambda file_name, stream, max_bytes: parser.parse(
                     file_name,
                     stream.read(max_bytes + 1),
@@ -69,6 +87,7 @@ class ConversationRoutesTest(unittest.TestCase):
                 auth_session_ttl_seconds=3600,
                 auth_cookie_secure=False,
                 rag_context_max_chars=12000,
+                max_document_bytes=0,
             ),
         )
         app.include_router(router)
@@ -87,6 +106,37 @@ class ConversationRoutesTest(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["title"], "新名称")
+
+    def test_upload_accepts_document_for_background_ingestion(self):
+        response = self.client.post(
+            "/api/v1/knowledge-bases/kb-1/documents",
+            files={"file": ("notes.txt", b"background content", "text/plain")},
+        )
+
+        self.assertEqual(response.status_code, 202)
+        self.assertEqual(response.json()["status"], "processing")
+        self.assertEqual(self.ingestion_calls[0][0][1], "notes.txt")
+
+    def test_gets_background_ingestion_status(self):
+        response = self.client.get(
+            "/api/v1/knowledge-bases/kb-1/documents/document-1",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["stage"], "embedding")
+
+    def test_does_not_return_document_from_another_knowledge_base(self):
+        self.repository.documents["document-other"] = {
+            "id": "document-other",
+            "knowledge_base_id": "kb-other",
+            "status": "ready",
+        }
+
+        response = self.client.get(
+            "/api/v1/knowledge-bases/kb-1/documents/document-other",
+        )
+
+        self.assertEqual(response.status_code, 404)
 
     def test_deletes_conversation(self):
         response = self.client.delete("/api/v1/conversations/conversation-1")

@@ -1,16 +1,28 @@
+from collections.abc import Callable
+
 from ..domain.ports import MetadataRepository, ObjectStore, VectorStore
 
 
 class DeletionService:
-    def __init__(self, repository: MetadataRepository, objects: ObjectStore, vectors: VectorStore):
+    def __init__(
+        self,
+        repository: MetadataRepository,
+        objects: ObjectStore,
+        vectors: VectorStore,
+        cancel_ingestion: Callable[[str], bool] | None = None,
+    ):
         self.repository = repository
         self.objects = objects
         self.vectors = vectors
+        self.cancel_ingestion = cancel_ingestion or (lambda _document_id: False)
 
     def delete_document(self, knowledge_base_id: str, document_id: str) -> bool:
         document = self.repository.get_document(document_id)
         if not document or document["knowledge_base_id"] != knowledge_base_id:
             return False
+        if self.cancel_ingestion(document_id):
+            self.repository.delete_document(document_id)
+            return True
 
         self.vectors.delete_document(document_id)
         self.objects.delete_object(document["source_object_key"])
@@ -34,6 +46,9 @@ class DeletionService:
             or document_path.startswith(prefix)
         ]
         for document in documents:
+            if self.cancel_ingestion(document["id"]):
+                self.repository.delete_document(document["id"])
+                continue
             self.vectors.delete_document(document["id"])
             self.objects.delete_object(document["source_object_key"])
             self.repository.delete_document(document["id"])
@@ -44,6 +59,8 @@ class DeletionService:
             return False
 
         documents = self.repository.list_documents(knowledge_base_id)
+        for document in documents:
+            self.cancel_ingestion(document["id"])
         self.vectors.delete_knowledge_base(knowledge_base_id)
         for document in documents:
             self.objects.delete_object(document["source_object_key"])

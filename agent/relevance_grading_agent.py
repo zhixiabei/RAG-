@@ -54,6 +54,7 @@ class RelevanceResult:
     relevant_hits: tuple[SearchHit, ...]
     grades: tuple[RelevanceGrade, ...]
     threshold: float
+    grading_complete: bool = True
 
     def score_for(self, chunk_id: str) -> float:
         return next((grade.score for grade in self.grades if grade.chunk_id == chunk_id), 0.0)
@@ -117,38 +118,44 @@ class RelevanceGradingAgent:
         search_query: str | None = None,
     ) -> RelevanceResult:
         if not hits:
-            return RelevanceResult((), (), self.threshold)
+            return RelevanceResult((), (), self.threshold, True)
 
         alias_to_chunk_id = {f"c{index}": hit.chunk_id for index, hit in enumerate(hits, 1)}
-        candidates = [
-            {
-                "chunk_id": alias,
-                "document": hit.file_name or hit.title,
-                "relative_path": retrieved_file_path(hit),
-                "content": hit.text,
-            }
-            for alias, hit in zip(alias_to_chunk_id, hits)
-        ]
-        output = self.models.complete(
-            [
-                {"role": "system", "content": RELEVANCE_GRADING_PROMPT},
+        alias_scores = {}
+        aliases = list(alias_to_chunk_id)
+        batch_size = 20
+        for start in range(0, len(hits), batch_size):
+            hit_batch = hits[start:start + batch_size]
+            alias_batch = aliases[start:start + batch_size]
+            candidates = [
                 {
-                    "role": "user",
-                    "content": json.dumps(
-                        {
-                            "current_question": question,
-                            "resolved_search_query": search_query or question,
-                            "candidates": candidates,
-                        },
-                        ensure_ascii=False,
-                    ),
-                },
-            ],
-            temperature=0,
-            reasoning=False,
-            response_schema=RELEVANCE_GRADING_SCHEMA,
-        )
-        alias_scores = _parse_scores(output, set(alias_to_chunk_id))
+                    "chunk_id": alias,
+                    "document": hit.file_name or hit.title,
+                    "relative_path": retrieved_file_path(hit),
+                    "content": hit.text,
+                }
+                for alias, hit in zip(alias_batch, hit_batch)
+            ]
+            output = self.models.complete(
+                [
+                    {"role": "system", "content": RELEVANCE_GRADING_PROMPT},
+                    {
+                        "role": "user",
+                        "content": json.dumps(
+                            {
+                                "current_question": question,
+                                "resolved_search_query": search_query or question,
+                                "candidates": candidates,
+                            },
+                            ensure_ascii=False,
+                        ),
+                    },
+                ],
+                temperature=0,
+                reasoning=False,
+                response_schema=RELEVANCE_GRADING_SCHEMA,
+            )
+            alias_scores.update(_parse_scores(output, set(alias_batch)))
         scores = {
             chunk_id: alias_scores[alias]
             for alias, chunk_id in alias_to_chunk_id.items()
@@ -156,4 +163,4 @@ class RelevanceGradingAgent:
         }
         grades = tuple(RelevanceGrade(hit.chunk_id, scores.get(hit.chunk_id, 0.0)) for hit in hits)
         relevant_hits = tuple(hit for hit in hits if scores.get(hit.chunk_id, 0.0) >= self.threshold)
-        return RelevanceResult(relevant_hits, grades, self.threshold)
+        return RelevanceResult(relevant_hits, grades, self.threshold, len(scores) == len(hits))

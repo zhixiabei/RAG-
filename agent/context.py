@@ -67,11 +67,36 @@ def format_knowledge_catalog_answer(
     question: str,
     documents: Sequence[Mapping[str, Any]],
     history: Sequence[Mapping[str, Any]] = (),
+    file_lookup: bool = False,
 ) -> str:
     """Build an exact Markdown file listing without relying on a language model."""
     entries = _ready_document_catalog_entries(documents)
     if not entries:
         return "当前知识库还没有已完成入库的文件。"
+
+    if file_lookup:
+        lookup_text = "\n".join([
+            question,
+            *(
+                str(message.get("content") or "")
+                for message in reversed(history)
+                if message.get("role") == "user"
+            ),
+        ]).replace("\\", "/").casefold()
+        matches = sorted(
+            {
+                path
+                for _folder, path in entries
+                if len(file_name := path.rsplit("/", 1)[-1]) >= 3
+                and (file_name.casefold() in lookup_text or path.casefold() in lookup_text)
+            },
+            key=str.casefold,
+        )
+        if not matches:
+            return "没有在当前知识库的已入库文件中找到该文件。"
+        lines = [f"找到了 **{len(matches)}** 个匹配的已入库文件："]
+        lines.extend(f"- `{_escape_markdown_code(path)}`" for path in matches)
+        return "\n".join(lines)
 
     folders = sorted({folder for folder, _path in entries if folder}, key=lambda value: (-len(value), value.casefold()))
     targets = _mentioned_catalog_folders(question, folders)

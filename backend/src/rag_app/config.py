@@ -41,9 +41,9 @@ class Settings(BaseSettings):
     remote_embedding_api_key: str = ""
     remote_embedding_model: str = ""
     rag_retrieval_top_k: int = 100
-    rag_context_top_k: int = 20
+    rag_context_top_k: int = 50
     rag_relevance_threshold: float = 0.65
-    rag_context_max_chars: int = 12_000
+    rag_context_max_chars: int = 30_000
     auth_username: str = "admin"
     auth_password: str = "admin"
     auth_secret: str = "local-development-secret-change-me"
