@@ -90,14 +90,6 @@ export const useKnowledgeBaseStore = defineStore('knowledgeBase', () => {
     }
   }
 
-  function reset() {
-    items.value = []
-    documents.value = []
-    selectedId.value = null
-    loading.value = false
-    error.value = ''
-  }
-
   return {
     items,
     documents,
@@ -113,6 +105,5 @@ export const useKnowledgeBaseStore = defineStore('knowledgeBase', () => {
     removeKnowledgeBase,
     removeDocument,
     removeDocumentFolder,
-    reset,
   }
 })

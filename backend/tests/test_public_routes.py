@@ -28,67 +28,32 @@ class FakeRepository:
         )
 
 
-class AuthRoutesTest(unittest.TestCase):
+class PublicRoutesTest(unittest.TestCase):
     def setUp(self):
         app = FastAPI()
         app.state.startup_error = None
         app.state.services = SimpleNamespace(
             repository=FakeRepository(),
-            settings=SimpleNamespace(
-                auth_username="admin",
-                auth_password="test-password",
-                auth_secret="test-secret",
-                auth_owner_id="personal",
-                auth_session_ttl_seconds=3600,
-                auth_cookie_secure=False,
-            ),
+            settings=SimpleNamespace(owner_id="personal"),
         )
         app.include_router(router)
         self.client = TestClient(app)
 
-    def login(self):
-        return self.client.post(
-            "/api/v1/auth/login",
-            json={"username": "admin", "password": "test-password"},
-        )
-
-    def test_requires_login_for_business_api(self):
-        response = self.client.get("/api/v1/knowledge-bases")
-
-        self.assertEqual(response.status_code, 401)
-        self.assertEqual(response.json()["detail"], "请先登录")
-
-    def test_rejects_invalid_credentials(self):
-        response = self.client.post(
-            "/api/v1/auth/login",
-            json={"username": "admin", "password": "wrong"},
-        )
-
-        self.assertEqual(response.status_code, 401)
-
-    def test_session_lists_only_owned_knowledge_bases(self):
-        self.assertEqual(self.login().status_code, 200)
-
+    def test_business_api_is_available_without_login(self):
         response = self.client.get("/api/v1/knowledge-bases")
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual([item["id"] for item in response.json()], ["kb-personal"])
 
     def test_other_owner_resource_is_hidden(self):
-        self.login()
-
         response = self.client.get("/api/v1/knowledge-bases/kb-other")
 
         self.assertEqual(response.status_code, 404)
 
-    def test_logout_invalidates_browser_session(self):
-        self.login()
-        self.assertEqual(self.client.get("/api/v1/auth/me").status_code, 200)
-
-        response = self.client.post("/api/v1/auth/logout")
-
-        self.assertEqual(response.status_code, 204)
-        self.assertEqual(self.client.get("/api/v1/auth/me").status_code, 401)
+    def test_auth_endpoints_do_not_exist(self):
+        self.assertEqual(self.client.post("/api/v1/auth/login", json={}).status_code, 404)
+        self.assertEqual(self.client.post("/api/v1/auth/logout").status_code, 404)
+        self.assertEqual(self.client.get("/api/v1/auth/me").status_code, 404)
 
 
 if __name__ == "__main__":

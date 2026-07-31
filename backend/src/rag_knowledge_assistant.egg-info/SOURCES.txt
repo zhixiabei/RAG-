@@ -7,7 +7,6 @@ src/rag_app/api/__init__.py
 src/rag_app/api/routes.py
 src/rag_app/api/schemas.py
 src/rag_app/application/__init__.py
-src/rag_app/application/auth.py
 src/rag_app/application/deletion_service.py
 src/rag_app/application/ingestion_service.py
 src/rag_app/application/rag_service.py
@@ -34,14 +33,13 @@ src/rag_knowledge_assistant.egg-info/SOURCES.txt
 src/rag_knowledge_assistant.egg-info/dependency_links.txt
 src/rag_knowledge_assistant.egg-info/top_level.txt
 tests/test_answer_agent.py
-tests/test_auth.py
-tests/test_auth_routes.py
 tests/test_context_compression_agent.py
 tests/test_conversation_routes.py
 tests/test_deletion_service.py
 tests/test_ingestion_service.py
 tests/test_knowledge_retrieval_agent.py
 tests/test_model_completion_gateways.py
+tests/test_public_routes.py
 tests/test_rag_service.py
 tests/test_relevance_grading_agent.py
 tests/test_retrieval_decision_agent.py

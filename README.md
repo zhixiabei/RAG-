@@ -79,22 +79,7 @@ bash scripts/start-server.sh
 
 脚本会启动 PostgreSQL，并以后台进程启动 Qdrant 和 MinIO；已监听的服务不会重复启动。Uvicorn 和 Vite 由脚本统一看护，按 `Ctrl+C` 会停止前后端，PostgreSQL、Qdrant 和 MinIO 会继续运行。Qdrant 和 MinIO 的日志分别写入各自目录下的 `qdrant.log` 和 `minio.log`。
 
-## 个人登录
-
-系统提供一个由环境变量配置的个人账号。首次使用前建议在 `.env` 中设置：
-
-```dotenv
-AUTH_USERNAME=admin
-AUTH_PASSWORD=替换为强密码
-AUTH_SECRET=替换为至少32位随机字符串
-AUTH_OWNER_ID=personal
-```
-
-本地环境未配置时可使用 `admin / admin`；这组默认凭据只用于本机开发。`APP_ENV` 不是 `local` 时，后端会拒绝使用默认密码或默认签名密钥启动。登录状态保存在 HttpOnly Cookie 中，默认有效期为 7 天。
-
-知识库表使用 `owner_id` 隔离数据，文档、向量、对话和消息均通过知识库归属继承隔离。现有数据库升级时，已有知识库自动归入 `personal`；不要随意修改已经使用中的 `AUTH_OWNER_ID`。
-
-文档导入进度保存在 `documents.progress` 和 `documents.stage` 中。切换到问答界面不会中断当前上传；退出后重新登录时，文档列表会恢复后台正在处理的文件并自动刷新状态。尚未发送到后端的本地文件选择不会跨登录保存。
+文档导入进度保存在 `documents.progress` 和 `documents.stage` 中。切换到问答界面不会中断当前上传；重新打开页面时，文档列表会恢复后台正在处理的文件并自动刷新状态。尚未发送到后端的本地文件选择不会跨页面刷新保存。
 
 文档默认允许两个任务同时上传和解析，embedding 阶段保持单并发，并以 32 个文本块为一批写入向量库，兼顾批量导入速度和本地模型稳定性。知识库文档默认没有大小上限（`MAX_DOCUMENT_BYTES=0`）；大体积 PPTX 使用流式上传并逐页读取 XML，不会把图片、音频和视频加载到内存。可通过 `INGESTION_MAX_CONCURRENCY`、`INGESTION_EMBEDDING_MAX_CONCURRENCY`、`INGESTION_EMBEDDING_BATCH_SIZE` 和 `MAX_DOCUMENT_BYTES` 调整。聊天临时附件仍保留独立的 30 MB 限制。使用本地模型时不要同时启动多个 Uvicorn worker，否则每个进程都有独立的导入并发限制。
 

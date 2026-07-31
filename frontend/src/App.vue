@@ -1,14 +1,12 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { FileStack, LoaderCircle, LogOut, MessageSquareText, Plus, Search, X } from 'lucide-vue-next'
+import { FileStack, LoaderCircle, MessageSquareText, Plus, Search, X } from 'lucide-vue-next'
 import KnowledgeSidebar from './components/KnowledgeSidebar.vue'
 import CreateKnowledgeBaseDialog from './components/CreateKnowledgeBaseDialog.vue'
 import DeleteConfirmDialog from './components/DeleteConfirmDialog.vue'
 import DocumentList from './components/DocumentList.vue'
 import ImportPanel from './components/ImportPanel.vue'
 import ChatWorkspace from './components/ChatWorkspace.vue'
-import LoginPanel from './components/LoginPanel.vue'
-import { getCurrentUser, login, logout } from './services/api'
 import { useKnowledgeBaseStore } from './stores/knowledgeBase'
 
 const store = useKnowledgeBaseStore()
@@ -20,10 +18,7 @@ const documentQuery = ref('')
 const deleteTarget = ref(null)
 const deletingId = ref(null)
 const deleteError = ref('')
-const authLoading = ref(true)
-const authUser = ref(null)
-const authError = ref('')
-const loggingIn = ref(false)
+const appLoading = ref(true)
 const importActive = ref(false)
 let documentPollTimer = null
 
@@ -65,14 +60,6 @@ const documentCountText = computed(() => {
   return `${filteredDocuments.value.length} / ${store.documents.length} 个文件`
 })
 
-function clearSession() {
-  authUser.value = null
-  authError.value = ''
-  store.reset()
-  importActive.value = false
-  stopDocumentPolling()
-}
-
 function toggleSidebar() {
   sidebarCollapsed.value = !sidebarCollapsed.value
   localStorage.setItem('rag-sidebar-collapsed', String(sidebarCollapsed.value))
@@ -85,61 +72,32 @@ function stopDocumentPolling() {
 
 function scheduleDocumentPolling() {
   stopDocumentPolling()
-  if (!authUser.value || !store.selectedId || (!importActive.value && !store.hasProcessingDocuments)) return
+  if (!store.selectedId || (!importActive.value && !store.hasProcessingDocuments)) return
   const knowledgeBaseId = store.selectedId
   documentPollTimer = setTimeout(async () => {
     try {
       await store.loadDocuments(knowledgeBaseId)
     } catch {
-      // The next authenticated request or manual refresh will surface persistent errors.
+      // The next poll or manual refresh will surface persistent errors.
     } finally {
       scheduleDocumentPolling()
     }
   }, 2000)
 }
 
-async function initializeSession() {
-  authLoading.value = true
+async function initializeApp() {
   try {
-    const session = await getCurrentUser()
     await store.load()
-    authUser.value = session
-  } catch (cause) {
-    if (cause?.status !== 401) authError.value = cause instanceof Error ? cause.message : '登录状态检查失败'
   } finally {
-    authLoading.value = false
-  }
-}
-
-async function submitLogin(username, password) {
-  loggingIn.value = true
-  authError.value = ''
-  try {
-    const session = await login(username, password)
-    await store.load()
-    authUser.value = session
-  } catch (cause) {
-    authError.value = cause instanceof Error ? cause.message : '登录失败'
-  } finally {
-    loggingIn.value = false
-  }
-}
-
-async function signOut() {
-  try {
-    await logout()
-  } finally {
-    clearSession()
+    appLoading.value = false
   }
 }
 
 onMounted(() => {
-  window.addEventListener('rag:unauthorized', clearSession)
-  initializeSession()
+  initializeApp()
 })
 
 onBeforeUnmount(() => {
-  window.removeEventListener('rag:unauthorized', clearSession)
   stopDocumentPolling()
 })
 
@@ -149,7 +107,6 @@ watch(() => store.selectedId, () => {
 
 watch(
   [
-    () => authUser.value?.username,
     () => store.selectedId,
     () => store.hasProcessingDocuments,
     () => importActive.value,
@@ -221,11 +178,9 @@ async function confirmDelete() {
 </script>
 
 <template>
-  <main v-if="authLoading" class="auth-shell auth-loading">
+  <main v-if="appLoading" class="app-loading-shell">
     <LoaderCircle :size="24" class="spinning" />
   </main>
-
-  <LoginPanel v-else-if="!authUser" :busy="loggingIn" :error="authError" @submit="submitLogin" />
 
   <div v-else class="app-shell">
     <KnowledgeSidebar
@@ -248,10 +203,6 @@ async function confirmDelete() {
           <button :class="{ active: activeTab === 'chat' }" @click="activeTab = 'chat'"><MessageSquareText :size="15" />对话</button>
           <button :class="{ active: activeTab === 'documents' }" @click="activeTab = 'documents'"><FileStack :size="15" />文档</button>
         </nav>
-        <div class="account-menu">
-          <span>{{ authUser.username }}</span>
-          <button class="icon-button" title="退出登录" aria-label="退出登录" @click="signOut"><LogOut :size="16" /></button>
-        </div>
       </header>
 
       <template v-if="store.selected">

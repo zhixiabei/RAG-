@@ -134,7 +134,7 @@ flowchart TD
 1. 若当前没有会话，前端以问题前 50 个字符创建会话。
 2. 前端立即把用户消息作为 pending 消息放入页面。
 3. 若有附件，附件早在发送前已经通过 `/chat-attachments/parse` 解析；发送时上传解析后的 context，而不是重新传文件。
-4. API 校验 HttpOnly Cookie，确认知识库属于当前 `owner_id`。
+4. API 使用固定的 `OWNER_ID` 筛选知识库；当前不提供登录或客户端身份校验。
 5. API 校验 `conversation_id` 存在且属于当前知识库。
 6. `RagService` 读取知识库记录，随后读取会话历史并取最后 12 条。
 7. 代码正则判断问题是否涉及目录/文件清单。若涉及，先从 PostgreSQL 读取所有文档元数据并生成目录上下文。
@@ -220,8 +220,8 @@ sequenceDiagram
         A->>P: INSERT conversations
     end
     V->>V: 乐观显示用户消息
-    V->>A: POST chat（Cookie、kb、conversation、question、model）
-    A->>A: 鉴权、知识库归属、会话归属校验
+    V->>A: POST chat（kb、conversation、question、model）
+    A->>A: 固定 owner、知识库归属、会话归属校验
     A->>R: answer(...)
     R->>P: 读取知识库、会话消息
     opt 目录类问题
@@ -268,7 +268,7 @@ sequenceDiagram
 - 压缩异常：捕获异常并确定性截窗，仍保证字符预算。
 - Prompt injection：评分、压缩、回答 prompt 都说明文档内容是只读证据，不执行其中指令；但这仍是 prompt 级防护，不是形式化隔离。
 - 结构化输出：Ollama 收到完整 JSON schema；OpenAI 兼容网关只请求 `json_object`，若服务不支持还会去掉该参数重试，最终靠本地解析兜底。
-- 数据隔离：API 通过 Cookie 中固定的 `owner_id` 隐藏其他 owner 的知识库。当前是单个环境变量账号，不是完整多用户/OIDC/RBAC 实现。
+- 数据范围：API 通过环境变量 `OWNER_ID` 只访问固定 owner 的知识库，但不验证访问者身份；这不是多用户/OIDC/RBAC 实现。
 - 同步执行：聊天和文档入库都在 HTTP 请求内同步完成，没有后台 worker、任务队列、流式答案或 SSE。
 
 ## 9. 每个源码文件的功能
@@ -292,17 +292,16 @@ sequenceDiagram
 | 文件 | 功能 |
 | --- | --- |
 | `backend/src/rag_app/main.py` | 应用 composition root：选择本地/远程模型，创建所有存储、服务和 Agent，启动检查、CORS、FastAPI lifespan。 |
-| `backend/src/rag_app/config.py` | 从根目录 `.env` 读取端口、存储、模型、RAG 阈值、并发、认证和 CORS 配置。 |
+| `backend/src/rag_app/config.py` | 从根目录 `.env` 读取端口、存储、模型、RAG 阈值、并发、固定 owner 和 CORS 配置。 |
 | `backend/src/rag_app/cli.py` | 命令行递归导入本机文件夹；逐文件同步调用入库服务并报告成功/失败。 |
 | `backend/src/rag_app/application/rag_service.py` | 全部 Agent 的确定性编排器；负责历史读取、目录分支、citation、消息持久化和 `agent_trace`。 |
 | `backend/src/rag_app/application/ingestion_service.py` | 上传流大小/路径/重复校验，MinIO 保存、解析、分批 embedding、Qdrant upsert、PG 状态推进和失败清理。 |
 | `backend/src/rag_app/application/deletion_service.py` | 按“Qdrant -> MinIO -> PostgreSQL”同步删除文档、文件夹或整个知识库。 |
-| `backend/src/rag_app/application/auth.py` | 常量时间比较账号密码；创建和校验 HMAC-SHA256 签名、带过期时间的 Cookie token。 |
 | `backend/src/rag_app/domain/models.py` | `ParsedChunk`、`SearchHit`、`Citation` 不可变数据模型。 |
 | `backend/src/rag_app/domain/ports.py` | Metadata/Object/Vector/Parser/Model 五类端口接口，定义应用层依赖边界。 |
 | `backend/src/rag_app/domain/ids.py` | 用 UUIDv5 从 chunk ID 生成稳定 Qdrant point ID，支持幂等 upsert。 |
-| `backend/src/rag_app/api/schemas.py` | Pydantic 请求校验：登录、知识库、聊天、预解析附件、会话创建/改名。 |
-| `backend/src/rag_app/api/routes.py` | 所有 HTTP 路由、认证/owner 校验、聊天与附件入口、上传/删除、会话 CRUD、错误码映射。 |
+| `backend/src/rag_app/api/schemas.py` | Pydantic 请求校验：知识库、聊天、预解析附件、会话创建/改名。 |
+| `backend/src/rag_app/api/routes.py` | 所有 HTTP 路由、固定 owner 范围校验、聊天与附件入口、上传/删除、会话 CRUD、错误码映射。 |
 | 各目录 `__init__.py` | Python 包标记；除 OpenAI compatible 包导出 gateway 外基本为空。 |
 
 ### 9.3 后端基础设施
@@ -335,14 +334,13 @@ sequenceDiagram
 | 文件 | 功能 |
 | --- | --- |
 | `frontend/src/main.js` | 创建 Vue 应用、注册 Pinia、加载 KaTeX 和全局样式。 |
-| `frontend/src/App.vue` | 登录态、知识库选择、文档/聊天页签、文档状态轮询、知识库/文档删除总布局。 |
-| `frontend/src/services/api.js` | 带 Cookie 的 fetch 封装和全部后端 API 函数；401 广播全局登出事件。 |
+| `frontend/src/App.vue` | 应用初始化、知识库选择、文档/聊天页签、文档状态轮询、知识库/文档删除总布局。 |
+| `frontend/src/services/api.js` | fetch 封装和全部后端业务 API 函数。 |
 | `frontend/src/stores/knowledgeBase.js` | Pinia 知识库/文档状态；合并相同文档列表请求，处理选择、创建和删除。 |
 | `frontend/src/components/ChatWorkspace.vue` | 会话列表/改名/删除、模型选择、附件预解析、发送、乐观消息、答案 Markdown/citation 展示。 |
 | `frontend/src/components/ImportPanel.vue` | 选择文件/目录、过滤类型和系统文件、两并发上传、文件夹队列、sessionStorage 中断提示。快照不含 File 内容，刷新后必须重新选择。 |
 | `frontend/src/components/DocumentList.vue` | 将扁平文档按 `folder_path` 组装成树形表格，汇总状态/chunk 数，提供文档和目录删除。 |
 | `frontend/src/components/KnowledgeSidebar.vue` | 知识库列表、选择、折叠、刷新、新建和删除入口。 |
-| `frontend/src/components/LoginPanel.vue` | 登录表单和 busy/error 状态。 |
 | `frontend/src/components/CreateKnowledgeBaseDialog.vue` | 知识库名称/描述输入和提交事件。 |
 | `frontend/src/components/DeleteConfirmDialog.vue` | 通用不可撤销删除确认框。 |
 | `frontend/src/utils/markdown.js` | 修正常见 LaTeX 定界符，使用 marked + KaTeX 渲染，再用 DOMPurify 清洗 HTML。 |
@@ -364,7 +362,7 @@ sequenceDiagram
 | `frontend/package-lock.json` | npm 锁文件，固定完整依赖树，不包含业务逻辑。 |
 | `backend/src/rag_knowledge_assistant.egg-info/*` | setuptools 生成的包元数据，不是运行时业务代码。 |
 | `docs/*.md` | 架构与权限设计；包含未来目标，不能全部视为已实现。 |
-| `backend/tests/*.py` | 71 个后端单元/路由测试，覆盖 Agent 兜底、网关参数、入库、解析、删除、认证、会话和 RAG 编排。 |
+| `backend/tests/*.py` | 后端单元/路由测试，覆盖 Agent 兜底、网关参数、入库、解析、删除、公开路由、会话和 RAG 编排。 |
 | `figures/*`、`*.docx` | 示例/报告资产，不参与应用运行。 |
 | `*-server.log`、`.tmp-*`、`frontend/dist` | 运行或构建产物，不属于源码调用链。 |
 
@@ -383,7 +381,7 @@ sequenceDiagram
 11. **fresh DB schema 顺序问题**：`schema.py:34` 在创建 `document_chunks` 表之前执行 `ALTER TABLE document_chunks ADD COLUMN folder_path`。全新数据库没有该表时会直接失败；已有旧表的升级路径可能正常。
 12. **默认配置文字不一致**：`Settings` 代码默认 `retrieval_top_k=100/context_top_k=20`，`.env.example` 和 README 使用 50/8；实际运行取 `.env`，排查效果时必须以运行配置为准。
 13. **CLI 丢失目录层级**：`cli.import_folder()` 虽递归找文件，但调用 `ingest_stream()` 时没有传相对 `folder_path`，因此批量 CLI 导入会把文件都放到知识库根目录，并可能触发同名冲突。
-14. **权限设计只完成个人单账号版本**：当前没有用户表、OIDC、角色、共享总知识库和会话所有者字段；权限设计文档的大部分是未来方案。
+14. **当前没有身份认证**：应用使用固定 `OWNER_ID` 访问单个数据范围，没有用户表、OIDC、角色、共享总知识库和会话所有者字段；权限设计文档的大部分是未来方案。
 15. **跨存储事务非原子**：删除和入库跨 PostgreSQL/MinIO/Qdrant；部分操作虽有清理，但没有 outbox、补偿任务或可重试状态机。
 
 ## 11. 测试结论
@@ -394,4 +392,4 @@ sequenceDiagram
 python -m pytest backend/tests -q -p no:cacheprovider
 ```
 
-结果为 **71 passed**，另有 1 条来自 FastAPI TestClient/httpx 兼容层的弃用警告。测试主要是 mock/单元测试，未覆盖真实 PostgreSQL + MinIO + Qdrant + Ollama 的端到端链路，因此不能发现 fresh DB schema 顺序、真实向量召回质量或模型上下文超限等集成问题。
+结果为 **102 passed**，另有 1 条来自 FastAPI TestClient/httpx 兼容层的弃用警告。测试主要是 mock/单元测试，未覆盖真实 PostgreSQL + MinIO + Qdrant + Ollama 的端到端链路，因此不能发现 fresh DB schema 顺序、真实向量召回质量或模型上下文超限等集成问题。

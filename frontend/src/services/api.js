@@ -13,7 +13,7 @@ const browserIsLoopback = browserHost === '127.0.0.1' || browserHost === 'localh
 const API_BASE_URL = loopbackApi && !browserIsLoopback ? '' : configuredApiBase
 
 async function request(path, init) {
-  const response = await fetch(`${API_BASE_URL}${path}`, { credentials: 'include', ...init })
+  const response = await fetch(`${API_BASE_URL}${path}`, init)
   if (!response.ok) {
     let message = `请求失败（${response.status}）`
     try {
@@ -24,29 +24,10 @@ async function request(path, init) {
     }
     const error = new Error(message)
     error.status = response.status
-    if (response.status === 401 && !path.startsWith('/api/v1/auth/')) {
-      window.dispatchEvent(new Event('rag:unauthorized'))
-    }
     throw error
   }
   if (response.status === 204) return null
   return response.json()
-}
-
-export function login(username, password) {
-  return request('/api/v1/auth/login', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username, password }),
-  })
-}
-
-export function logout() {
-  return request('/api/v1/auth/logout', { method: 'POST' })
-}
-
-export function getCurrentUser() {
-  return request('/api/v1/auth/me')
 }
 
 export function listKnowledgeBases() {
