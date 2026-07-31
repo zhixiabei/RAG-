@@ -1,6 +1,8 @@
 import unittest
 from unittest.mock import Mock, patch
 
+import httpx
+
 from rag_app.infrastructure.ollama.gateway import OllamaGateway
 from rag_app.infrastructure.openai_compatible.gateway import OpenAICompatibleGateway
 
@@ -96,6 +98,28 @@ class ModelCompletionGatewayTest(unittest.TestCase):
         self.assertEqual(post.call_count, 2)
         self.assertNotIn("response_format", post.call_args.kwargs["json"])
         success.raise_for_status.assert_called_once()
+
+    @patch("rag_app.infrastructure.openai_compatible.gateway.httpx.post")
+    def test_openai_compatible_identifies_chat_timeout(self, post):
+        post.side_effect = httpx.ReadTimeout("timed out")
+        gateway = OpenAICompatibleGateway(
+            "DeepSeek", "https://chat.example/v1", "chat-key", ["chat-model"], "chat-model",
+            "EmbeddingProvider", "https://embed.example/v1", "embed-key", "embed-model",
+        )
+
+        with self.assertRaisesRegex(RuntimeError, "DeepSeek 聊天接口超时"):
+            gateway.complete([{"role": "user", "content": "question"}])
+
+    @patch("rag_app.infrastructure.openai_compatible.gateway.httpx.post")
+    def test_openai_compatible_identifies_embedding_timeout(self, post):
+        post.side_effect = httpx.ReadTimeout("timed out")
+        gateway = OpenAICompatibleGateway(
+            "DeepSeek", "https://chat.example/v1", "chat-key", ["chat-model"], "chat-model",
+            "EmbeddingProvider", "https://embed.example/v1", "embed-key", "embed-model",
+        )
+
+        with self.assertRaisesRegex(RuntimeError, "EmbeddingProvider 接口超时"):
+            gateway.embed(["question"])
 
 
 if __name__ == "__main__":

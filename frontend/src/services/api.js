@@ -1,4 +1,16 @@
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8080').replace(/\/$/, '')
+// Keep production requests same-origin so a remote browser never resolves the
+// backend address against its own localhost. VITE_API_BASE_URL remains an
+// explicit override for deployments that expose the API on another origin.
+const configuredApiBase = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '')
+const browserHost = typeof globalThis.location?.hostname === 'string' ? globalThis.location.hostname : ''
+let loopbackApi = false
+try {
+  loopbackApi = ['127.0.0.1', 'localhost', '[::1]'].includes(new URL(configuredApiBase).hostname)
+} catch {
+  // Relative and invalid overrides are left untouched.
+}
+const browserIsLoopback = browserHost === '127.0.0.1' || browserHost === 'localhost' || browserHost === '[::1]'
+const API_BASE_URL = loopbackApi && !browserIsLoopback ? '' : configuredApiBase
 
 async function request(path, init) {
   const response = await fetch(`${API_BASE_URL}${path}`, { credentials: 'include', ...init })

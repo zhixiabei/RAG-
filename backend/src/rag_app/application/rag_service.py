@@ -1,4 +1,7 @@
+import logging
 import re
+from time import perf_counter
+from typing import Callable, TypeVar
 
 from ..domain.models import Citation, SearchHit
 from ..domain.ports import MetadataRepository
@@ -15,6 +18,35 @@ from agent.query_intent import (
     is_knowledge_catalog_inventory_question,
     needs_knowledge_catalog,
 )
+
+
+logger = logging.getLogger(__name__)
+T = TypeVar("T")
+
+
+class RagStageError(RuntimeError):
+    """Identifies the RAG stage that failed without discarding the root cause."""
+
+    def __init__(self, stage: str, elapsed_seconds: float, cause: Exception):
+        self.stage = stage
+        self.elapsed_seconds = elapsed_seconds
+        self.cause = cause
+        super().__init__(
+            f"{stage}失败（{elapsed_seconds:.2f} 秒）: {type(cause).__name__}: {cause}"
+        )
+
+
+def _run_stage(stage: str, operation: Callable[[], T]) -> T:
+    started_at = perf_counter()
+    try:
+        result = operation()
+    except Exception as exc:
+        elapsed = perf_counter() - started_at
+        logger.exception("RAG 阶段失败 stage=%s elapsed_seconds=%.3f", stage, elapsed)
+        raise RagStageError(stage, elapsed, exc) from exc
+    elapsed = perf_counter() - started_at
+    logger.info("RAG 阶段完成 stage=%s elapsed_seconds=%.3f", stage, elapsed)
+    return result
 
 
 def _lexical_search_terms(query: str) -> list[str]:
@@ -86,10 +118,16 @@ class RagService:
         attachment_context: str = "",
         attachment_citations: list[dict] | None = None,
     ) -> dict:
-        knowledge_base = self.repository.get_knowledge_base(knowledge_base_id)
+        knowledge_base = _run_stage(
+            "读取知识库",
+            lambda: self.repository.get_knowledge_base(knowledge_base_id),
+        )
         if not knowledge_base:
             raise ValueError("知识库不存在")
-        history = self.repository.list_messages(conversation_id)[-12:]
+        history = _run_stage(
+            "读取对话历史",
+            lambda: self.repository.list_messages(conversation_id),
+        )[-12:]
         knowledge_catalog = ""
         catalog_answer = ""
         file_lookup_question = is_knowledge_catalog_file_lookup_question(question) and not attachment_context
@@ -104,7 +142,10 @@ class RagService:
                     history,
                     file_lookup=file_lookup_question,
                 )
-        decision = self.decision_agent.run(question, history)
+        decision = _run_stage(
+            "检索判断",
+            lambda: self.decision_agent.run(question, history),
+        )
         retrieval_used = decision.should_retrieve
         retrieved_hits = []
         relevant_hits = []
@@ -118,11 +159,17 @@ class RagService:
         search_query = question
         if retrieval_used:
             search_query = decision.search_query or question
-            retrieved_hits = self.retrieval_agent.run(knowledge_base, search_query)
-            lexical_hits = self.repository.search_document_chunks(
-                knowledge_base_id,
-                _lexical_search_terms(search_query),
-                self.retrieval_agent.retrieval_top_k,
+            retrieved_hits = _run_stage(
+                "生成查询向量并检索 Qdrant",
+                lambda: self.retrieval_agent.run(knowledge_base, search_query),
+            )
+            lexical_hits = _run_stage(
+                "检索 PostgreSQL 文本",
+                lambda: self.repository.search_document_chunks(
+                    knowledge_base_id,
+                    _lexical_search_terms(search_query),
+                    self.retrieval_agent.retrieval_top_k,
+                ),
             )
             if lexical_hits:
                 vector_chunk_ids = {hit.chunk_id for hit in retrieved_hits}
@@ -132,7 +179,15 @@ class RagService:
                     *(hit for hit in retrieved_hits if hit.chunk_id not in lexical_chunk_ids),
                 ][: self.retrieval_agent.retrieval_top_k]
                 retrieval_fallback = "postgres_lexical" if not vector_chunk_ids else "postgres_lexical_augmented"
-            relevance_result = self.relevance_agent.run(question, retrieved_hits, search_query)
+            relevance_result = _run_stage(
+                "相关性评分",
+                lambda: self.relevance_agent.run(
+                    question,
+                    retrieved_hits,
+                    search_query,
+                    max_candidates=20,
+                ),
+            )
             all_relevant_hits = list(relevance_result.relevant_hits)
             relevant_hits = _select_diverse_hits(all_relevant_hits, self.retrieval_agent.context_top_k)
             hits = relevant_hits
@@ -145,7 +200,10 @@ class RagService:
                 hits = _select_diverse_hits(hits, self.retrieval_agent.context_top_k)
                 relevance_fallback = bool(hits)
             if hits:
-                compression_result = self.compression_agent.run(question, hits, search_query)
+                compression_result = _run_stage(
+                    "上下文压缩",
+                    lambda: self.compression_agent.run(question, hits, search_query),
+                )
                 hits = [hit for hit in hits if hit.chunk_id in compression_result.kept_chunk_ids]
         citations = _deduplicate_citations([
             Citation(
@@ -158,18 +216,30 @@ class RagService:
             ).as_dict()
             for hit in hits
         ] + list(attachment_citations or []))
-        answer = self.answer_agent.run(
-            question,
-            history,
-            hits,
-            retrieval_used,
-            model,
-            context_texts=compression_result.text_by_chunk_id if compression_result else None,
-            knowledge_catalog=knowledge_catalog,
-            catalog_answer=catalog_answer,
-            attachment_context=attachment_context,
+        answer = _run_stage(
+            "生成最终回答",
+            lambda: self.answer_agent.run(
+                question,
+                history,
+                hits,
+                retrieval_used,
+                model,
+                context_texts=compression_result.text_by_chunk_id if compression_result else None,
+                knowledge_catalog=knowledge_catalog,
+                catalog_answer=catalog_answer,
+                attachment_context=attachment_context,
+            ),
         )
-        self.repository.add_message(conversation_id, knowledge_base_id, question, answer, citations)
+        _run_stage(
+            "保存回答",
+            lambda: self.repository.add_message(
+                conversation_id,
+                knowledge_base_id,
+                question,
+                answer,
+                citations,
+            ),
+        )
         return {
             "conversation_id": conversation_id,
             "model": model or self.answer_agent.models.chat_model,
@@ -201,6 +271,7 @@ class RagService:
                     "agent": self.relevance_agent.name,
                     "status": "completed" if retrieval_used else "skipped",
                     "candidate_count": len(retrieved_hits),
+                    "graded_count": len(relevance_result.grades) if relevance_result else 0,
                     "relevant_count": len(all_relevant_hits),
                     "relevant_document_count": len({hit.document_id for hit in all_relevant_hits}),
                     "threshold": self.relevance_agent.threshold,

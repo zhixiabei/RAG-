@@ -3,6 +3,7 @@ import { computed, nextTick, ref, watch } from 'vue'
 import { Bot, BrainCircuit, Check, FileText, LoaderCircle, MessageSquareText, Paperclip, Pencil, Plus, RefreshCw, Send, Trash2, UserRound, X } from 'lucide-vue-next'
 import DeleteConfirmDialog from './DeleteConfirmDialog.vue'
 import { renderMarkdown } from '../utils/markdown'
+import { canRecoverAnswerFailure, recoverCompletedAnswer } from '../utils/chatRecovery'
 import {
   askKnowledgeBase,
   askKnowledgeBaseWithParsedAttachments,
@@ -311,11 +312,12 @@ async function send() {
   if (!canSend.value) return
   const knowledgeBaseId = props.kbId
   let sentAttachments = []
+  let conversationId = activeConversationId.value
+  const previousMessageCount = messages.value.length
   sending.value = true
   error.value = ''
 
   try {
-    let conversationId = activeConversationId.value
     if (!conversationId) {
       const conversation = await createConversation(knowledgeBaseId, value.slice(0, 50))
       if (knowledgeBaseId !== props.kbId) return
@@ -353,9 +355,34 @@ async function send() {
       citations: result.citations || [],
     })
     if (saveFailureCount) attachmentNotice.value = `${saveFailureCount} 个附件未能保存到知识库，但已用于本次回答`
-    await refreshConversations(knowledgeBaseId)
+    try {
+      await refreshConversations(knowledgeBaseId)
+    } catch (refreshFailure) {
+      // The answer is already visible and persisted; sidebar refresh errors are non-fatal.
+      if (refreshFailure?.status === 401) throw refreshFailure
+    }
   } catch (cause) {
     if (knowledgeBaseId === props.kbId) {
+      if (conversationId && canRecoverAnswerFailure(cause)) {
+        const recoveredMessages = await recoverCompletedAnswer({
+          loadMessages: () => listConversationMessages(conversationId),
+          shouldContinue: () => (
+            knowledgeBaseId === props.kbId
+            && activeConversationId.value === conversationId
+          ),
+          previousMessageCount,
+        })
+        if (recoveredMessages) {
+          messages.value = recoveredMessages
+          error.value = ''
+          try {
+            await refreshConversations(knowledgeBaseId)
+          } catch (refreshFailure) {
+            if (refreshFailure?.status === 401) error.value = refreshFailure.message
+          }
+          return
+        }
+      }
       if (sentAttachments.length && !attachments.value.length) attachments.value = sentAttachments
       error.value = cause instanceof Error ? cause.message : '问答失败'
     }

@@ -104,6 +104,7 @@ class RelevanceGradingAgent:
     """Scores retrieved chunks and keeps only evidence that can answer the question."""
 
     name = "relevance_grading"
+    batch_size = 20
 
     def __init__(self, models: ModelGateway, threshold: float = 0.65):
         if not 0 <= threshold <= 1:
@@ -116,17 +117,22 @@ class RelevanceGradingAgent:
         question: str,
         hits: Sequence[SearchHit],
         search_query: str | None = None,
+        max_candidates: int | None = None,
     ) -> RelevanceResult:
         if not hits:
             return RelevanceResult((), (), self.threshold, True)
 
-        alias_to_chunk_id = {f"c{index}": hit.chunk_id for index, hit in enumerate(hits, 1)}
+        graded_hits = list(hits[:max_candidates]) if max_candidates and max_candidates > 0 else list(hits)
+        alias_to_chunk_id = {f"c{index}": hit.chunk_id for index, hit in enumerate(graded_hits, 1)}
         alias_scores = {}
         aliases = list(alias_to_chunk_id)
-        batch_size = 20
-        for start in range(0, len(hits), batch_size):
-            hit_batch = hits[start:start + batch_size]
-            alias_batch = aliases[start:start + batch_size]
+        batches = [
+            (graded_hits[start:start + self.batch_size], aliases[start:start + self.batch_size])
+            for start in range(0, len(graded_hits), self.batch_size)
+        ]
+
+        def grade_batch(batch: tuple[Sequence[SearchHit], Sequence[str]]) -> dict[str, float]:
+            hit_batch, alias_batch = batch
             candidates = [
                 {
                     "chunk_id": alias,
@@ -155,12 +161,20 @@ class RelevanceGradingAgent:
                 reasoning=False,
                 response_schema=RELEVANCE_GRADING_SCHEMA,
             )
-            alias_scores.update(_parse_scores(output, set(alias_batch)))
+            return _parse_scores(output, set(alias_batch))
+
+        for batch in batches:
+            alias_scores.update(grade_batch(batch))
         scores = {
             chunk_id: alias_scores[alias]
             for alias, chunk_id in alias_to_chunk_id.items()
             if alias in alias_scores
         }
-        grades = tuple(RelevanceGrade(hit.chunk_id, scores.get(hit.chunk_id, 0.0)) for hit in hits)
-        relevant_hits = tuple(hit for hit in hits if scores.get(hit.chunk_id, 0.0) >= self.threshold)
-        return RelevanceResult(relevant_hits, grades, self.threshold, len(scores) == len(hits))
+        grades = tuple(RelevanceGrade(hit.chunk_id, scores.get(hit.chunk_id, 0.0)) for hit in graded_hits)
+        relevant_hits = tuple(hit for hit in graded_hits if scores.get(hit.chunk_id, 0.0) >= self.threshold)
+        return RelevanceResult(
+            relevant_hits,
+            grades,
+            self.threshold,
+            len(graded_hits) == len(hits) and len(scores) == len(graded_hits),
+        )

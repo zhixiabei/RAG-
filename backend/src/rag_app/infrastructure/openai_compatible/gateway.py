@@ -47,6 +47,20 @@ class OpenAICompatibleGateway:
             for model in self.models
         ]
 
+    @staticmethod
+    def _post_json(url: str, api_key: str, payload: dict, operation: str) -> httpx.Response:
+        try:
+            return httpx.post(
+                url,
+                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                json=payload,
+                timeout=180,
+            )
+        except httpx.TimeoutException as exc:
+            raise RuntimeError(f"{operation}超时（180 秒）") from exc
+        except httpx.RequestError as exc:
+            raise RuntimeError(f"{operation}连接失败: {exc}") from exc
+
     def complete(
         self,
         messages: list[dict[str, str]],
@@ -69,20 +83,20 @@ class OpenAICompatibleGateway:
             payload["max_tokens"] = max_tokens
         if response_schema is not None:
             payload["response_format"] = {"type": "json_object"}
-        response = httpx.post(
+        response = self._post_json(
             f"{self.base_url}/chat/completions",
-            headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"},
-            json=payload,
-            timeout=180,
+            self.api_key,
+            payload,
+            f"{self.provider_name} 聊天接口",
         )
         if response_schema is not None and response.status_code in {400, 422}:
             # Some OpenAI-compatible providers do not implement response_format.
             payload.pop("response_format", None)
-            response = httpx.post(
+            response = self._post_json(
                 f"{self.base_url}/chat/completions",
-                headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"},
-                json=payload,
-                timeout=180,
+                self.api_key,
+                payload,
+                f"{self.provider_name} 聊天接口",
             )
         response.raise_for_status()
         choices = response.json().get("choices") or []
@@ -96,11 +110,11 @@ class OpenAICompatibleGateway:
         batch_size = 32
         for start in range(0, len(texts), batch_size):
             batch = texts[start:start + batch_size]
-            response = httpx.post(
+            response = self._post_json(
                 f"{self.embedding_base_url}/embeddings",
-                headers={"Authorization": f"Bearer {self.embedding_api_key}", "Content-Type": "application/json"},
-                json={"model": self.remote_embedding_model, "input": batch},
-                timeout=180,
+                self.embedding_api_key,
+                {"model": self.remote_embedding_model, "input": batch},
+                f"{self.embedding_provider_name or '远程 embedding'} 接口",
             )
             response.raise_for_status()
             data = sorted(response.json().get("data") or [], key=lambda item: item.get("index", 0))

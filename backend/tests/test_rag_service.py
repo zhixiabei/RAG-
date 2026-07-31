@@ -8,7 +8,7 @@ from agent import (
     RelevanceGradingAgent,
     RetrievalDecisionAgent,
 )
-from rag_app.application.rag_service import RagService
+from rag_app.application.rag_service import RagService, RagStageError
 from rag_app.domain.models import SearchHit
 
 
@@ -402,6 +402,20 @@ class RagServiceTest(unittest.TestCase):
         context_payload = json.loads(answer_messages[-2]["content"].split("\n", 1)[1])
         self.assertLessEqual(len(context_payload["retrieved_context"]), 160)
         self.assertEqual(len(models.completion_calls), 4)
+
+    def test_reports_the_stage_that_timed_out(self):
+        repository = FakeRepository()
+        vectors = FakeVectorStore()
+        models = FakeModelGateway(retrieval_needed=True)
+        service = self.build_service(repository, vectors, models)
+        models.embed = lambda _texts: (_ for _ in ()).throw(TimeoutError("timed out"))
+
+        with self.assertLogs("rag_app.application.rag_service", level="ERROR"):
+            with self.assertRaisesRegex(
+                RagStageError,
+                "生成查询向量并检索 Qdrant失败.*TimeoutError: timed out",
+            ):
+                service.answer("kb-1", "conversation-1", "报销制度是什么？")
 
 
 if __name__ == "__main__":
