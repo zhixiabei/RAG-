@@ -16,6 +16,7 @@ from ..domain.ports import MetadataRepository
 
 logger = logging.getLogger(__name__)
 T = TypeVar("T")
+CONTEXT_HISTORY_MESSAGE_LIMIT = 12
 
 
 class RagStageError(RuntimeError):
@@ -86,7 +87,7 @@ class RagService:
         history = _run_stage(
             "读取对话历史",
             lambda: self.repository.list_messages(conversation_id),
-        )[-12:]
+        )[-CONTEXT_HISTORY_MESSAGE_LIMIT:]
 
         knowledge_catalog = ""
         catalog_answer = ""

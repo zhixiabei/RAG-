@@ -2,7 +2,7 @@ import json
 import unittest
 
 from agent import AnswerAgent, KnowledgeRetrievalAgent, RetrievalDecisionAgent
-from rag_app.application.rag_service import RagService, RagStageError
+from rag_app.application.rag_service import CONTEXT_HISTORY_MESSAGE_LIMIT, RagService, RagStageError
 from rag_app.domain.models import SearchHit
 
 
@@ -81,6 +81,33 @@ class RagServiceTest(unittest.TestCase):
         self.assertEqual(models.embed_calls, [])
         self.assertEqual(vectors.search_calls, [])
         self.assertEqual(len(models.completion_calls), 2)
+
+    def test_only_latest_twelve_messages_are_added_to_model_context(self):
+        history = [
+            {
+                "role": "user" if index % 2 == 0 else "assistant",
+                "content": f"<message-{index:02d}>",
+            }
+            for index in range(CONTEXT_HISTORY_MESSAGE_LIMIT + 2)
+        ]
+        repository = FakeRepository(history)
+        vectors = FakeVectorStore()
+        models = FakeModelGateway(retrieval_needed=False)
+
+        self.build_service(repository, vectors, models).answer(
+            "kb-1", "conversation-1", "current question"
+        )
+
+        self.assertEqual(len(models.completion_calls), 2)
+        decision_prompt = models.completion_calls[0][0][1]["content"]
+        self.assertNotIn("<message-00>", decision_prompt)
+        self.assertNotIn("<message-01>", decision_prompt)
+
+        answer_messages = models.completion_calls[1][0]
+        answer_history = answer_messages[1:1 + CONTEXT_HISTORY_MESSAGE_LIMIT]
+        self.assertEqual(answer_history, history[-CONTEXT_HISTORY_MESSAGE_LIMIT:])
+        self.assertNotIn("<message-00>", str(answer_messages))
+        self.assertNotIn("<message-01>", str(answer_messages))
 
     def test_vectorizes_the_question_and_returns_qdrant_ordered_top_k_chunks(self):
         hits = [
