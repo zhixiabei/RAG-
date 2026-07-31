@@ -68,6 +68,10 @@ def build_services(settings: Settings) -> Services:
         timeout_seconds=settings.qdrant_timeout_seconds,
         upsert_batch_size=settings.qdrant_upsert_batch_size,
         upsert_max_retries=settings.qdrant_upsert_max_retries,
+        hnsw_m=settings.qdrant_hnsw_m,
+        hnsw_ef_construct=settings.qdrant_hnsw_ef_construct,
+        hnsw_full_scan_threshold=settings.qdrant_hnsw_full_scan_threshold,
+        search_hnsw_ef=settings.qdrant_search_hnsw_ef,
     )
     if settings.model_mode == "local":
         models = OllamaGateway(settings.ollama_url, settings.ollama_chat_model, settings.ollama_embedding_model)

@@ -9,6 +9,8 @@ from ...domain.models import SearchHit
 
 
 class QdrantVectorStore:
+    payload_index_fields = ("knowledge_base_id", "document_id", "node_id")
+
     def __init__(
         self,
         url: str,
@@ -16,25 +18,83 @@ class QdrantVectorStore:
         timeout_seconds: float = 30.0,
         upsert_batch_size: int = 32,
         upsert_max_retries: int = 2,
+        hnsw_m: int = 16,
+        hnsw_ef_construct: int = 128,
+        hnsw_full_scan_threshold: int = 10_000,
+        search_hnsw_ef: int = 64,
     ):
         self.collection = collection
         self.client = QdrantClient(url=url, timeout=timeout_seconds)
         self.upsert_batch_size = max(1, upsert_batch_size)
         self.upsert_max_retries = max(0, upsert_max_retries)
+        self.hnsw_m = max(4, hnsw_m)
+        self.hnsw_ef_construct = max(self.hnsw_m, hnsw_ef_construct)
+        self.hnsw_full_scan_threshold = max(0, hnsw_full_scan_threshold)
+        self.search_hnsw_ef = max(1, search_hnsw_ef)
+        self._collection_configured = False
 
     def check_connection(self) -> None:
         self.client.get_collections()
+        if self.client.collection_exists(self.collection):
+            self._configure_existing_collection(self.client.get_collection(self.collection))
 
     def ensure_collection(self, vector_size: int) -> None:
         if not self.client.collection_exists(self.collection):
             self.client.create_collection(
                 collection_name=self.collection,
                 vectors_config=models.VectorParams(size=vector_size, distance=models.Distance.COSINE),
+                hnsw_config=self._hnsw_config(),
             )
+            payload_schema = {}
+        else:
+            collection = self.client.get_collection(self.collection)
+            if collection.config.params.vectors.size != vector_size:
+                raise RuntimeError("Qdrant collection 向量维度与 embedding 模型不一致")
+            if not self._collection_configured:
+                self._configure_existing_collection(collection)
             return
-        collection = self.client.get_collection(self.collection)
-        if collection.config.params.vectors.size != vector_size:
-            raise RuntimeError("Qdrant collection 向量维度与 embedding 模型不一致")
+        self._ensure_payload_indexes(payload_schema)
+        self._collection_configured = True
+
+    def _configure_existing_collection(self, collection: Any) -> None:
+        if not self._uses_configured_hnsw(collection):
+            self.client.update_collection(
+                collection_name=self.collection,
+                hnsw_config=self._hnsw_config(),
+            )
+        self._ensure_payload_indexes(collection.payload_schema or {})
+        self._collection_configured = True
+
+    def _hnsw_config(self) -> models.HnswConfigDiff:
+        return models.HnswConfigDiff(
+            m=self.hnsw_m,
+            ef_construct=self.hnsw_ef_construct,
+            full_scan_threshold=self.hnsw_full_scan_threshold,
+        )
+
+    def _uses_configured_hnsw(self, collection: Any) -> bool:
+        current = getattr(getattr(collection, "config", None), "hnsw_config", None)
+        return current is not None and all(
+            getattr(current, field, None) == expected
+            for field, expected in (
+                ("m", self.hnsw_m),
+                ("ef_construct", self.hnsw_ef_construct),
+                ("full_scan_threshold", self.hnsw_full_scan_threshold),
+            )
+        )
+
+    def _ensure_payload_indexes(self, payload_schema: Any) -> None:
+        indexed_fields = set(payload_schema) if isinstance(payload_schema, dict) else set()
+        for field in self.payload_index_fields:
+            if field in indexed_fields:
+                continue
+            self.client.create_payload_index(
+                collection_name=self.collection,
+                field_name=field,
+                field_schema=models.PayloadSchemaType.KEYWORD,
+                # Index construction may take time for an existing large collection.
+                wait=False,
+            )
 
     def upsert(self, points: list[dict[str, Any]], vectors: list[list[float]]) -> None:
         for start in range(0, len(points), self.upsert_batch_size):
@@ -64,6 +124,7 @@ class QdrantVectorStore:
             collection_name=self.collection,
             query=vector,
             query_filter=models.Filter(must=[models.FieldCondition(key="knowledge_base_id", match=models.MatchValue(value=knowledge_base_id))]),
+            search_params=models.SearchParams(hnsw_ef=self.search_hnsw_ef, exact=False),
             limit=limit,
             with_payload=True,
         )

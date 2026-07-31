@@ -23,6 +23,10 @@ class Settings(BaseSettings):
     qdrant_timeout_seconds: float = 30.0
     qdrant_upsert_batch_size: int = 32
     qdrant_upsert_max_retries: int = 2
+    qdrant_hnsw_m: int = 16
+    qdrant_hnsw_ef_construct: int = 128
+    qdrant_hnsw_full_scan_threshold: int = 10_000
+    qdrant_search_hnsw_ef: int = 64
     ingestion_max_concurrency: int = 2
     ingestion_embedding_max_concurrency: int = 1
     ingestion_embedding_batch_size: int = 32
