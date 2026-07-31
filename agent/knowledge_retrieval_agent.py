@@ -4,15 +4,16 @@ from .contracts import ModelGateway, SearchHit, VectorStore
 
 
 class KnowledgeRetrievalAgent:
-    """Embeds a question and retrieves the bounded context used for answering."""
+    """Embeds a question and returns its nearest knowledge-base chunks."""
 
     name = "knowledge_retrieval"
 
-    def __init__(self, vectors: VectorStore, models: ModelGateway, retrieval_top_k: int, context_top_k: int):
+    def __init__(self, vectors: VectorStore, models: ModelGateway, top_k: int):
+        if top_k <= 0:
+            raise ValueError("Top-K 必须大于 0")
         self.vectors = vectors
         self.models = models
-        self.retrieval_top_k = retrieval_top_k
-        self.context_top_k = context_top_k
+        self.top_k = top_k
 
     def run(self, knowledge_base: dict[str, Any], question: str) -> list[SearchHit]:
         if knowledge_base["embedding_model"] != self.models.embedding_model:
@@ -21,4 +22,4 @@ class KnowledgeRetrievalAgent:
                 f"{self.models.embedding_model}，请重新建立知识库并导入文档"
             )
         query_vector = self.models.embed([question])[0]
-        return list(self.vectors.search(knowledge_base["id"], query_vector, self.retrieval_top_k))
+        return list(self.vectors.search(knowledge_base["id"], query_vector, self.top_k))[: self.top_k]

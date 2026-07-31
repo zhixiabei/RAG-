@@ -12,6 +12,7 @@ router = APIRouter()
 
 MAX_CHAT_ATTACHMENTS = 10
 MAX_CHAT_ATTACHMENT_BYTES = 30 * 1024 * 1024
+MAX_CHAT_ATTACHMENT_CONTEXT_CHARS = 12_000
 
 
 def services(request: Request):
@@ -191,7 +192,7 @@ def parse_chat_attachment(request: Request, knowledge_base_id: str, file: Upload
 
     context_parts: list[str] = []
     citations: list[dict] = []
-    remaining_chars = service.settings.rag_context_max_chars
+    remaining_chars = MAX_CHAT_ATTACHMENT_CONTEXT_CHARS
     for chunk in chunks:
         if remaining_chars <= 0:
             break
@@ -230,7 +231,7 @@ def chat_with_parsed_attachments(
     if not conversation or conversation["knowledge_base_id"] != knowledge_base_id:
         raise HTTPException(404, "对话不存在")
 
-    remaining_chars = service.settings.rag_context_max_chars
+    remaining_chars = MAX_CHAT_ATTACHMENT_CONTEXT_CHARS
     context_parts: list[str] = []
     citations: list[dict] = []
     attachment_names: list[str] = []
@@ -285,7 +286,7 @@ def chat_with_attachments(
     context_parts: list[str] = []
     citations: list[dict] = []
     total_bytes = 0
-    remaining_chars = service.settings.rag_context_max_chars
+    remaining_chars = MAX_CHAT_ATTACHMENT_CONTEXT_CHARS
     try:
         for file_index, file in enumerate(files):
             file_name = Path(file.filename or "").name

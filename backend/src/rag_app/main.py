@@ -20,9 +20,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from agent import (
     AnswerAgent,
-    ContextCompressionAgent,
     KnowledgeRetrievalAgent,
-    RelevanceGradingAgent,
     RetrievalDecisionAgent,
 )
 from .api.routes import router
@@ -93,11 +91,8 @@ def build_services(settings: Settings) -> Services:
     retrieval_agent = KnowledgeRetrievalAgent(
         vectors,
         models,
-        settings.rag_retrieval_top_k,
-        settings.rag_context_top_k,
+        settings.rag_top_k,
     )
-    relevance_agent = RelevanceGradingAgent(models, settings.rag_relevance_threshold)
-    compression_agent = ContextCompressionAgent(models, settings.rag_context_max_chars)
     answer_agent = AnswerAgent(models)
     ingestion = IngestionService(
         repository,
@@ -117,7 +112,7 @@ def build_services(settings: Settings) -> Services:
         models=models,
         ingestion=ingestion,
         deletion=DeletionService(repository, objects, vectors, ingestion.cancel),
-        rag=RagService(repository, decision_agent, retrieval_agent, relevance_agent, compression_agent, answer_agent),
+        rag=RagService(repository, decision_agent, retrieval_agent, answer_agent),
     )
 
 

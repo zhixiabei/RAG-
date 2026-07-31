@@ -22,21 +22,21 @@ class FakeVectors:
 
 
 class KnowledgeRetrievalAgentTest(unittest.TestCase):
-    def test_returns_all_retrieval_candidates(self):
+    def test_returns_similarity_ordered_top_k_candidates(self):
         hits = [
             SearchHit(f"chunk-{index}", "doc-1", "kb-1", "制度.pdf", f"内容 {index}", 0.9)
             for index in range(4)
         ]
         vectors = FakeVectors(hits)
-        agent = KnowledgeRetrievalAgent(vectors, FakeModels(), retrieval_top_k=10, context_top_k=2)
+        agent = KnowledgeRetrievalAgent(vectors, FakeModels(), top_k=2)
 
         result = agent.run({"id": "kb-1", "embedding_model": "test-embedding"}, "报销制度")
 
-        self.assertEqual(len(result), 4)
-        self.assertEqual(vectors.calls, [("kb-1", [0.1, 0.2], 10)])
+        self.assertEqual(len(result), 2)
+        self.assertEqual(vectors.calls, [("kb-1", [0.1, 0.2], 2)])
 
     def test_rejects_incompatible_embedding_model(self):
-        agent = KnowledgeRetrievalAgent(FakeVectors([]), FakeModels(), 10, 2)
+        agent = KnowledgeRetrievalAgent(FakeVectors([]), FakeModels(), 2)
 
         with self.assertRaisesRegex(RuntimeError, "embedding 模型"):
             agent.run({"id": "kb-1", "embedding_model": "old-embedding"}, "问题")

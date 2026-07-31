@@ -1,16 +1,14 @@
 # RAG 项目运行机制与代码分析
 
-本文以当前代码为准，不以设计文档中的旧流程为准。当前实现不是“三阶段 Agent”，而是由应用层固定编排的五阶段链路：
+本文以当前代码为准，不以设计文档中的旧流程为准。当前实现由应用层固定编排三阶段链路：
 
 ```text
 RetrievalDecisionAgent
   -> KnowledgeRetrievalAgent（按需）
-  -> RelevanceGradingAgent（按需）
-  -> ContextCompressionAgent（有相关片段时执行，超预算才调用模型）
   -> AnswerAgent
 ```
 
-核心结论：这些 Agent 不是能互相发消息、自由选工具的自治 Agent。它们是五个普通 Python 对象，由 `RagService.answer()` 依次调用；前一个对象的返回值由 `RagService` 转换后传给下一个对象。
+核心结论：这些 Agent 不是能互相发消息、自由选工具的自治 Agent。它们是三个普通 Python 对象，由 `RagService.answer()` 依次调用；前一个对象的返回值由 `RagService` 转换后传给下一个对象。
 
 ## 1. 总体架构
 
@@ -78,7 +76,7 @@ user: 当前问题
 - 没有对旧会话做摘要，也没有长期记忆抽取。
 - 没有对会话历史做向量化或语义检索。
 - 历史引用保存在数据库和前端，但传给模型时只传 `role/content`，不传历史 citation 结构。
-- 只限制历史消息条数，不限制历史总 token/字符；`RAG_CONTEXT_MAX_CHARS` 只约束本轮检索证据，不约束历史和最终 prompt。
+- 只限制历史消息条数，不限制历史总 token/字符；附件正文仍由 API 的固定请求安全上限限制。
 - 失败的请求不会写入记忆，因为写库发生在答案成功生成之后。
 
 ### 2.4 临时附件的记忆边界
@@ -89,43 +87,35 @@ user: 当前问题
 
 ### 3.1 对象装配
 
-`build_services()` 创建一个模型网关、一个 Qdrant 存储对象和五个 Agent，再全部注入 `RagService`（`backend/src/rag_app/main.py:56`）。五个 Agent 共享同一个 `models` 对象，但没有共享可变“记忆板”。
+`build_services()` 创建一个模型网关、一个 Qdrant 存储对象和三个 Agent，再全部注入 `RagService`（`backend/src/rag_app/main.py`）。三个 Agent 共享同一个 `models` 对象，但没有共享可变“记忆板”。
 
 ```mermaid
 flowchart TD
     Main[build_services] --> Models[ModelGateway]
     Main --> Decision[RetrievalDecisionAgent]
     Main --> Retrieval[KnowledgeRetrievalAgent]
-    Main --> Grading[RelevanceGradingAgent]
-    Main --> Compression[ContextCompressionAgent]
     Main --> Answer[AnswerAgent]
     Decision --> Models
     Retrieval --> Models
-    Grading --> Models
-    Compression --> Models
     Answer --> Models
     Main --> Orchestrator[RagService]
     Orchestrator --> Decision
     Orchestrator --> Retrieval
-    Orchestrator --> Grading
-    Orchestrator --> Compression
     Orchestrator --> Answer
 ```
 
 ### 3.2 实际数据传递
 
-1. `DecisionAgent.run(question, history)` 返回 `RetrievalDecision(should_retrieve, search_query)`。
-2. 若需检索，`RetrievalAgent.run(knowledge_base, search_query)` 返回 `list[SearchHit]`。
-3. `RelevanceAgent.run(question, retrieved_hits, search_query)` 返回每个 chunk 的 LLM 评分和过阈值片段。
-4. 先取过阈值片段中的前 `context_top_k` 个，再交给 `CompressionAgent.run()`；后者返回 `chunk_id -> 原文/摘录`。
-5. `AnswerAgent.run()` 接收历史、最终 hits、压缩文本、目录和附件，生成唯一的用户答案。
-6. `RagService` 生成 citation、写数据库并返回 `agent_trace`。
+1. `DecisionAgent.run(question, history)` 返回是否需要检索。
+2. 若需检索，`RetrievalAgent.run(knowledge_base, question)` 将问题 embedding 后调用 Qdrant，直接返回按 cosine 相似度排序的前 `RAG_TOP_K` 个 `SearchHit`。
+3. `AnswerAgent.run()` 接收这些原始 hits、历史、目录和附件，生成唯一的用户答案。
+4. `RagService` 生成 citation、写数据库并返回 `agent_trace`。
 
 因此，“Agent 通信协议”就是 Python 方法参数、dataclass 和 `SearchHit` 协议，不是 HTTP、队列、WebSocket 或 Agent 间自然语言会话。
 
 ### 3.3 模型选择的一个细节
 
-用户在前端选择的 `model` 只传给 `AnswerAgent`。检索决策、相关性评分、上下文压缩都调用模型网关的默认 `chat_model`，不会使用本轮所选模型（`rag_service.py:52-91`）。
+用户在前端选择的 `model` 只传给 `AnswerAgent`；检索使用网关配置的 embedding 模型。
 
 ## 4. 检索之前会发生什么
 
@@ -140,9 +130,9 @@ flowchart TD
 7. 代码正则判断问题是否涉及目录/文件清单。若涉及，先从 PostgreSQL 读取所有文档元数据并生成目录上下文。
 8. 若是纯文件清单/计数问题，代码直接生成确定性 Markdown 答案，并让决策 Agent 跳过检索。
 9. 若是助手身份/模型问题，也直接跳过检索。
-10. 其他问题调用 `RetrievalDecisionAgent`：将历史和当前问题发给默认聊天模型，请它输出 `RETRIEVE/SKIP` 及独立可理解的 `search_query`。
+10. 其他问题调用 `RetrievalDecisionAgent`：将历史和当前问题发给默认聊天模型，请它输出 `RETRIEVE/SKIP`。
 11. 解析模型 JSON；只有明确的 `SKIP` 才跳过。空输出、格式异常或不确定都会保守地进入检索。
-12. 查询改写若丢失原问题中的 `.pdf/.att/.gdb` 等扩展名，代码会把缺失后缀补回。
+12. 需要检索时，直接使用当前问题进入 embedding 和 Qdrant 查询，不使用词法补召回或查询后的 LLM 重排。
 
 到第 12 步结束后，才进入 query embedding 和 Qdrant 查询。
 
@@ -164,42 +154,25 @@ flowchart TD
 
 ## 6. 实际怎样检索
 
-### 6.1 宽召回
+### 6.1 单路向量相似度检索
 
 `KnowledgeRetrievalAgent` 先检查知识库建库时的 embedding 模型是否等于当前网关模型，避免用不同向量空间查询旧索引。然后：
 
 ```text
-search_query -> embedding -> Qdrant cosine query
+question -> embedding -> Qdrant cosine query
              -> filter knowledge_base_id
-             -> top retrieval_top_k
+             -> top RAG_TOP_K
 ```
 
-Qdrant 结果已携带全文和引用元数据，所以问答阶段不再访问 PostgreSQL 的 `document_chunks`，也不读取 MinIO。
+Qdrant 结果已携带全文和引用元数据，所以问答阶段不再访问 PostgreSQL 的 `document_chunks`，也不读取 MinIO。Qdrant 返回顺序就是最终上下文顺序，`KnowledgeRetrievalAgent` 只做 `top_k` 的边界保护。
 
-当前没有 BM25、sparse vector、RRF、关键词召回或精确文件名过滤，属于单路 dense retrieval。
+当前没有宽召回、BM25、sparse vector、RRF、关键词召回或精确文件名过滤，属于单路 dense retrieval。
 
-### 6.2 LLM 相关性过滤
+### 6.2 最终回答与引用
 
-宽召回后的每个候选被改名为 `c1/c2/...`，连同当前问题和改写查询交给 `RelevanceGradingAgent`。模型输出 0~1 分；默认阈值 0.65。无效/缺失评分按 0 处理，所以该阶段失败时是“关闭证据”，不会把未审核片段交给回答模型。
+有证据时，`AnswerAgent` 把 Qdrant 返回的原始 chunks 放入只读 JSON system message，再调用回答模型。无证据但本轮执行过检索且没有附件时，直接返回“知识库中无相关内容。”，不再调用回答模型。
 
-该阶段是评分过滤，不是真正重新排序：通过阈值的片段仍保持 Qdrant 原顺序，然后取前 `context_top_k`。
-
-### 6.3 上下文压缩
-
-先把最终片段格式化为：完整路径、文件名、页码、内容。若总长度不超过 `rag_context_max_chars`，原样通过且不调用压缩模型。
-
-超预算时，压缩 Agent 要求模型抽取连续原文。代码会验证每个摘录必须真实存在于原 chunk；模型改写或幻觉出的文字会被丢弃。之后代码还会：
-
-- 若仅各片段标题/路径等固定头信息已经超预算，从尾部删除片段；
-- 将剩余字符预算平均分给各片段；
-- 模型失败或摘录无效，则在命中查询词附近做确定性窗口截取；
-- 最终再次格式化，确保不超过字符上限。
-
-### 6.4 最终回答与引用
-
-有证据时，`AnswerAgent` 把压缩后的证据放入只读 JSON system message，再调用回答模型。无证据但本轮执行过检索且没有附件时，直接返回“知识库中无相关内容。”，不再调用回答模型。
-
-返回的 citation 是“进入最终上下文的片段来源”，包括 Qdrant cosine `score` 和 LLM `relevance_score`。它不是逐句 claim-to-source 对齐，也不能证明回答实际使用了每个 citation。
+返回的 citation 是“进入最终上下文的片段来源”，包括 Qdrant cosine `score`；`relevance_score` 保留为 `null` 以兼容已有客户端，不再执行 LLM 评分。它不是逐句 claim-to-source 对齐，也不能证明回答实际使用了每个 citation。
 
 ## 7. 用户提问一次后完整发生什么
 
@@ -227,16 +200,12 @@ sequenceDiagram
     opt 目录类问题
         R->>P: 读取文档元数据
     end
-    R->>M: 判断是否检索 + 改写 search_query
+    R->>M: 判断是否检索
     alt 需要检索
-        R->>E: search_query embedding
+        R->>E: question embedding
         E-->>R: query vector
         R->>Q: cosine topK + knowledge_base_id filter
-        Q-->>R: SearchHit candidates
-        R->>M: 候选相关性评分
-        opt 上下文超字符预算
-            R->>M: 抽取连续原文
-        end
+        Q-->>R: 按相似度排序的 Top-K SearchHit
     end
     R->>M: 最终答案（部分特殊分支不调用）
     M-->>R: answer
@@ -255,18 +224,14 @@ sequenceDiagram
 | 纯文件清单/计数 | 0 | 0 | 0 |
 | 问候或基于历史改写 | 2：决策 + 回答 | 0 | 0 |
 | 检索但没有候选 | 1：决策 | 1 | 1 |
-| 有候选、全部低于阈值 | 2：决策 + 评分 | 1 | 1 |
-| 正常短上下文回答 | 3：决策 + 评分 + 回答 | 1 | 1 |
-| 正常长上下文回答 | 4：再加压缩 | 1 | 1 |
+| 正常回答（有或无候选） | 2：决策 + 回答 | 1 | 1 |
 
-上述决策、评分、压缩使用默认聊天模型；只有最后的回答使用用户所选模型。
+决策使用默认聊天模型，只有最后的回答使用用户所选模型；embedding 使用知识库绑定的 embedding 模型。
 
 ## 8. 关键容错与安全边界
 
 - 检索决策异常：默认检索，避免误跳过知识。
-- 相关性评分异常：默认 0 分，避免把未确认材料交给回答 Agent。
-- 压缩异常：捕获异常并确定性截窗，仍保证字符预算。
-- Prompt injection：评分、压缩、回答 prompt 都说明文档内容是只读证据，不执行其中指令；但这仍是 prompt 级防护，不是形式化隔离。
+- Prompt injection：回答 prompt 说明文档内容是只读证据，不执行其中指令；但这仍是 prompt 级防护，不是形式化隔离。
 - 结构化输出：Ollama 收到完整 JSON schema；OpenAI 兼容网关只请求 `json_object`，若服务不支持还会去掉该参数重试，最终靠本地解析兜底。
 - 数据范围：API 通过环境变量 `OWNER_ID` 只访问固定 owner 的知识库，但不验证访问者身份；这不是多用户/OIDC/RBAC 实现。
 - 同步执行：聊天和文档入库都在 HTTP 请求内同步完成，没有后台 worker、任务队列、流式答案或 SSE。
@@ -280,10 +245,8 @@ sequenceDiagram
 | `agent/contracts.py` | 定义 Agent 依赖的最小 `SearchHit`、`ModelGateway`、`VectorStore` Protocol，隔离具体基础设施。 |
 | `agent/query_intent.py` | 用正则识别助手身份、目录元数据需求、纯文件清单问题，提供无需模型的快速分支。 |
 | `agent/context.py` | 统一文件路径和检索上下文格式；生成有长度上限的目录描述；对纯清单问题生成确定性 Markdown。 |
-| `agent/retrieval_decision_agent.py` | 用历史判断 RETRIEVE/SKIP，并把多轮问题改写为独立查询；解析异常时默认检索并保留文件后缀。 |
-| `agent/knowledge_retrieval_agent.py` | 校验 embedding 模型，生成 query embedding，调用 Qdrant 宽召回。 |
-| `agent/relevance_grading_agent.py` | 让 LLM 给每个候选证据评分，兼容几种 JSON/截断输出，按阈值过滤。 |
-| `agent/context_compression_agent.py` | 仅在证据超预算时调用模型抽取连续原文；验证摘录并提供代码截窗兜底。 |
+| `agent/retrieval_decision_agent.py` | 用历史判断 RETRIEVE/SKIP；解析异常时默认检索。 |
+| `agent/knowledge_retrieval_agent.py` | 校验 embedding 模型，将当前问题向量化并调用 Qdrant 返回 `RAG_TOP_K` 个近邻 chunks。 |
 | `agent/answer_agent.py` | 处理身份/目录/无相关内容等确定性分支；否则组装历史、证据、附件、目录并生成唯一答案。 |
 | `agent/__init__.py` | 汇总导出公共 Agent、结果类型和 Protocol。 |
 
@@ -292,7 +255,7 @@ sequenceDiagram
 | 文件 | 功能 |
 | --- | --- |
 | `backend/src/rag_app/main.py` | 应用 composition root：选择本地/远程模型，创建所有存储、服务和 Agent，启动检查、CORS、FastAPI lifespan。 |
-| `backend/src/rag_app/config.py` | 从根目录 `.env` 读取端口、存储、模型、RAG 阈值、并发、固定 owner 和 CORS 配置。 |
+| `backend/src/rag_app/config.py` | 从根目录 `.env` 读取端口、存储、模型、RAG Top-K、并发、固定 owner 和 CORS 配置。 |
 | `backend/src/rag_app/cli.py` | 命令行递归导入本机文件夹；逐文件同步调用入库服务并报告成功/失败。 |
 | `backend/src/rag_app/application/rag_service.py` | 全部 Agent 的确定性编排器；负责历史读取、目录分支、citation、消息持久化和 `agent_trace`。 |
 | `backend/src/rag_app/application/ingestion_service.py` | 上传流大小/路径/重复校验，MinIO 保存、解析、分批 embedding、Qdrant upsert、PG 状态推进和失败清理。 |
@@ -368,21 +331,19 @@ sequenceDiagram
 
 ## 10. 当前实现与文档/理想架构的差异及风险
 
-1. **设计文档过时**：`README` 和设计文档部分位置仍写三阶段 Agent，代码实际为五阶段。
+1. **设计文档过时**：部分旧设计仍描述宽召回、相关性评分和上下文压缩，代码当前采用单路向量 Top-K。
 2. **不是自治 Agent**：没有规划器、工具循环、Agent-to-Agent 消息或并行执行；“Agent”在这里更接近有独立 prompt 的处理阶段。
-3. **上下文预算不完整**：只压缩检索证据，不计算历史、目录、附件和 system prompt 的总 token，长历史仍可能超过模型上下文窗口。
+3. **上下文预算不完整**：检索 chunks 不再做 RAG 字符数压缩，只限制附件请求的固定大小；长历史、目录和多个 chunks 仍可能超过模型上下文窗口。
 4. **历史查询低效**：数据库每轮取出会话全部消息，再在 Python 中 `[-12:]`；长会话应在 SQL 中倒序 limit 后恢复正序。
 5. **附件不具备跨轮原文记忆**：临时正文不持久化，后续只能依赖上一轮答案或重新上传/入库。
-6. **所选模型只影响最终回答**：用户可能以为整条 Agent 流程都切换了模型，实际前三个 LLM Agent仍用默认模型。
-7. **仅 dense 检索**：专业文件名、编号、精确术语可能需要 BM25/sparse/hybrid；相关性 Agent只能过滤已召回内容，无法找回漏召回内容。
-8. **相关性评分不重排**：代码保留 Qdrant 顺序，`context_top_k` 可能截掉评分更高但向量排名靠后的候选。
-9. **引用不是逐句引用**：citation 代表输入证据集合，无法证明答案中的每项陈述对应哪个片段。
-10. **入库实际上同步**：设计文档中的 worker/任务队列/重试尚未实现；大文件上传请求会一直占用连接。
-11. **fresh DB schema 顺序问题**：`schema.py:34` 在创建 `document_chunks` 表之前执行 `ALTER TABLE document_chunks ADD COLUMN folder_path`。全新数据库没有该表时会直接失败；已有旧表的升级路径可能正常。
-12. **默认配置文字不一致**：`Settings` 代码默认 `retrieval_top_k=100/context_top_k=20`，`.env.example` 和 README 使用 50/8；实际运行取 `.env`，排查效果时必须以运行配置为准。
-13. **CLI 丢失目录层级**：`cli.import_folder()` 虽递归找文件，但调用 `ingest_stream()` 时没有传相对 `folder_path`，因此批量 CLI 导入会把文件都放到知识库根目录，并可能触发同名冲突。
-14. **当前没有身份认证**：应用使用固定 `OWNER_ID` 访问单个数据范围，没有用户表、OIDC、角色、共享总知识库和会话所有者字段；权限设计文档的大部分是未来方案。
-15. **跨存储事务非原子**：删除和入库跨 PostgreSQL/MinIO/Qdrant；部分操作虽有清理，但没有 outbox、补偿任务或可重试状态机。
+6. **所选模型只影响最终回答**：用户可能以为 embedding 也随聊天模型切换，实际 embedding 使用知识库绑定的 embedding 配置。
+7. **仅 dense 检索**：专业文件名、编号、精确术语可能需要 BM25/sparse/hybrid；当前 Top-K 无法找回向量漏召回内容。
+8. **引用不是逐句引用**：citation 代表输入证据集合，无法证明答案中的每项陈述对应哪个片段。
+9. **入库实际上同步**：设计文档中的 worker/任务队列/重试尚未实现；大文件上传请求会一直占用连接。
+10. **fresh DB schema 顺序问题**：`schema.py:34` 在创建 `document_chunks` 表之前执行 `ALTER TABLE document_chunks ADD COLUMN folder_path`。全新数据库没有该表时会直接失败；已有旧表的升级路径可能正常。
+11. **CLI 丢失目录层级**：`cli.import_folder()` 虽递归找文件，但调用 `ingest_stream()` 时没有传相对 `folder_path`，因此批量 CLI 导入会把文件都放到知识库根目录，并可能触发同名冲突。
+12. **当前没有身份认证**：应用使用固定 `OWNER_ID` 访问单个数据范围，没有用户表、OIDC、角色、共享总知识库和会话所有者字段；权限设计文档的大部分是未来方案。
+13. **跨存储事务非原子**：删除和入库跨 PostgreSQL/MinIO/Qdrant；部分操作虽有清理，但没有 outbox、补偿任务或可重试状态机。
 
 ## 11. 测试结论
 
@@ -392,4 +353,4 @@ sequenceDiagram
 python -m pytest backend/tests -q -p no:cacheprovider
 ```
 
-结果为 **102 passed**，另有 1 条来自 FastAPI TestClient/httpx 兼容层的弃用警告。测试主要是 mock/单元测试，未覆盖真实 PostgreSQL + MinIO + Qdrant + Ollama 的端到端链路，因此不能发现 fresh DB schema 顺序、真实向量召回质量或模型上下文超限等集成问题。
+结果为 **81 passed**，另有 1 条来自 FastAPI TestClient/httpx 兼容层的弃用警告。测试主要是 mock/单元测试，未覆盖真实 PostgreSQL + MinIO + Qdrant + Ollama 的端到端链路，因此不能发现 fresh DB schema 顺序、真实向量召回质量或模型上下文超限等集成问题。

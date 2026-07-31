@@ -44,9 +44,6 @@ class Settings(BaseSettings):
     remote_embedding_base_url: str = ""
     remote_embedding_api_key: str = ""
     remote_embedding_model: str = ""
-    rag_retrieval_top_k: int = 100
-    rag_context_top_k: int = 50
-    rag_relevance_threshold: float = 0.65
-    rag_context_max_chars: int = 30_000
+    rag_top_k: int = 10
     owner_id: str = "personal"
     cors_origins: str = "http://127.0.0.1:5173,http://localhost:5173"

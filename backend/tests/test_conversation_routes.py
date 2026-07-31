@@ -81,7 +81,6 @@ class ConversationRoutesTest(unittest.TestCase):
             rag=SimpleNamespace(answer=answer),
             settings=SimpleNamespace(
                 owner_id="personal",
-                rag_context_max_chars=12000,
                 max_document_bytes=0,
             ),
         )

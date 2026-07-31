@@ -31,7 +31,7 @@ class Citation:
     title: str
     page_number: int | None
     score: float
-    relevance_score: float
+    relevance_score: float | None = None
 
     def as_dict(self) -> dict[str, Any]:
         return {

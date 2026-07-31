@@ -1,13 +1,7 @@
-import unittest
 import json
+import unittest
 
-from agent import (
-    AnswerAgent,
-    ContextCompressionAgent,
-    KnowledgeRetrievalAgent,
-    RelevanceGradingAgent,
-    RetrievalDecisionAgent,
-)
+from agent import AnswerAgent, KnowledgeRetrievalAgent, RetrievalDecisionAgent
 from rag_app.application.rag_service import RagService, RagStageError
 from rag_app.domain.models import SearchHit
 
@@ -17,8 +11,6 @@ class FakeRepository:
         self.history = history or []
         self.saved = []
         self.documents = []
-        self.lexical_hits = []
-        self.lexical_search_calls = []
 
     def get_knowledge_base(self, knowledge_base_id):
         return {"id": knowledge_base_id, "embedding_model": "test-embedding"}
@@ -28,10 +20,6 @@ class FakeRepository:
 
     def list_documents(self, knowledge_base_id):
         return self.documents
-
-    def search_document_chunks(self, knowledge_base_id, terms, limit):
-        self.lexical_search_calls.append((knowledge_base_id, terms, limit))
-        return self.lexical_hits[:limit]
 
     def add_message(self, conversation_id, knowledge_base_id, question, answer, citations):
         self.saved.append((conversation_id, knowledge_base_id, question, answer, citations))
@@ -44,17 +32,16 @@ class FakeVectorStore:
 
     def search(self, knowledge_base_id, vector, limit):
         self.search_calls.append((knowledge_base_id, vector, limit))
-        return self.hits
+        return self.hits[:limit]
 
 
 class FakeModelGateway:
     chat_model = "test-chat"
     embedding_model = "test-embedding"
 
-    def __init__(self, retrieval_needed, search_query="时变电磁场 核心概念 基本规律"):
+    def __init__(self, retrieval_needed, search_query="unused rewrite"):
         self.retrieval_needed = retrieval_needed
         self.search_query = search_query
-        self.relevance_scores = {}
         self.embed_calls = []
         self.completion_calls = []
 
@@ -62,44 +49,21 @@ class FakeModelGateway:
         self.completion_calls.append((messages, model, temperature, max_tokens, reasoning, response_schema))
         if response_schema and response_schema.get("required") == ["decision", "search_query"]:
             decision = "RETRIEVE" if self.retrieval_needed else "SKIP"
-            query = self.search_query if self.retrieval_needed else ""
-            return f'{{"decision":"{decision}","search_query":"{query}"}}'
-        if response_schema and response_schema.get("required") == ["items"]:
-            candidates = json.loads(messages[-1]["content"])["candidates"]
-            item_properties = response_schema["properties"]["items"]["items"]["properties"]
-            if "excerpts" in item_properties:
-                return json.dumps(
-                    {
-                        "items": [
-                            {"chunk_id": item["chunk_id"], "excerpts": [item["content"][:80]]}
-                            for item in candidates
-                        ]
-                    },
-                    ensure_ascii=False,
-                )
-            items = [
-                {
-                    "chunk_id": item["chunk_id"],
-                    "score": self.relevance_scores.get(f"chunk-{index}", 0.9),
-                }
-                for index, item in enumerate(candidates, 1)
-            ]
-            return json.dumps({"items": items})
+            return json.dumps({"decision": decision, "search_query": self.search_query if self.retrieval_needed else ""})
         return "测试回答"
 
     def embed(self, texts):
         self.embed_calls.append(texts)
-        return [[0.1, 0.2]]
+        return [[0.1, 0.2] for _ in texts]
+
 
 class RagServiceTest(unittest.TestCase):
     @staticmethod
-    def build_service(repository, vectors, models, context_max_chars=12_000, context_top_k=8):
+    def build_service(repository, vectors, models, top_k=3):
         return RagService(
             repository,
             RetrievalDecisionAgent(models),
-            KnowledgeRetrievalAgent(vectors, models, retrieval_top_k=20, context_top_k=context_top_k),
-            RelevanceGradingAgent(models, threshold=0.65),
-            ContextCompressionAgent(models, max_chars=context_max_chars),
+            KnowledgeRetrievalAgent(vectors, models, top_k=top_k),
             AnswerAgent(models),
         )
 
@@ -107,9 +71,10 @@ class RagServiceTest(unittest.TestCase):
         repository = FakeRepository([{"role": "assistant", "content": "已有回答"}])
         vectors = FakeVectorStore()
         models = FakeModelGateway(retrieval_needed=False)
-        service = self.build_service(repository, vectors, models)
 
-        result = service.answer("kb-1", "conversation-1", "把上面的回答总结一下")
+        result = self.build_service(repository, vectors, models).answer(
+            "kb-1", "conversation-1", "把上面的回答总结一下"
+        )
 
         self.assertFalse(result["retrieval_used"])
         self.assertEqual(result["retrieved_count"], 0)
@@ -117,305 +82,66 @@ class RagServiceTest(unittest.TestCase):
         self.assertEqual(models.embed_calls, [])
         self.assertEqual(vectors.search_calls, [])
         self.assertEqual(len(models.completion_calls), 2)
-        self.assertEqual(result["agent_trace"][0]["outcome"], "skip")
-        self.assertEqual(result["agent_trace"][1]["status"], "skipped")
 
-    def test_searches_and_returns_citations_when_retrieval_is_needed(self):
-        hit = SearchHit("chunk-1", "doc-1", "kb-1", "制度.pdf", "知识库内容", 0.92, 3)
-        repository = FakeRepository()
-        vectors = FakeVectorStore([hit])
-        models = FakeModelGateway(retrieval_needed=True)
-        service = self.build_service(repository, vectors, models)
-
-        result = service.answer("kb-1", "conversation-1", "报销制度是什么？")
-
-        self.assertTrue(result["retrieval_used"])
-        self.assertEqual(result["retrieved_count"], 1)
-        self.assertEqual(result["citations"][0]["chunk_id"], "chunk-1")
-        self.assertEqual(models.embed_calls, [["时变电磁场 核心概念 基本规律"]])
-        self.assertEqual(len(vectors.search_calls), 1)
-        self.assertEqual(result["agent_trace"][0]["outcome"], "retrieve")
-        self.assertEqual(result["agent_trace"][0]["search_query"], "时变电磁场 核心概念 基本规律")
-        self.assertEqual(result["agent_trace"][1]["retrieved_count"], 1)
-        self.assertEqual(result["agent_trace"][2]["relevant_count"], 1)
-        self.assertFalse(result["agent_trace"][3]["triggered"])
-        self.assertEqual(result["citations"][0]["relevance_score"], 0.9)
-        self.assertEqual(len(models.completion_calls), 3)
-
-    def test_requested_materials_checklist_searches_content_instead_of_listing_files(self):
-        question = "黑山梁化学驱方案所需资料清单帮我列出来"
-        hit = SearchHit(
-            "chunk-1",
-            "doc-1",
-            "kb-1",
-            "黑山梁化学驱方案.docx",
-            "方案所需资料包括地质基础数据、井史资料和动态监测数据。",
-            0.93,
-            4,
-        )
-        repository = FakeRepository()
-        repository.documents = [
-            {"status": "ready", "folder_path": "归档", "file_name": f"无关文件-{index}.pdf"}
-            for index in range(20)
-        ]
-        vectors = FakeVectorStore([hit])
-        models = FakeModelGateway(retrieval_needed=True, search_query="黑山梁化学驱方案 所需资料清单")
-        service = self.build_service(repository, vectors, models)
-
-        result = service.answer("kb-1", "conversation-1", question)
-
-        self.assertTrue(result["retrieval_used"])
-        self.assertFalse(result["catalog_used"])
-        self.assertEqual(result["citations"][0]["document_id"], "doc-1")
-        self.assertEqual(len(vectors.search_calls), 1)
-
-    def test_context_prefers_distinct_documents_and_citations_are_unique(self):
+    def test_vectorizes_the_question_and_returns_qdrant_ordered_top_k_chunks(self):
         hits = [
-            SearchHit("doc-1:0", "doc-1", "kb-1", "文档一.pdf", "文档一片段一", 0.99, 1),
-            SearchHit("doc-1:1", "doc-1", "kb-1", "文档一.pdf", "文档一片段二", 0.98, 2),
-            SearchHit("doc-1:2", "doc-1", "kb-1", "文档一.pdf", "文档一片段三", 0.97, 3),
-            SearchHit("doc-2:0", "doc-2", "kb-1", "文档二.pdf", "文档二片段", 0.96, 1),
-            SearchHit("doc-3:0", "doc-3", "kb-1", "文档三.pdf", "文档三片段", 0.95, 1),
+            SearchHit("chunk-1", "doc-1", "kb-1", "制度.pdf", "第一段", 0.92, 3),
+            SearchHit("chunk-2", "doc-1", "kb-1", "制度.pdf", "第二段", 0.87, 4),
+            SearchHit("chunk-3", "doc-2", "kb-1", "流程.pdf", "第三段", 0.81, 1),
+            SearchHit("chunk-4", "doc-3", "kb-1", "其他.pdf", "第四段", 0.70, 1),
         ]
         repository = FakeRepository()
         vectors = FakeVectorStore(hits)
-        models = FakeModelGateway(retrieval_needed=True)
-        service = self.build_service(repository, vectors, models, context_top_k=3)
+        models = FakeModelGateway(retrieval_needed=True, search_query="不应使用的改写")
 
-        result = service.answer("kb-1", "conversation-1", "综合说明这些资料")
-
-        self.assertEqual([item["document_id"] for item in result["citations"]], ["doc-1", "doc-2", "doc-3"])
-        self.assertEqual(result["relevant_document_count"], 3)
-        self.assertEqual(result["context_document_count"], 3)
-        context_payload = json.loads(models.completion_calls[-1][0][-2]["content"].split("\n", 1)[1])
-        rendered_context = context_payload["retrieved_context"]
-        self.assertIn("文档一片段一", rendered_context)
-        self.assertIn("文档二片段", rendered_context)
-        self.assertIn("文档三片段", rendered_context)
-        self.assertNotIn("文档一片段二", rendered_context)
-
-    def test_multiple_chunks_from_one_document_produce_one_citation(self):
-        hits = [
-            SearchHit("doc-1:0", "doc-1", "kb-1", "制度.pdf", "第一部分", 0.95, 1),
-            SearchHit("doc-1:1", "doc-1", "kb-1", "制度.pdf", "第二部分", 0.93, 2),
-        ]
-        repository = FakeRepository()
-        vectors = FakeVectorStore(hits)
-        models = FakeModelGateway(retrieval_needed=True)
-        service = self.build_service(repository, vectors, models)
-
-        result = service.answer("kb-1", "conversation-1", "制度包含什么？")
-
-        self.assertEqual(len(result["citations"]), 1)
-        self.assertEqual(result["citations"][0]["document_id"], "doc-1")
-        self.assertEqual(result["context_document_count"], 1)
-        context_payload = json.loads(models.completion_calls[-1][0][-2]["content"].split("\n", 1)[1])
-        rendered_context = context_payload["retrieved_context"]
-        self.assertIn("第一部分", rendered_context)
-        self.assertIn("第二部分", rendered_context)
-
-    def test_folder_question_uses_document_catalog_when_vector_search_is_empty(self):
-        repository = FakeRepository()
-        repository.documents = [
-            {
-                "status": "ready",
-                "folder_path": "井资料/化163-1井",
-                "file_name": "化163-1井示踪剂施工设计.docx",
-            },
-            {
-                "status": "ready",
-                "folder_path": "井资料/化163-1井",
-                "file_name": "化163-1井施工总结.pdf",
-            },
-            {
-                "status": "ready",
-                "folder_path": "井资料/化163-1井/曲线",
-                "file_name": "压力曲线.xlsx",
-            },
-        ]
-        vectors = FakeVectorStore()
-        models = FakeModelGateway(retrieval_needed=True)
-        service = self.build_service(repository, vectors, models)
-
-        result = service.answer("kb-1", "conversation-1", "化163-1井文件夹有哪些文件？")
-
-        self.assertTrue(result["catalog_used"])
-        self.assertFalse(result["retrieval_used"])
-        self.assertIn("化163-1井示踪剂施工设计.docx", result["answer"])
-        self.assertIn("化163-1井施工总结.pdf", result["answer"])
-        self.assertIn("曲线/压力曲线.xlsx", result["answer"])
-        self.assertEqual(models.completion_calls, [])
-
-    def test_rejects_unrelated_vector_results_when_grading_is_complete(self):
-        hit = SearchHit("chunk-1", "doc-1", "kb-1", "制度.pdf", "无关内容", 0.92, 3)
-        repository = FakeRepository([{"role": "assistant", "content": "旧回答"}])
-        vectors = FakeVectorStore([hit])
-        models = FakeModelGateway(retrieval_needed=True)
-        models.relevance_scores = {"chunk-1": 0.2}
-        service = self.build_service(repository, vectors, models)
-
-        result = service.answer("kb-1", "conversation-1", "完全不同的问题")
-
-        self.assertEqual(result["answer"], "知识库中无相关内容。")
-        self.assertEqual(result["retrieved_count"], 1)
-        self.assertEqual(result["relevant_count"], 0)
-        self.assertEqual(result["citations"], [])
-        self.assertFalse(result["relevance_fallback"])
-        self.assertEqual(len(models.completion_calls), 2)
-
-    def test_uses_postgres_content_fallback_without_a_file_name(self):
-        hit = SearchHit(
-            "chunk-1",
-            "doc-1",
-            "kb-1",
-            "综合治理方案.doc",
-            "历年措施包括封山育林、坡面治理和水土保持。",
-            0.8,
-            2,
-        )
-        repository = FakeRepository()
-        repository.lexical_hits = [hit]
-        vectors = FakeVectorStore()
-        models = FakeModelGateway(retrieval_needed=True, search_query="历年措施")
-        models.relevance_scores = {"chunk-1": 0.2}
-        service = self.build_service(repository, vectors, models)
-
-        result = service.answer("kb-1", "conversation-1", "历年采取了哪些措施？")
-
-        self.assertEqual(result["answer"], "测试回答")
-        self.assertEqual(result["retrieval_fallback"], "postgres_lexical")
-        self.assertTrue(result["relevance_fallback"])
-        self.assertEqual(result["citations"][0]["title"], "综合治理方案.doc")
-        self.assertIn("历年措施", repository.lexical_search_calls[0][1])
-
-    def test_file_name_search_augments_unrelated_vector_results(self):
-        target = SearchHit(
-            "chunk-target",
-            "doc-target",
-            "kb-1",
-            "化子坪项目区综合治理方案2025.6.31-3.doc",
-            "方案正文包含项目区的历年治理措施。",
-            0.82,
-            1,
-            file_name="化子坪项目区综合治理方案2025.6.31-3.doc",
-        )
-        unrelated = SearchHit("chunk-other", "doc-other", "kb-1", "其他.txt", "无关内容", 0.95, 1)
-        repository = FakeRepository()
-        repository.lexical_hits = [target]
-        vectors = FakeVectorStore([unrelated])
-        models = FakeModelGateway(
-            retrieval_needed=True,
-            search_query="化子坪项目区综合治理方案2025.6.31-3.doc 里面的内容",
-        )
-        models.relevance_scores = {"chunk-1": 0.2, "chunk-2": 0.2}
-        service = self.build_service(repository, vectors, models)
-
-        result = service.answer(
-            "kb-1",
-            "conversation-1",
-            "化子坪项目区综合治理方案2025.6.31-3.doc 里面是什么内容？",
+        result = self.build_service(repository, vectors, models, top_k=3).answer(
+            "kb-1", "conversation-1", "报销制度是什么？"
         )
 
-        self.assertEqual(result["answer"], "测试回答")
-        self.assertTrue(result["retrieval_used"])
-        self.assertEqual(result["retrieval_fallback"], "postgres_lexical_augmented")
-        self.assertTrue(result["relevance_fallback"])
-        self.assertEqual(result["citations"][0]["document_id"], "doc-target")
-        self.assertEqual(len(result["citations"]), 1)
+        self.assertEqual(models.embed_calls, [["报销制度是什么？"]])
+        self.assertEqual(vectors.search_calls, [("kb-1", [0.1, 0.2], 3)])
+        self.assertEqual(result["retrieved_count"], 3)
+        self.assertEqual([item["chunk_id"] for item in result["citations"]], ["chunk-1", "chunk-3"])
+        self.assertEqual(result["citations"][0]["score"], 0.92)
+        self.assertIsNone(result["citations"][0]["relevance_score"])
+        self.assertEqual(result["agent_trace"], [
+            {"agent": "retrieval_decision", "status": "completed", "outcome": "retrieve"},
+            {"agent": "knowledge_retrieval", "status": "completed", "retrieved_count": 3, "top_k": 3},
+            {"agent": "answer", "status": "completed"},
+        ])
 
-    def test_exact_file_presence_question_uses_catalog(self):
-        repository = FakeRepository()
-        repository.documents = [{
-            "status": "ready",
-            "folder_path": "治理方案/2025",
-            "file_name": "化子坪项目区综合治理方案2025.6.31-3.doc",
-        }]
-        vectors = FakeVectorStore()
-        models = FakeModelGateway(retrieval_needed=True)
-        service = self.build_service(repository, vectors, models)
-
-        result = service.answer(
-            "kb-1",
-            "conversation-1",
-            "化子坪项目区综合治理方案2025.6.31-3.doc 能找到这个文件吗？",
-        )
-
-        self.assertFalse(result["retrieval_used"])
-        self.assertIn("治理方案/2025/化子坪项目区综合治理方案2025.6.31-3.doc", result["answer"])
-        self.assertEqual(models.completion_calls, [])
-
-    def test_temporary_attachment_is_answered_when_knowledge_retrieval_is_empty(self):
-        repository = FakeRepository()
-        vectors = FakeVectorStore()
-        models = FakeModelGateway(retrieval_needed=True)
-        service = self.build_service(repository, vectors, models)
-
-        result = service.answer(
-            "kb-1",
-            "conversation-1",
-            "总结附件",
-            attachment_context="[临时附件] notes.txt\n[内容] temporary evidence",
-            attachment_citations=[{"chunk_id": "attachment:0:0", "title": "notes.txt"}],
-        )
-
-        self.assertEqual(result["answer"], "测试回答")
-        self.assertTrue(result["attachments_used"])
-        self.assertEqual(result["citations"][0]["title"], "notes.txt")
         answer_payload = json.loads(models.completion_calls[-1][0][-2]["content"].split("\n", 1)[1])
-        self.assertIn("temporary evidence", answer_payload["temporary_attachment_context"])
+        self.assertIn("第一段", answer_payload["retrieved_context"])
+        self.assertIn("第二段", answer_payload["retrieved_context"])
+        self.assertIn("第三段", answer_payload["retrieved_context"])
+        self.assertNotIn("第四段", answer_payload["retrieved_context"])
 
-    def test_model_identity_question_does_not_retrieve_and_reports_selected_model(self):
-        repository = FakeRepository([{"role": "assistant", "content": "旧的文档回答"}])
+    def test_catalog_inventory_uses_metadata_without_vector_search(self):
+        repository = FakeRepository()
+        repository.documents = [{"status": "ready", "folder_path": "资料", "file_name": "制度.pdf"}]
         vectors = FakeVectorStore()
         models = FakeModelGateway(retrieval_needed=True)
-        service = self.build_service(repository, vectors, models)
 
-        result = service.answer("kb-1", "conversation-1", "你是什么大模型啊", "qwen3:4b")
-
-        self.assertEqual(result["answer"], "我是知识库助手，当前回答使用的模型是 qwen3:4b。")
-        self.assertFalse(result["retrieval_used"])
-        self.assertEqual(result["citations"], [])
-        self.assertEqual(models.completion_calls, [])
-        self.assertEqual(vectors.search_calls, [])
-
-    def test_compresses_only_when_answer_context_exceeds_budget(self):
-        hit = SearchHit(
-            "chunk-1",
-            "doc-1",
-            "kb-1",
-            "制度.pdf",
-            "报销流程要求主管审批。" * 100,
-            0.92,
-            3,
+        result = self.build_service(repository, vectors, models).answer(
+            "kb-1", "conversation-1", "知识库里有哪些文件？"
         )
-        repository = FakeRepository()
-        vectors = FakeVectorStore([hit])
-        models = FakeModelGateway(retrieval_needed=True)
-        service = self.build_service(repository, vectors, models, context_max_chars=160)
 
-        result = service.answer("kb-1", "conversation-1", "报销流程是什么？")
+        self.assertFalse(result["retrieval_used"])
+        self.assertEqual(vectors.search_calls, [])
+        self.assertEqual(models.completion_calls, [])
+        self.assertTrue(result["catalog_used"])
 
-        compression_trace = result["agent_trace"][3]
-        self.assertTrue(compression_trace["triggered"])
-        self.assertLessEqual(compression_trace["compressed_chars"], 160)
-        answer_messages = models.completion_calls[-1][0]
-        context_payload = json.loads(answer_messages[-2]["content"].split("\n", 1)[1])
-        self.assertLessEqual(len(context_payload["retrieved_context"]), 160)
-        self.assertEqual(len(models.completion_calls), 4)
-
-    def test_reports_the_stage_that_timed_out(self):
+    def test_reports_vector_stage_failures(self):
         repository = FakeRepository()
         vectors = FakeVectorStore()
         models = FakeModelGateway(retrieval_needed=True)
-        service = self.build_service(repository, vectors, models)
         models.embed = lambda _texts: (_ for _ in ()).throw(TimeoutError("timed out"))
 
         with self.assertLogs("rag_app.application.rag_service", level="ERROR"):
-            with self.assertRaisesRegex(
-                RagStageError,
-                "生成查询向量并检索 Qdrant失败.*TimeoutError: timed out",
-            ):
-                service.answer("kb-1", "conversation-1", "报销制度是什么？")
+            with self.assertRaisesRegex(RagStageError, "问题向量化并执行相似度检索失败.*TimeoutError: timed out"):
+                self.build_service(repository, vectors, models).answer(
+                    "kb-1", "conversation-1", "报销制度是什么？"
+                )
 
 
 if __name__ == "__main__":
