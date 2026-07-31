@@ -404,7 +404,6 @@ OLLAMA_URL
 OLLAMA_CHAT_MODEL
 OLLAMA_EMBEDDING_MODEL
 RAG_TOP_K
-RAG_FINAL_K
 ```
 
 配置通过根目录 `.env`、服务器 Secret 或环境变量注入，代码不写死服务器地址和凭证。

@@ -353,4 +353,4 @@ sequenceDiagram
 python -m pytest backend/tests -q -p no:cacheprovider
 ```
 
-结果为 **81 passed**，另有 1 条来自 FastAPI TestClient/httpx 兼容层的弃用警告。测试主要是 mock/单元测试，未覆盖真实 PostgreSQL + MinIO + Qdrant + Ollama 的端到端链路，因此不能发现 fresh DB schema 顺序、真实向量召回质量或模型上下文超限等集成问题。
+结果为 **78 passed**，另有 1 条来自 FastAPI TestClient/httpx 兼容层的弃用警告。测试主要是 mock/单元测试，未覆盖真实 PostgreSQL + MinIO + Qdrant + Ollama 的端到端链路，因此不能发现 fresh DB schema 顺序、真实向量召回质量或模型上下文超限等集成问题。

@@ -39,17 +39,16 @@ class FakeModelGateway:
     chat_model = "test-chat"
     embedding_model = "test-embedding"
 
-    def __init__(self, retrieval_needed, search_query="unused rewrite"):
+    def __init__(self, retrieval_needed):
         self.retrieval_needed = retrieval_needed
-        self.search_query = search_query
         self.embed_calls = []
         self.completion_calls = []
 
     def complete(self, messages, model=None, temperature=0.1, max_tokens=None, reasoning=None, response_schema=None):
         self.completion_calls.append((messages, model, temperature, max_tokens, reasoning, response_schema))
-        if response_schema and response_schema.get("required") == ["decision", "search_query"]:
+        if response_schema and response_schema.get("required") == ["decision"]:
             decision = "RETRIEVE" if self.retrieval_needed else "SKIP"
-            return json.dumps({"decision": decision, "search_query": self.search_query if self.retrieval_needed else ""})
+            return json.dumps({"decision": decision})
         return "测试回答"
 
     def embed(self, texts):
@@ -92,7 +91,7 @@ class RagServiceTest(unittest.TestCase):
         ]
         repository = FakeRepository()
         vectors = FakeVectorStore(hits)
-        models = FakeModelGateway(retrieval_needed=True, search_query="不应使用的改写")
+        models = FakeModelGateway(retrieval_needed=True)
 
         result = self.build_service(repository, vectors, models, top_k=3).answer(
             "kb-1", "conversation-1", "报销制度是什么？"

@@ -10,7 +10,6 @@
 agent/
   retrieval_decision_agent.py  判断本轮是否需要检索
   knowledge_retrieval_agent.py 执行知识库向量检索
-  relevance_grading_agent.py   评估候选片段能否回答问题并按阈值过滤
   answer_agent.py              生成唯一的最终回答
 backend/src/rag_app/
   api/              HTTP 路由和请求模型

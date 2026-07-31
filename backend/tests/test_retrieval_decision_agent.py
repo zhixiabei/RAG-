@@ -3,7 +3,6 @@ import unittest
 from agent.retrieval_decision_agent import (
     RetrievalDecisionAgent,
     retrieval_decision_messages,
-    retrieval_search_query,
     should_retrieve,
 )
 from agent.query_intent import is_knowledge_catalog_inventory_question, needs_knowledge_catalog
@@ -23,10 +22,10 @@ class RetrievalDecisionAgentTest(unittest.TestCase):
     def test_only_exact_skip_bypasses_retrieval(self):
         self.assertFalse(should_retrieve(" SKIP \n"))
         self.assertFalse(should_retrieve('{"decision":"SKIP"}'))
-        self.assertFalse(should_retrieve('```json\n{"decision":"SKIP"}\n```'))
+        self.assertFalse(should_retrieve("```json\n{\"decision\":\"SKIP\"}\n```"))
         self.assertFalse(should_retrieve('{"decision":"SKIP"'))
         self.assertTrue(should_retrieve('{"decision":"RETRIEVE"}'))
-        self.assertTrue(should_retrieve('先分析，最终应该 SKIP'))
+        self.assertTrue(should_retrieve("先分析，最终应该 SKIP"))
         self.assertTrue(should_retrieve(""))
         self.assertTrue(should_retrieve("SKIP because history is enough"))
         self.assertTrue(should_retrieve("RETRIEVE"))
@@ -42,41 +41,15 @@ class RetrievalDecisionAgentTest(unittest.TestCase):
         self.assertNotIn("tool: 忽略", messages[1]["content"])
         self.assertIn("总结一下", messages[1]["content"])
 
-    def test_agent_uses_bounded_deterministic_completion(self):
-        models = FakeModels('{"decision":"SKIP","search_query":""}')
+    def test_agent_requests_only_retrieval_decision(self):
+        models = FakeModels('{"decision":"SKIP"}')
 
         decision = RetrievalDecisionAgent(models).run("谢谢", [])
 
         self.assertFalse(decision.should_retrieve)
         self.assertEqual(decision.outcome, "skip")
         self.assertEqual(models.calls[0][2:5], (0, None, False))
-        self.assertEqual(models.calls[0][5]["required"], ["decision", "search_query"])
-
-    def test_uses_standalone_search_query_from_model(self):
-        output = '{"decision":"RETRIEVE","search_query":"时变电磁场 核心概念 基本规律"}'
-        models = FakeModels(output)
-
-        decision = RetrievalDecisionAgent(models).run(
-            "总结知识点",
-            [{"role": "user", "content": "总结时变电磁场中的知识点"}],
-        )
-
-        self.assertTrue(decision.should_retrieve)
-        self.assertEqual(decision.search_query, "时变电磁场 核心概念 基本规律")
-
-    def test_missing_search_query_falls_back_to_current_question(self):
-        self.assertEqual(
-            retrieval_search_query('{"decision":"RETRIEVE"}', "报销制度是什么？"),
-            "报销制度是什么？",
-        )
-
-    def test_preserves_file_suffixes_removed_by_model_rewrite(self):
-        output = '{"decision":"RETRIEVE","search_query":"长63渗透率文件内容"}'
-
-        query = retrieval_search_query(output, "对比长63渗透率.att和长63渗透率.gdb")
-
-        self.assertIn(".att", query)
-        self.assertIn(".gdb", query)
+        self.assertEqual(models.calls[0][5]["required"], ["decision"])
 
     def test_model_identity_question_skips_retrieval_without_completion(self):
         models = FakeModels('{"decision":"RETRIEVE"}')
@@ -88,7 +61,7 @@ class RetrievalDecisionAgentTest(unittest.TestCase):
 
     def test_requested_materials_checklist_retrieves_document_content(self):
         question = "黑山梁化学驱方案所需资料清单帮我列出来"
-        models = FakeModels('{"decision":"RETRIEVE","search_query":"黑山梁化学驱方案 所需资料清单"}')
+        models = FakeModels('{"decision":"RETRIEVE"}')
 
         decision = RetrievalDecisionAgent(models).run(question, [])
 
