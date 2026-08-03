@@ -47,10 +47,10 @@ class DocumentParserSpecialExtensionTest(unittest.TestCase):
         self.assertIsNone(chunks[0].page_number)
         self.assertIn("first\n\nsecond", chunks[0].text)
 
-    def test_att_text_file_is_supported_and_parsed(self):
+    def test_att_text_file_remains_parsable_but_is_not_uploadable(self):
         chunks = self.parser.parse("长63渗透率.att", "渗透率 12.5 mD".encode("utf-8"))
 
-        self.assertTrue(self.parser.supports("长63渗透率.att"))
+        self.assertFalse(self.parser.supports("长63渗透率.att"))
         self.assertTrue(all(len(chunk.text) <= CHUNK_SIZE for chunk in chunks))
         self.assertIn("渗透率 12.5 mD", chunks[0].text)
 
@@ -164,10 +164,10 @@ class DocumentParserSpecialExtensionTest(unittest.TestCase):
         self.assertIn("图层名称: 比例尺", text)
         self.assertIn("属性记录数: 0", text)
 
-    def test_gdb_binary_file_is_supported_and_keeps_file_name(self):
+    def test_gdb_binary_file_remains_parsable_but_is_not_uploadable(self):
         chunks = self.parser.parse("长63渗透率.gdb", b"\x00\x01permeability=12.5\x00\x02")
 
-        self.assertTrue(self.parser.supports("长63渗透率.GDB"))
+        self.assertFalse(self.parser.supports("长63渗透率.GDB"))
         self.assertEqual(len(chunks), 1)
         self.assertIn("长63渗透率.gdb", chunks[0].text)
         self.assertIn("permeability=12.5", chunks[0].text)
@@ -229,6 +229,32 @@ class DocumentParserSpecialExtensionTest(unittest.TestCase):
         self.assertEqual(chunks[0].text[-CHUNK_OVERLAP:], chunks[1].text[:CHUNK_OVERLAP])
         self.assertTrue(all(chunk.page_number is None for chunk in chunks))
         self.assertTrue(all(chunk.section_path is None for chunk in chunks))
+
+    def test_uploadable_formats_are_restricted(self):
+        allowed = [
+            "records.jsonl",
+            "data.JSON",
+            "report.pdf",
+            "report.docx",
+            "table.xlsx",
+            "slides.pptx",
+            "notes.txt",
+            "readme.md",
+            "readme.markdown",
+        ]
+        rejected = ["legacy.doc", "table.xls", "data.csv", "map.gdb", "README"]
+
+        self.assertTrue(all(self.parser.supports(name) for name in allowed))
+        self.assertTrue(all(not self.parser.supports(name) for name in rejected))
+
+    def test_jsonl_is_parsed_as_individual_json_records(self):
+        chunks = self.parser.parse(
+            "records.jsonl",
+            '{"井号":"化31"}\n{"产量":12}\n'.encode("utf-8"),
+        )
+
+        self.assertEqual(len(chunks), 1)
+        self.assertEqual(chunks[0].text, '{"井号": "化31"}\n{"产量": 12}')
 
 
 if __name__ == "__main__":

@@ -4,6 +4,7 @@ import { Bot, BrainCircuit, Check, FileText, LoaderCircle, MessageSquareText, Pa
 import DeleteConfirmDialog from './DeleteConfirmDialog.vue'
 import { renderMarkdown } from '../utils/markdown'
 import { canRecoverAnswerFailure, recoverCompletedAnswer } from '../utils/chatRecovery'
+import { SUPPORTED_DOCUMENT_ACCEPT, isSupportedDocument } from '../utils/supportedDocuments'
 import {
   askKnowledgeBase,
   askKnowledgeBaseWithParsedAttachments,
@@ -54,17 +55,6 @@ const canSend = computed(() => (
   && attachmentsReady.value
 ))
 
-const SUPPORTED_EXTENSIONS = new Set([
-  '', '.pdf', '.doc', '.docx', '.pptx', '.xlsx', '.xlsm', '.xls', '.csv',
-  '.md', '.markdown', '.txt', '.html', '.htm', '.xml', '.json',
-  '.dll', '.gdb', '.att', '.ptpt', '.jcpt', '.stpt', '.ppt', '.lst',
-])
-
-function fileExtension(name) {
-  const index = name.lastIndexOf('.')
-  return index > 0 ? name.slice(index).toLowerCase() : ''
-}
-
 async function parseAttachment(entry, knowledgeBaseId) {
   try {
     const parsed = await parseChatAttachment(knowledgeBaseId, entry.file)
@@ -98,7 +88,7 @@ function chooseAttachments(event) {
   let skipped = 0
   for (const file of selected) {
     const identity = `${file.name}:${file.size}:${file.lastModified}`
-    if (!SUPPORTED_EXTENSIONS.has(fileExtension(file.name)) || existing.has(identity) || attachments.value.length + next.length >= 10) {
+    if (!isSupportedDocument(file.name) || existing.has(identity) || attachments.value.length + next.length >= 10) {
       skipped++
       continue
     }
@@ -475,7 +465,7 @@ async function send() {
         <div v-if="sending" class="typing"><span /><span /><span />正在判断和组织答案</div>
       </div>
       <div class="chat-composer">
-        <input ref="attachmentInput" class="hidden-input" type="file" multiple @change="chooseAttachments" />
+        <input ref="attachmentInput" class="hidden-input" type="file" multiple :accept="SUPPORTED_DOCUMENT_ACCEPT" @change="chooseAttachments" />
         <div v-if="attachments.length" class="attachment-list">
           <div v-for="(attachment, index) in attachments" :key="attachment.id" class="attachment-chip" :class="`attachment-${attachment.status}`">
             <LoaderCircle v-if="attachment.status === 'parsing'" :size="14" class="spinning" />

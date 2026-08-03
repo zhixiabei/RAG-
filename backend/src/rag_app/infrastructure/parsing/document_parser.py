@@ -20,21 +20,27 @@ from ...domain.models import ParsedChunk
 
 SUPPORTED_SUFFIXES = frozenset(
     {
+        ".jsonl",
+        ".json",
         ".pdf",
-        ".doc",
         ".docx",
         ".pptx",
         ".xlsx",
-        ".xlsm",
-        ".xls",
-        ".csv",
         ".md",
         ".markdown",
         ".txt",
+    }
+)
+
+PARSABLE_SUFFIXES = SUPPORTED_SUFFIXES | frozenset(
+    {
+        ".doc",
+        ".xlsm",
+        ".xls",
+        ".csv",
         ".html",
         ".htm",
         ".xml",
-        ".json",
         ".dll",
         ".gdb",
         ".att",
@@ -178,7 +184,7 @@ class DocumentParser:
 
     def parse_stream(self, file_name: str, stream: BinaryIO) -> list[ParsedChunk]:
         suffix = Path(file_name).suffix.lower()
-        if suffix not in SUPPORTED_SUFFIXES:
+        if suffix not in PARSABLE_SUFFIXES:
             raise UnsupportedDocumentTypeError(f"暂不支持的文件类型: {suffix or '无扩展名'}")
 
         stream.seek(0)
@@ -196,6 +202,8 @@ class DocumentParser:
             sources = self._parse_xls(stream.read())
         elif suffix == ".csv":
             sources = self._parse_csv(stream.read())
+        elif suffix == ".jsonl":
+            sources = self._parse_jsonl(stream.read())
         elif suffix == ".json":
             sources = self._parse_json(stream.read())
         elif suffix == ".xml":
@@ -584,6 +592,18 @@ class DocumentParser:
     def _parse_json(self, content: bytes) -> list[tuple[int | None, str | None, str]]:
         value = json.loads(_decode_text(content))
         return [(None, None, json.dumps(value, ensure_ascii=False, indent=2, default=str))]
+
+    def _parse_jsonl(self, content: bytes) -> list[tuple[int | None, str | None, str]]:
+        records = []
+        for line_number, line in enumerate(_decode_text(content).splitlines(), start=1):
+            if not line.strip():
+                continue
+            try:
+                value = json.loads(line)
+            except json.JSONDecodeError as exc:
+                raise ValueError(f"JSONL 第 {line_number} 行格式错误") from exc
+            records.append(json.dumps(value, ensure_ascii=False, default=str))
+        return [(None, None, "\n".join(records))]
 
     def _parse_xml(self, content: bytes) -> list[tuple[int | None, str | None, str]]:
         root = ElementTree.fromstring(content)

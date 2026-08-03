@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { AlertTriangle, ChevronRight, FileUp, Folder, FolderOpen, LoaderCircle, UploadCloud, X } from 'lucide-vue-next'
 import { getDocument, uploadDocument } from '../services/api'
+import { SUPPORTED_DOCUMENT_ACCEPT, documentExtension, isSupportedDocument } from '../utils/supportedDocuments'
 
 const props = defineProps({ kbId: { type: String, required: true } })
 const emit = defineEmits(['started', 'completed'])
@@ -154,12 +155,6 @@ function toggleFolder(folderId) {
   expandedFolders.value = next
 }
 
-const SUPPORTED_EXTENSIONS = new Set([
-  '', '.pdf', '.doc', '.docx', '.pptx', '.xlsx', '.xlsm', '.xls', '.csv',
-  '.md', '.markdown', '.txt', '.html', '.htm', '.xml', '.json',
-  '.dll', '.gdb', '.att', '.ptpt', '.jcpt', '.stpt', '.ppt', '.lst',
-])
-
 // beforeunload 始终注册，通过 importing 状态决定是否拦截
 function beforeUnloadHandler(event) {
   if (importing.value) {
@@ -256,11 +251,6 @@ watch(() => props.kbId, (newId, oldId) => {
   }
 })
 
-function fileExtension(name) {
-  const index = name.lastIndexOf('.')
-  return index > 0 ? name.slice(index).toLowerCase() : ''
-}
-
 function isSystemFile(file) {
   const path = (file.webkitRelativePath || file.name).replaceAll('\\', '/').toLowerCase()
   const name = file.name.toLowerCase()
@@ -285,8 +275,8 @@ function chooseFiles(event) {
   const typeCounts = new Map()
   let duplicateCount = 0
   files.value = selected.filter((file) => {
-    const extension = fileExtension(file.name)
-    if (isSystemFile(file) || !SUPPORTED_EXTENSIONS.has(extension)) {
+    const extension = documentExtension(file.name)
+    if (isSystemFile(file) || !isSupportedDocument(file.name)) {
       const label = isSystemFile(file) ? '系统文件' : (extension || '无扩展名')
       typeCounts.set(label, (typeCounts.get(label) || 0) + 1)
       return false
@@ -469,6 +459,7 @@ async function startImport() {
       class="hidden-input"
       type="file"
       multiple
+      :accept="SUPPORTED_DOCUMENT_ACCEPT"
       @change="chooseFiles"
     />
     <input
@@ -478,6 +469,7 @@ async function startImport() {
       multiple
       webkitdirectory
       directory
+      :accept="SUPPORTED_DOCUMENT_ACCEPT"
       @change="chooseFiles"
     />
     <div class="import-actions">
