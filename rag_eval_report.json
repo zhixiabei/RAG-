@@ -1,0 +1,337 @@
+{
+  "dataset": "D:\\startwell\\RAG\\heishanliang_rag_eval_v1.0.0.jsonl",
+  "knowledge_base_id": "9b3260db-27a6-4993-a6c3-da95bbe44dd2",
+  "base_url": "http://127.0.0.1:8080",
+  "model": null,
+  "evaluated_at": "2026-08-03T06:01:54.121808+00:00",
+  "min_answer_f1": 0.35,
+  "source_id_check_skipped": false,
+  "summary": {
+    "sample_count": 9,
+    "completed_count": 9,
+    "error_count": 0,
+    "passed_count": 0,
+    "pass_rate": 0.0,
+    "document_hit_rate": 0.0,
+    "chunk_hit_rate": 0.0,
+    "refusal_accuracy": 0.8889,
+    "average_answer_char_f1": 0.3791,
+    "average_keyword_recall": 0.875
+  },
+  "results": [
+    {
+      "question_id": "q0001",
+      "question": "化31井开展能谱示踪同位素吸水剖面测井的目的是什么？",
+      "question_type": "direct_lookup",
+      "difficulty": "easy",
+      "passed": false,
+      "expected_refusal": false,
+      "refusal_detected": false,
+      "refusal_correct": true,
+      "document_hit": false,
+      "chunk_hit": false,
+      "source_id_check_skipped": false,
+      "answer_char_f1": 0.5641,
+      "keyword_recall": 0.6667,
+      "retrieval_used": true,
+      "retrieved_count": 10,
+      "retrieved_document_ids": [
+        "2e91d4d6-9c46-4930-90cb-2a515ea4fb08",
+        "41f93cdf-6e84-473f-9e99-3c49328a5d4b",
+        "49a1cd7d-d148-4d9a-8738-62610fbe46dc",
+        "84cf3524-5b93-4603-b9c5-7a2ccb23201d",
+        "e3ff51fe-46fa-4a96-bb03-4fab852d70a4"
+      ],
+      "retrieved_chunk_ids": [
+        "2e91d4d6-9c46-4930-90cb-2a515ea4fb08:0",
+        "41f93cdf-6e84-473f-9e99-3c49328a5d4b:7",
+        "49a1cd7d-d148-4d9a-8738-62610fbe46dc:17",
+        "84cf3524-5b93-4603-b9c5-7a2ccb23201d:0",
+        "e3ff51fe-46fa-4a96-bb03-4fab852d70a4:0"
+      ],
+      "expected_document_ids": [
+        "doc_hua31_report"
+      ],
+      "expected_chunk_ids": [
+        "doc_hua31_report_p63_c01"
+      ],
+      "answer": "根据《化31井解释报告》，化31井开展能谱示踪同位素吸水剖面测井的目的是：\n\n**了解该井正常注水条件下射孔层段的吸水情况。**",
+      "expected_answer": "用于了解化31井在正常注水条件下射孔层段的吸水情况。"
+    },
+    {
+      "question_id": "q0002",
+      "question": "化31井测井时的日注水量和注水压力分别是多少？",
+      "question_type": "numeric",
+      "difficulty": "easy",
+      "passed": false,
+      "expected_refusal": false,
+      "refusal_detected": false,
+      "refusal_correct": true,
+      "document_hit": false,
+      "chunk_hit": false,
+      "source_id_check_skipped": false,
+      "answer_char_f1": 0.5915,
+      "keyword_recall": 1.0,
+      "retrieval_used": true,
+      "retrieved_count": 10,
+      "retrieved_document_ids": [
+        "2e91d4d6-9c46-4930-90cb-2a515ea4fb08",
+        "41f93cdf-6e84-473f-9e99-3c49328a5d4b",
+        "84cf3524-5b93-4603-b9c5-7a2ccb23201d",
+        "e3ff51fe-46fa-4a96-bb03-4fab852d70a4"
+      ],
+      "retrieved_chunk_ids": [
+        "2e91d4d6-9c46-4930-90cb-2a515ea4fb08:0",
+        "41f93cdf-6e84-473f-9e99-3c49328a5d4b:3",
+        "84cf3524-5b93-4603-b9c5-7a2ccb23201d:7",
+        "e3ff51fe-46fa-4a96-bb03-4fab852d70a4:0"
+      ],
+      "expected_document_ids": [
+        "doc_hua31_report"
+      ],
+      "expected_chunk_ids": [
+        "doc_hua31_report_p71_c02"
+      ],
+      "answer": "根据《化31井解释报告.docx》中的解释结论表，化31井测井时的日注水量为 **11.3 m³/d**，注水压力为 **4.8 MPa**。",
+      "expected_answer": "日注水量为11.3m³/d，注水压力为4.8MPa。"
+    },
+    {
+      "question_id": "q0004",
+      "question": "同位素示踪载体的粒径要求是多少？",
+      "question_type": "numeric",
+      "difficulty": "easy",
+      "passed": false,
+      "expected_refusal": false,
+      "refusal_detected": false,
+      "refusal_correct": true,
+      "document_hit": false,
+      "chunk_hit": false,
+      "source_id_check_skipped": false,
+      "answer_char_f1": 0.5185,
+      "keyword_recall": 0.6667,
+      "retrieval_used": true,
+      "retrieved_count": 10,
+      "retrieved_document_ids": [
+        "49a1cd7d-d148-4d9a-8738-62610fbe46dc",
+        "e3ff51fe-46fa-4a96-bb03-4fab852d70a4"
+      ],
+      "retrieved_chunk_ids": [
+        "49a1cd7d-d148-4d9a-8738-62610fbe46dc:25",
+        "e3ff51fe-46fa-4a96-bb03-4fab852d70a4:0"
+      ],
+      "expected_document_ids": [
+        "doc_hua31_report"
+      ],
+      "expected_chunk_ids": [
+        "doc_hua31_report_p151_c04"
+      ],
+      "answer": "根据《化31井解释报告.docx》中的内容，同位素示踪载体的粒径要求是 **100—300μm**。",
+      "expected_answer": "载体粒径要求为100—300μm。"
+    },
+    {
+      "question_id": "q0005",
+      "question": "化31井两个射孔段的吸水表现如何？请结合基础井段数据和解释结论回答。",
+      "question_type": "multi_chunk",
+      "difficulty": "hard",
+      "passed": false,
+      "expected_refusal": false,
+      "refusal_detected": false,
+      "refusal_correct": true,
+      "document_hit": false,
+      "chunk_hit": false,
+      "source_id_check_skipped": false,
+      "answer_char_f1": 0.5119,
+      "keyword_recall": 1.0,
+      "retrieval_used": true,
+      "retrieved_count": 10,
+      "retrieved_document_ids": [
+        "2e91d4d6-9c46-4930-90cb-2a515ea4fb08",
+        "41f93cdf-6e84-473f-9e99-3c49328a5d4b",
+        "49a1cd7d-d148-4d9a-8738-62610fbe46dc",
+        "e3ff51fe-46fa-4a96-bb03-4fab852d70a4"
+      ],
+      "retrieved_chunk_ids": [
+        "2e91d4d6-9c46-4930-90cb-2a515ea4fb08:0",
+        "41f93cdf-6e84-473f-9e99-3c49328a5d4b:6",
+        "49a1cd7d-d148-4d9a-8738-62610fbe46dc:17",
+        "e3ff51fe-46fa-4a96-bb03-4fab852d70a4:0"
+      ],
+      "expected_document_ids": [
+        "doc_hua31_report"
+      ],
+      "expected_chunk_ids": [
+        "doc_hua31_report_p163_c06",
+        "doc_hua31_report_p71_c02"
+      ],
+      "answer": "根据《化31井解释报告》中的解释结论，化31井共有两个射孔段：\n\n- **第一射孔段：1416.0m - 1420.0m**\n- **第二射孔段：1467.0m - 1474.0m**\n\n**吸水表现如下：**\n\n- **第一射孔段（1416.0m - 1420.0m）**：为**吸水层**，对应层段为 **1415.8m - 1420.4m**。该段同位素曲线反应明显，与能谱点测结果吻合，温度曲线负异常明显，属于**孔隙型吸水**，**相对吸水量为100.0%**。\n- **第二射孔段（1467.0m - 1474.0m）**：**不吸水**。\n\n**基础数据补充：** 该井日注水量为 11.3 m³/d，注水压力为 4.8 MPa，测量井段为 1320.0m - 1507.0m。",
+      "expected_answer": "第一个射孔段1416.0m-1420.0m对应的解释吸水层为1415.8m-1420.4m，属于孔隙型吸水，相对吸水量100.0%；第二个射孔段1467.0m-1474.0m不吸水。"
+    },
+    {
+      "question_id": "q0008",
+      "question": "井网调整方案实施后，注采井数比是多少？",
+      "question_type": "numeric",
+      "difficulty": "easy",
+      "passed": false,
+      "expected_refusal": false,
+      "refusal_detected": false,
+      "refusal_correct": true,
+      "document_hit": false,
+      "chunk_hit": false,
+      "source_id_check_skipped": false,
+      "answer_char_f1": 0.2857,
+      "keyword_recall": 1.0,
+      "retrieval_used": true,
+      "retrieved_count": 10,
+      "retrieved_document_ids": [
+        "2e91d4d6-9c46-4930-90cb-2a515ea4fb08",
+        "41f93cdf-6e84-473f-9e99-3c49328a5d4b",
+        "49a1cd7d-d148-4d9a-8738-62610fbe46dc",
+        "6c9bc26c-c926-410d-91a2-63fd5ef32c40"
+      ],
+      "retrieved_chunk_ids": [
+        "2e91d4d6-9c46-4930-90cb-2a515ea4fb08:0",
+        "41f93cdf-6e84-473f-9e99-3c49328a5d4b:6",
+        "49a1cd7d-d148-4d9a-8738-62610fbe46dc:23",
+        "6c9bc26c-c926-410d-91a2-63fd5ef32c40:0"
+      ],
+      "expected_document_ids": [
+        "doc_heishanliang_2015"
+      ],
+      "expected_chunk_ids": [
+        "doc_heishanliang_2015_s11_c05"
+      ],
+      "answer": "根据检索到的资料，井网调整方案实施后，注采井数比为 **1:2.9**。\n\n该信息来源于《黑山梁报告.docx》中的内容：“重新调整井网后，预转注井54口，方案实施后注采井数比1:2.9，很大程度提高水驱控制程度”。",
+      "expected_answer": "方案实施后注采井数比为1:2.9。"
+    },
+    {
+      "question_id": "q0009",
+      "question": "黑山梁研究区2026年的计划新增注水井数量是多少？",
+      "question_type": "no_answer",
+      "difficulty": "hard",
+      "passed": false,
+      "expected_refusal": true,
+      "refusal_detected": false,
+      "refusal_correct": false,
+      "document_hit": null,
+      "chunk_hit": null,
+      "source_id_check_skipped": false,
+      "answer_char_f1": 0.0,
+      "keyword_recall": 0.6667,
+      "retrieval_used": true,
+      "retrieved_count": 10,
+      "retrieved_document_ids": [
+        "41f93cdf-6e84-473f-9e99-3c49328a5d4b",
+        "49a1cd7d-d148-4d9a-8738-62610fbe46dc",
+        "84cf3524-5b93-4603-b9c5-7a2ccb23201d"
+      ],
+      "retrieved_chunk_ids": [
+        "41f93cdf-6e84-473f-9e99-3c49328a5d4b:7",
+        "49a1cd7d-d148-4d9a-8738-62610fbe46dc:31",
+        "84cf3524-5b93-4603-b9c5-7a2ccb23201d:0"
+      ],
+      "expected_document_ids": [],
+      "expected_chunk_ids": [],
+      "answer": "根据提供的检索证据，**没有找到**关于黑山梁研究区2026年计划新增注水井数量的信息。\n\n检索到的资料主要涉及2013年至2015年的开发数据，以及2024年的动态分析，其中提到“重新调整井网后，预转注井54口”，但并未提及2026年的具体新增注水井计划。",
+      "expected_answer": ""
+    },
+    {
+      "question_id": "q0012",
+      "question": "化子坪项目区2023年测试了多少口井？测试结果分别是什么？",
+      "question_type": "direct_lookup",
+      "difficulty": "easy",
+      "passed": false,
+      "expected_refusal": false,
+      "refusal_detected": false,
+      "refusal_correct": true,
+      "document_hit": false,
+      "chunk_hit": false,
+      "source_id_check_skipped": false,
+      "answer_char_f1": 0.7755,
+      "keyword_recall": 1.0,
+      "retrieval_used": true,
+      "retrieved_count": 10,
+      "retrieved_document_ids": [
+        "2e91d4d6-9c46-4930-90cb-2a515ea4fb08",
+        "41f93cdf-6e84-473f-9e99-3c49328a5d4b"
+      ],
+      "retrieved_chunk_ids": [
+        "2e91d4d6-9c46-4930-90cb-2a515ea4fb08:0",
+        "41f93cdf-6e84-473f-9e99-3c49328a5d4b:7"
+      ],
+      "expected_document_ids": [
+        "doc_file_eqoijx_eqoijx"
+      ],
+      "expected_chunk_ids": [
+        "doc_file_eqoijx_eqoijx_c0001"
+      ],
+      "answer": "根据检索到的资料，化子坪项目区2023年共进行测试**42口**（方案计划测试42口，实际完成45口，完成率107%）。\n\n测试结果按测试类型和层位统计如下：\n\n- **静压测试**（9口）：\n  - 长2层（4口）：地层压力为 **4.43 MPa**，压力保持水平 **59%**。\n  - 长6层（5口）：地层压力为 **10.84 MPa**，压力保持水平 **90.3%**。\n\n- **压恢测试**（10口）：\n  - 长2层（3口）：平均地层压力 **4.06 MPa**，压力保持水平 **54.1%**。\n  - 长6层（7口）：平均地层压力 **6.5 MPa**，压力保持水平 **58.3%**。\n\n- **压降测试**（23口）：\n  - 长2层（5口）：平均地层压力 **8.75 MPa**，压力保持水平 **116.6%**。\n  - 长6层（18口）：平均地层压力 **13.21 MPa**，压力保持水平 **110%**。\n\n总体评价为：化子坪注水项目区总体情况良好，但仍需加强注水以进一步提高油层压力，改善油田开发效果。",
+      "expected_answer": "子坪项目区2023年共进行测试42口，其中静压测试9口，压恢测试10口，压降测试23口。静压测试长2层4口，地层压力为4.43MPa，压力保持水平59%；长6层5口，地层压力为10.84MPa，压力保持为90.3%。压恢测试长2层共3口，平均地层压力4.06MPa，压力保持为54.1%；长6层共7口，平均地层压力6.5 MPa，压力保持为58.3%；压降测试长2层共5口，平均压力8.75 MPa。压力保持为116.6%；长6层共18口，平均地层压力13.21 MPa，压力保持为110%。"
+    },
+    {
+      "question_id": "q0011",
+      "question": "长6油层的特点是什么",
+      "question_type": "direct_lookup",
+      "difficulty": "easy",
+      "passed": false,
+      "expected_refusal": false,
+      "refusal_detected": false,
+      "refusal_correct": true,
+      "document_hit": false,
+      "chunk_hit": false,
+      "source_id_check_skipped": false,
+      "answer_char_f1": 0.1225,
+      "keyword_recall": null,
+      "retrieval_used": true,
+      "retrieved_count": 10,
+      "retrieved_document_ids": [
+        "41f93cdf-6e84-473f-9e99-3c49328a5d4b",
+        "49a1cd7d-d148-4d9a-8738-62610fbe46dc"
+      ],
+      "retrieved_chunk_ids": [
+        "41f93cdf-6e84-473f-9e99-3c49328a5d4b:0",
+        "49a1cd7d-d148-4d9a-8738-62610fbe46dc:20"
+      ],
+      "expected_document_ids": [
+        "doc_2024_1tn2eao"
+      ],
+      "expected_chunk_ids": [
+        "doc_2024_1tn2eao_c0004"
+      ],
+      "answer": "根据检索到的《黑山梁报告.docx》和《化子坪2024年全年动态分析.docx》资料，长6油层组的特点可归纳如下：\n\n## 一、沉积与构造特征\n- **沉积相**：长6时期湖盆萎缩，广泛发育**三角洲前缘水下分流河道砂体**，是本油田主要储集层段。砂体呈北东—南西向展布，连通性较好。\n- **油藏类型**：为**岩性—构造双重控制的复合油藏**，油水分布主要受岩性和物性控制，油水分异差，无明显的油水界面，油水普遍同储同出，油水过渡带较宽，局部受鼻状构造控制。\n- **生储盖组合**：下伏长7半深湖相泥页岩为直接油源岩，长4+5晚期漫滩湖沼相沉积构成区域性盖层，长7～长4+5垂向上构成完整生储盖组合。\n\n## 二、储层特征\n- **岩性**：以灰色细粒长石砂岩为主，其次为中～细粒及细～粉粒长石砂岩。成分成熟度低、结构成熟度高。细砂岩约占62.1%，中砂质细砂岩约占19.1%。\n- **物性**：属**低孔、特低渗储层**，物性较差：\n  - 长61：孔隙度平均10.5%，渗透率平均1.297×10⁻³μm²；\n  - 长62：孔隙度平均9.73%，渗透率平均0.796×10⁻³μm²；\n  - 长63：孔隙度平均8.61%，渗透率平均0.511×10⁻³μm²。\n- **孔隙类型**：以原生粒间孔、浊沸石溶孔、长石溶孔为主，具有特低孔～超低孔、特低渗～超低渗特征。\n- **成岩作用**：已进入晚成岩A期，压实压溶作用强烈，胶结作用损失孔隙度约占原始孔隙度的四分之一，后期溶蚀作用对储层物性有一定改善。\n\n## 三、流体性质\n- **原油**：低密度（20℃平均0.861g/cm³）、低粘（50℃平均7.39mPa·s）、高含蜡（平均10.46%）。\n- **地层水**：pH值5.0～6.2，平均6.0，近中性；总矿化度32.14～79.39g/l，平均41.67g/l，水型为CaCl₂型。\n\n## 四、压力与温度\n- 地温梯度2.92℃/100m，平均油层温度36.8℃。\n- 压力系数0.7～0.8，油层平均压力8.88MPa，属低压异常。\n\n## 五、渗流特征\n- 束缚水饱和度平均35.1%，原始含油饱和度低；两相流动范围窄；残余油饱和度高；油相渗透率下降快，水相渗透率上升慢。\n- 水驱油实验：无水期驱油效率平均25.94%，最终平均驱油效率49.28%，残余油饱和度平均32.59%。\n\n## 六、裂缝特征\n- 天然裂缝发育，主要发育NE和NW向两组共轭裂缝，以NE向最为发育，为区域性构造裂缝，以高角度裂缝为主。\n- 人工压裂裂缝为垂直裂缝，方位以北东向为主（平均方位角约56.7°），平均缝高11.2m，平均缝全长102.6m。\n\n## 七、敏感性\n- 长6油层敏感性矛盾集中在**应力敏感性、酸敏损害**方面，碱敏、速敏为次要矛盾，弱水敏。酸敏是由于储层含大量绿泥石与浊沸石等粘土矿物，注入盐酸易形成沉淀。",
+      "expected_answer": "原油密度、粘度以及含蜡等变化均不大，具有低密度（20℃条件下平均0.860g/cm3）、中低粘（50℃条件下平均8.01mPa.s）、高含蜡（平均10.46%）的特点。"
+    },
+    {
+      "question_id": "q0007",
+      "question": "长6储层的特征是什么",
+      "question_type": "direct_lookup",
+      "difficulty": "easy",
+      "passed": false,
+      "expected_refusal": false,
+      "refusal_detected": false,
+      "refusal_correct": true,
+      "document_hit": false,
+      "chunk_hit": false,
+      "source_id_check_skipped": false,
+      "answer_char_f1": 0.0419,
+      "keyword_recall": 1.0,
+      "retrieval_used": true,
+      "retrieved_count": 10,
+      "retrieved_document_ids": [
+        "41f93cdf-6e84-473f-9e99-3c49328a5d4b",
+        "49a1cd7d-d148-4d9a-8738-62610fbe46dc"
+      ],
+      "retrieved_chunk_ids": [
+        "41f93cdf-6e84-473f-9e99-3c49328a5d4b:0",
+        "49a1cd7d-d148-4d9a-8738-62610fbe46dc:8"
+      ],
+      "expected_document_ids": [
+        "doc_2024_1tn2eao"
+      ],
+      "expected_chunk_ids": [
+        "doc_2024_1tn2eao_c0003"
+      ],
+      "answer": "根据检索到的《黑山梁报告》和《化子坪2024年全年动态分析》资料，长6储层的特征可归纳如下：\n\n## 一、沉积特征\n- **沉积相**：以**三角洲前缘亚相**为主，主要发育**水下分流河道**、水下分流间湾等微相。\n- **砂体展布**：砂体整体呈**北东—南西向**带状展布，从河道中心向两侧砂体厚度逐渐减薄；各层段主砂体走向及分布位置有一定继承性。\n\n## 二、岩石学特征\n- **岩性**：主要为**灰色细粒长石砂岩**，其次为中～细粒及细～粉粒长石砂岩。\n- **粒度**：主要粒度区间为0.03～0.3mm（另一资料为0.01～0.50mm），以细粒为主，未见粗砂及砾质颗粒；细砂岩约占62.1%。\n- **成分**：长石含量最高（平均51.1%），其次为石英（平均21.5%）、岩屑（平均10.1%），**成分成熟度低、结构成熟度中等**。\n- **填隙物**：以自生矿物为主，平均含量15.2%，胶结物主要由浊沸石、方解石组成；杂基主要由绿泥石组成。\n\n## 三、储集空间与孔隙结构\n- **孔隙类型**：以**原生粒间孔**（平均占面孔率35.5%）、**次生溶蚀孔**（长石溶孔、沸石溶孔）为主，另含少量微裂缝。\n- **孔隙组合**：包括溶孔～粒间孔型、粒间孔～溶孔型、粒间孔型、微孔型及复合型等。\n\n## 四、物性特征（低孔、特低渗）\n| 小层 | 孔隙度平均值 | 渗透率平均值 |\n|------|------------|------------|\n| 长611 | 5.9% | 0.6×10⁻³μm² |\n| 长612 | 10.2% | 1.6×10⁻³μm² |\n| 长621 | 8.6% | 1.0×10⁻³μm² |\n| 长622 | 8.0% | 0.8×10⁻³μm² |\n| 长63 | 8.1% | 0.75×10⁻³μm² |\n\n- 总体平均孔隙度8.3%，平均渗透率0.84×10⁻³μm²，属**低孔隙度、特低渗透率储层**。\n- 物性以**长612、长621、长622相对最好**，长63次之，长611最差。\n- 物性平面分布受沉积微相控制，**河道砂体物性较好，河道侧缘及分流间湾物性差**。\n\n## 五、成岩作用特征\n- 成岩阶段已普遍进入**晚成岩A期**。\n- 主要成岩作用包括**压实压溶作用、胶结作用、溶蚀作用**：\n  - 压实压溶作用强烈，使物性变差；\n  - 胶结作用（硅质、自生粘土矿物、碳酸盐）使孔隙度损失约四分之一；\n  - 后期**溶蚀作用**（溶蚀浊沸石、长石）形成次生孔隙，改善储层物性。\n\n## 六、非均质性特征\n- **层内非均质性**：常见正韵律（水下分流河道）、反韵律（河口坝）及复合韵律；长621为弱非均质，长612、622为中等非均质，长611、63为中等偏强非均质。\n- **层间非均质性**：长63分层系数最大（3.3），长611最小（1.6）；长612和长622砂体发育最好、连通性较好。\n- **平面非均质性**：砂体几何形态以**带状**为主，连通形式包括多边式、多层式、孤立式。\n\n## 七、敏感性特征\n- 长6储层敏感性矛盾集中在**应力敏感性、酸敏损害**方面，碱敏、速敏为次要矛盾，**弱水敏**。\n- 应力敏感性表现为油层压力下降时渗透率下降幅度加大，且压力回升后渗透率恢复不到原来水平；酸敏是由于储层含大量绿泥石与浊沸石，注入盐酸易形成沉淀。",
+      "expected_answer": "长6储层总体属低孔、特低渗储层，储层物性较差"
+    }
+  ]
+}

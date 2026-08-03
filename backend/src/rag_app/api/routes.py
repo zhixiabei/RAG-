@@ -95,6 +95,15 @@ def list_documents(request: Request, knowledge_base_id: str):
     return service.repository.list_documents(knowledge_base_id)
 
 
+@router.post("/api/v1/knowledge-bases/{knowledge_base_id}/testset-sync")
+def sync_knowledge_base_to_testset(request: Request, knowledge_base_id: str):
+    service, _ = owned_knowledge_base(request, knowledge_base_id)
+    testset_sync = getattr(service, "testset_sync", None)
+    if not testset_sync:
+        raise HTTPException(503, "TESTSET_TOOL_BASE_URL is not configured")
+    return testset_sync.sync_knowledge_base(knowledge_base_id)
+
+
 @router.get("/api/v1/knowledge-bases/{knowledge_base_id}/documents/{document_id}")
 def get_document(request: Request, knowledge_base_id: str, document_id: str):
     service, _ = owned_knowledge_base(request, knowledge_base_id)

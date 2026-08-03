@@ -1,5 +1,6 @@
 from hashlib import sha256
 from io import BytesIO, SEEK_END
+import logging
 from pathlib import Path
 from queue import Queue
 from threading import BoundedSemaphore, Lock, Thread
@@ -7,6 +8,9 @@ from typing import BinaryIO
 from uuid import uuid4
 
 from ..domain.ports import DocumentParser, MetadataRepository, ModelGateway, ObjectStore, VectorStore
+
+
+logger = logging.getLogger(__name__)
 
 
 class DocumentTooLargeError(ValueError):
@@ -35,12 +39,14 @@ class IngestionService:
         max_concurrency: int = 2,
         embedding_max_concurrency: int = 1,
         embedding_batch_size: int = 32,
+        testset_sync=None,
     ):
         self.repository = repository
         self.objects = objects
         self.vectors = vectors
         self.parser = parser
         self.models = models
+        self.testset_sync = testset_sync
         self._ingestion_slots = BoundedSemaphore(max(1, max_concurrency))
         self._embedding_slots = BoundedSemaphore(max(1, embedding_max_concurrency))
         self._deduplication_lock = Lock()
@@ -327,6 +333,7 @@ class IngestionService:
                 "status": "processing",
                 "folder_path": folder_path,
                 "content_hash": content_hash,
+                "testset_sync_status": "pending" if self.testset_sync else "disabled",
             })
         try:
             stream.seek(0)
@@ -349,6 +356,8 @@ class IngestionService:
             "object_key": object_key,
             "folder_path": folder_path,
             "relative_path": relative_path,
+            "mime_type": mime_type,
+            "content_hash": content_hash,
         }
 
     def _process_ingestion(self, prepared: dict, stream: BinaryIO) -> dict:
@@ -413,6 +422,12 @@ class IngestionService:
             self._raise_if_cancelled(document_id)
             self.repository.replace_chunks(document_id, knowledge_base_id, chunks, folder_path)
             self._raise_if_cancelled(document_id)
+            if self.testset_sync:
+                self.repository.update_document(document_id, progress=95, stage="syncing_testset")
+                try:
+                    self.testset_sync.sync_document(prepared, chunks)
+                except Exception:
+                    logger.exception("Test-set tool synchronization failed for document %s", document_id)
             self.repository.update_document(
                 document_id,
                 status="ready",

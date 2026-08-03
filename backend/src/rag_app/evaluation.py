@@ -195,11 +195,67 @@ def load_dataset(path: Path, include_non_approved: bool = False) -> list[dict]:
     return samples
 
 
+def load_dataset_from_testset_tool(
+    base_url: str,
+    timeout: float,
+    include_non_approved: bool = False,
+    *,
+    transport: httpx.BaseTransport | None = None,
+) -> tuple[list[dict], dict]:
+    base_url = base_url.rstrip("/")
+    try:
+        with httpx.Client(timeout=timeout, transport=transport) as client:
+            payload = _request_json(
+                client,
+                "POST",
+                f"{base_url}/api/datasets/export",
+                json={
+                    "format": "jsonl",
+                    "scope": "all" if include_non_approved else "approved",
+                },
+            )
+    except httpx.HTTPError as exc:
+        raise EvaluationError(f"Cannot connect to test-set tool {base_url}: {exc}") from exc
+
+    data = payload.get("data")
+    if not isinstance(data, dict):
+        raise EvaluationError("Test-set tool export response is missing data")
+    samples = data.get("samples")
+    if not isinstance(samples, list) or not samples:
+        raise EvaluationError("Test-set tool export contains no evaluable samples")
+    for index, sample in enumerate(samples, start=1):
+        if not isinstance(sample, dict) or not sample.get("question_id") or not sample.get("question"):
+            raise EvaluationError(
+                f"Test-set tool export sample {index} is missing question_id or question"
+            )
+    metadata = data.get("metadata")
+    return samples, metadata if isinstance(metadata, dict) else {}
+
+
+def find_samples_outside_knowledge_base(
+    samples: list[dict],
+    document_ids: set[str],
+) -> list[dict]:
+    mismatched = []
+    for sample in samples:
+        expected_ids = {
+            str(document_id)
+            for document_id in sample.get("source_document_ids") or []
+            if document_id
+        }
+        if expected_ids and not expected_ids.intersection(document_ids):
+            mismatched.append(sample)
+    return mismatched
+
+
 def _request_json(client: httpx.Client, method: str, url: str, **kwargs) -> dict:
     response = client.request(method, url, **kwargs)
     if response.is_error:
         try:
-            detail = response.json().get("detail")
+            error_payload = response.json()
+            detail = error_payload.get("detail")
+            if not detail and isinstance(error_payload.get("error"), dict):
+                detail = error_payload["error"].get("message")
         except (ValueError, AttributeError):
             detail = response.text.strip()
         raise EvaluationError(
@@ -260,7 +316,7 @@ def evaluate_sample(
 
 
 def run_evaluation(
-    dataset_path: Path,
+    dataset_path: Path | None,
     knowledge_base_id: str,
     base_url: str,
     model: str | None,
@@ -269,8 +325,21 @@ def run_evaluation(
     check_source_ids: bool,
     cleanup: bool,
     include_non_approved: bool,
+    testset_tool_url: str | None = None,
 ) -> dict:
-    samples = load_dataset(dataset_path, include_non_approved)
+    dataset_metadata = {}
+    if testset_tool_url:
+        samples, dataset_metadata = load_dataset_from_testset_tool(
+            testset_tool_url,
+            timeout,
+            include_non_approved,
+        )
+        dataset_source = f"{testset_tool_url.rstrip('/')}/api/datasets/export"
+    else:
+        if dataset_path is None:
+            raise EvaluationError("A local dataset path is required")
+        samples = load_dataset(dataset_path, include_non_approved)
+        dataset_source = str(dataset_path.resolve())
     base_url = base_url.rstrip("/")
     results = []
     with httpx.Client(timeout=timeout) as client:
@@ -282,6 +351,37 @@ def run_evaluation(
             raise EvaluationError(
                 f"后端未就绪，/health 返回 {health.status_code}: {health.text.strip()}"
             )
+        if testset_tool_url:
+            kb_path = quote(knowledge_base_id, safe="")
+            document_response = client.get(
+                f"{base_url}/api/v1/knowledge-bases/{kb_path}/documents"
+            )
+            if document_response.is_error:
+                raise EvaluationError(
+                    f"读取知识库文档失败（{document_response.status_code}）: {document_response.text.strip()}"
+                )
+            try:
+                documents = document_response.json()
+            except ValueError as exc:
+                raise EvaluationError("知识库文档接口未返回 JSON") from exc
+            if not isinstance(documents, list):
+                raise EvaluationError("知识库文档接口返回的数据不是列表")
+            mismatched = find_samples_outside_knowledge_base(
+                samples,
+                {
+                    str(document.get("id"))
+                    for document in documents
+                    if isinstance(document, dict) and document.get("id")
+                },
+            )
+            if mismatched:
+                first = mismatched[0]
+                raise EvaluationError(
+                    "测试集工具中有 "
+                    f"{len(mismatched)} 条样本仍引用当前知识库不存在的文档 ID；"
+                    f"首条为 {first.get('question_id')}: {first.get('source_document_ids')}. "
+                    "请将旧问题改为非 Approved，并基于同步后的 UUID Chunk 重新生成问题。"
+                )
 
         for index, sample in enumerate(samples, start=1):
             question_id = str(sample["question_id"])
@@ -315,7 +415,8 @@ def run_evaluation(
             results.append(result)
 
     return {
-        "dataset": str(dataset_path.resolve()),
+        "dataset": dataset_source,
+        "dataset_metadata": dataset_metadata,
         "knowledge_base_id": knowledge_base_id,
         "base_url": base_url,
         "model": model,
@@ -330,7 +431,13 @@ def run_evaluation(
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="运行 RAG JSONL 端到端评测")
     parser.add_argument("--knowledge-base-id", required=True, help="已导入评测文档的知识库 ID")
-    parser.add_argument("--dataset", type=Path, default=Path(DEFAULT_DATASET), help="评测集 JSONL 路径")
+    dataset_source = parser.add_mutually_exclusive_group()
+    dataset_source.add_argument("--dataset", type=Path, default=None, help="评测集 JSONL 路径")
+    dataset_source.add_argument(
+        "--testset-tool-url",
+        default=None,
+        help="直接从测试集工具导出当前数据集，例如 http://localhost:3000",
+    )
     parser.add_argument("--base-url", default="http://127.0.0.1:8080", help="RAG 后端地址")
     parser.add_argument("--model", default=None, help="可选的聊天模型名称")
     parser.add_argument("--timeout", type=float, default=180.0, help="单次 HTTP 请求超时秒数")
@@ -363,12 +470,13 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit("--min-answer-f1 必须在 0 到 1 之间")
     if args.min_pass_rate is not None and not 0 <= args.min_pass_rate <= 1:
         raise SystemExit("--min-pass-rate 必须在 0 到 1 之间")
-    if not args.dataset.is_file():
-        raise SystemExit(f"评测集不存在: {args.dataset}")
+    dataset_path = args.dataset or (None if args.testset_tool_url else Path(DEFAULT_DATASET))
+    if dataset_path is not None and not dataset_path.is_file():
+        raise SystemExit(f"评测集不存在: {dataset_path}")
 
     try:
         report = run_evaluation(
-            args.dataset,
+            dataset_path,
             args.knowledge_base_id,
             args.base_url,
             args.model,
@@ -377,6 +485,7 @@ def main(argv: list[str] | None = None) -> int:
             not args.skip_source_id_check,
             not args.keep_conversations,
             args.include_non_approved,
+            args.testset_tool_url,
         )
     except EvaluationError as exc:
         print(f"评测无法启动: {exc}", file=sys.stderr)

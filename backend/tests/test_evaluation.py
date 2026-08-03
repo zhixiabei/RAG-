@@ -1,6 +1,16 @@
+import json
 import unittest
 
-from rag_app.evaluation import character_f1, is_refusal, score_response, summarize
+import httpx
+
+from rag_app.evaluation import (
+    character_f1,
+    find_samples_outside_knowledge_base,
+    is_refusal,
+    load_dataset_from_testset_tool,
+    score_response,
+    summarize,
+)
 
 
 class EvaluationTest(unittest.TestCase):
@@ -83,6 +93,48 @@ class EvaluationTest(unittest.TestCase):
         self.assertEqual(summary["chunk_hit_rate"], 0.0)
         self.assertEqual(summary["average_answer_char_f1"], 0.5)
         self.assertEqual(summary["average_keyword_recall"], 0.5)
+
+    def test_loads_approved_samples_directly_from_testset_tool(self):
+        def handle(request):
+            self.assertEqual(request.url.path, "/api/datasets/export")
+            self.assertEqual(json.loads(request.content)["scope"], "approved")
+            return httpx.Response(
+                200,
+                json={
+                    "success": True,
+                    "data": {
+                        "metadata": {"dataset_name": "rag_eval", "sample_count": 1},
+                        "samples": [
+                            {
+                                "question_id": "q1",
+                                "question": "question",
+                                "status": "approved",
+                            }
+                        ],
+                    },
+                },
+            )
+
+        samples, metadata = load_dataset_from_testset_tool(
+            "http://testset.local/",
+            10,
+            transport=httpx.MockTransport(handle),
+        )
+
+        self.assertEqual(samples[0]["question_id"], "q1")
+        self.assertEqual(metadata["sample_count"], 1)
+
+    def test_finds_legacy_source_ids_before_remote_evaluation(self):
+        mismatched = find_samples_outside_knowledge_base(
+            [
+                {"question_id": "old", "source_document_ids": ["doc_hua31_report"]},
+                {"question_id": "new", "source_document_ids": ["uuid-document"]},
+                {"question_id": "refusal", "source_document_ids": []},
+            ],
+            {"uuid-document"},
+        )
+
+        self.assertEqual([sample["question_id"] for sample in mismatched], ["old"])
 
 
 if __name__ == "__main__":

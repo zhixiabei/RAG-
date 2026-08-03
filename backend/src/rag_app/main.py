@@ -34,6 +34,7 @@ from .infrastructure.openai_compatible.gateway import OpenAICompatibleGateway
 from .infrastructure.parsing.document_parser import DocumentParser
 from .infrastructure.postgres.repository import PostgresRepository
 from .infrastructure.qdrant.vector_store import QdrantVectorStore
+from .testset_tool import TestsetSyncService, TestsetToolClient
 
 
 logger = logging.getLogger(__name__)
@@ -49,6 +50,7 @@ class Services:
     ingestion: IngestionService
     deletion: DeletionService
     rag: RagService
+    testset_sync: TestsetSyncService | None
 
 
 def build_services(settings: Settings) -> Services:
@@ -94,6 +96,15 @@ def build_services(settings: Settings) -> Services:
         settings.rag_top_k,
     )
     answer_agent = AnswerAgent(models)
+    testset_sync = None
+    if settings.testset_tool_base_url.strip():
+        testset_sync = TestsetSyncService(
+            repository,
+            TestsetToolClient(
+                settings.testset_tool_base_url,
+                settings.testset_tool_sync_timeout_seconds,
+            ),
+        )
     ingestion = IngestionService(
         repository,
         objects,
@@ -103,6 +114,7 @@ def build_services(settings: Settings) -> Services:
         max_concurrency=settings.ingestion_max_concurrency,
         embedding_max_concurrency=settings.ingestion_embedding_max_concurrency,
         embedding_batch_size=settings.ingestion_embedding_batch_size,
+        testset_sync=testset_sync,
     )
     return Services(
         settings=settings,
@@ -113,6 +125,7 @@ def build_services(settings: Settings) -> Services:
         ingestion=ingestion,
         deletion=DeletionService(repository, objects, vectors, ingestion.cancel),
         rag=RagService(repository, decision_agent, retrieval_agent, answer_agent),
+        testset_sync=testset_sync,
     )
 
 
@@ -146,6 +159,8 @@ async def lifespan(app: FastAPI):
     try:
         yield
     finally:
+        if services.testset_sync:
+            services.testset_sync.close()
         services.repository.close()
 
 

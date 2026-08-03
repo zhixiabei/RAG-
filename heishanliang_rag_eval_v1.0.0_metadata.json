@@ -1,9 +1,9 @@
 {
   "dataset_name": "heishanliang_rag_eval",
   "dataset_version": "1.0.0",
-  "created_at": "2026-07-31T09:23:02.713Z",
-  "sample_count": 3,
-  "approved_sample_count": 3,
-  "document_count": 2,
+  "created_at": "2026-08-03T05:56:28.320Z",
+  "sample_count": 11,
+  "approved_sample_count": 9,
+  "document_count": 4,
   "description": "用于文档级 RAG 检索与拒答能力评测"
 }

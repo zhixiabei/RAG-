@@ -200,3 +200,43 @@ python scripts\evaluate_rag.py `
 运行 `python scripts\evaluate_rag.py --help` 可查看模型选择、答案阈值、超时和保留评测对话等选项。
 
 正式架构见 [docs/rag-knowledge-base-design.md](docs/rag-knowledge-base-design.md)。
+
+## 同步到测试集生成工具
+
+RAG 可以在文档完成解析和切分后，将同一批 Chunk 原样推送到测试集生成工具。测试集工具不会再次切分这些文档，因此导出的 `source_document_ids` 和 `source_chunk_ids` 与 RAG 实际检索引用完全一致。
+
+在 `.env` 中配置：
+
+```env
+TESTSET_TOOL_BASE_URL=http://localhost:3000
+TESTSET_TOOL_SYNC_TIMEOUT_SECONDS=60
+```
+
+先启动 `D:\startwell\RAG_Test_set_tool-main\RAG_Test_set_tool-main`：
+
+```powershell
+cd D:\startwell\RAG_Test_set_tool-main\RAG_Test_set_tool-main
+npm run dev
+```
+
+之后从 RAG 上传的新文档会自动同步。文档接口中的 `testset_sync_status` 会显示 `pending`、`syncing`、`synced` 或 `failed`。同步失败不会撤销 RAG 入库；工具恢复后，可以补同步整个知识库：
+
+```powershell
+Invoke-RestMethod `
+  -Method Post `
+  -Uri "http://127.0.0.1:8080/api/v1/knowledge-bases/<knowledge-base-id>/testset-sync"
+```
+
+评测脚本可以直接拉取测试集工具中当前 Approved 的样本，无需先下载 JSONL：
+
+直接拉取会导出工具中的全部 Approved 问题。首次切换到同步模式时，应先将仍引用 `doc_hua31_report` 等旧 ID 的示例/历史问题改为非 Approved 或删除，再基于本次同步的 UUID Chunk 创建并审核新问题。
+
+```powershell
+python scripts/evaluate_rag.py `
+  --knowledge-base-id "<knowledge-base-id>" `
+  --testset-tool-url "http://localhost:3000" `
+  --base-url "http://127.0.0.1:8080" `
+  --output ".\rag_eval_report.json"
+```
+
+原有的本地文件模式仍然可用：`scripts/evaluate_rag.py --dataset <path>`。两种模式都直接使用测试集工具保存的 RAG Chunk ID，不需要再转换 ID。

@@ -24,6 +24,9 @@ SCHEMA_STATEMENTS = (
         chunk_count INTEGER NOT NULL DEFAULT 0,
         error_message TEXT,
         content_hash TEXT,
+        testset_sync_status TEXT NOT NULL DEFAULT 'disabled',
+        testset_sync_error TEXT,
+        testset_synced_at TIMESTAMPTZ,
         created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
     )
@@ -33,6 +36,9 @@ SCHEMA_STATEMENTS = (
     "ALTER TABLE documents ADD COLUMN IF NOT EXISTS stage TEXT NOT NULL DEFAULT 'queued'",
     "ALTER TABLE documents ADD COLUMN IF NOT EXISTS folder_path TEXT",
     "ALTER TABLE documents ADD COLUMN IF NOT EXISTS content_hash TEXT",
+    "ALTER TABLE documents ADD COLUMN IF NOT EXISTS testset_sync_status TEXT NOT NULL DEFAULT 'disabled'",
+    "ALTER TABLE documents ADD COLUMN IF NOT EXISTS testset_sync_error TEXT",
+    "ALTER TABLE documents ADD COLUMN IF NOT EXISTS testset_synced_at TIMESTAMPTZ",
     "ALTER TABLE document_chunks ADD COLUMN IF NOT EXISTS folder_path TEXT",
     """
     CREATE TABLE IF NOT EXISTS document_chunks (

@@ -161,6 +161,18 @@ class FakeModels:
         return [[0.1, 0.2] for _ in texts]
 
 
+class FakeTestsetSync:
+    def __init__(self, failure=None):
+        self.failure = failure
+        self.calls = []
+
+    def sync_document(self, document, chunks):
+        self.calls.append((document, chunks))
+        if self.failure:
+            raise self.failure
+        return {"document_id": document["document_id"], "chunk_count": len(chunks)}
+
+
 class IngestionServiceTest(unittest.TestCase):
     def build_service(self, parser, *, vectors=None, models=None, **kwargs):
         self.repository = FakeRepository()
@@ -228,6 +240,32 @@ class IngestionServiceTest(unittest.TestCase):
         self.assertEqual(service.models.embed_batch_sizes, [2, 2, 1])
         self.assertEqual(service.vectors.upsert_batch_sizes, [2, 2, 1])
         self.assertEqual(len(service.vectors.points), 5)
+
+    def test_syncs_the_same_parsed_chunks_after_indexing(self):
+        sync = FakeTestsetSync()
+        chunks = [ParsedChunk(0, "first", 1), ParsedChunk(1, "second", 2)]
+        service = self.build_service(FakeParser(chunks=chunks), testset_sync=sync)
+
+        result = service.ingest("kb-1", "report.pdf", "application/pdf", b"content")
+
+        self.assertEqual(result["status"], "ready")
+        self.assertEqual(sync.calls[0][0]["document_id"], result["id"])
+        self.assertIs(sync.calls[0][1], chunks)
+        self.assertIn((95, "syncing_testset"), [
+            (update.get("progress"), update.get("stage"))
+            for update in self.repository.updates
+        ])
+
+    def test_sync_failure_does_not_discard_a_ready_rag_document(self):
+        sync = FakeTestsetSync(RuntimeError("test-set tool unavailable"))
+        service = self.build_service(FakeParser(), testset_sync=sync)
+
+        with self.assertLogs("rag_app.application.ingestion_service", level="ERROR"):
+            result = service.ingest("kb-1", "report.pdf", "application/pdf", b"content")
+
+        self.assertEqual(result["status"], "ready")
+        self.assertEqual(result["chunk_count"], 1)
+        self.assertEqual(len(service.vectors.points), 1)
 
     def test_skips_same_path_without_storing_or_parsing_again(self):
         service = self.build_service(FakeParser())

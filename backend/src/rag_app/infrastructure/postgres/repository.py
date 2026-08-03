@@ -59,8 +59,8 @@ class PostgresRepository:
             connection.execute(
                 text("""
                     INSERT INTO documents
-                    (id, knowledge_base_id, title, file_name, mime_type, source_object_key, status, folder_path, content_hash)
-                    VALUES (:id, :knowledge_base_id, :title, :file_name, :mime_type, :source_object_key, :status, :folder_path, :content_hash)
+                    (id, knowledge_base_id, title, file_name, mime_type, source_object_key, status, folder_path, content_hash, testset_sync_status)
+                    VALUES (:id, :knowledge_base_id, :title, :file_name, :mime_type, :source_object_key, :status, :folder_path, :content_hash, :testset_sync_status)
                 """),
                 item,
             )
@@ -130,6 +130,14 @@ class PostgresRepository:
             rows = connection.execute(
                 text("SELECT * FROM documents WHERE knowledge_base_id = :id ORDER BY created_at DESC"),
                 {"id": knowledge_base_id},
+            ).mappings().all()
+        return [dict(row) for row in rows]
+
+    def list_document_chunks(self, document_id: str) -> list[dict[str, Any]]:
+        with self.engine.begin() as connection:
+            rows = connection.execute(
+                text("SELECT * FROM document_chunks WHERE document_id = :id ORDER BY chunk_index"),
+                {"id": document_id},
             ).mappings().all()
         return [dict(row) for row in rows]
 

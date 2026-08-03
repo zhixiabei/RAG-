@@ -45,5 +45,7 @@ class Settings(BaseSettings):
     remote_embedding_api_key: str = ""
     remote_embedding_model: str = ""
     rag_top_k: int = 10
+    testset_tool_base_url: str = ""
+    testset_tool_sync_timeout_seconds: float = 60.0
     owner_id: str = "personal"
     cors_origins: str = "http://127.0.0.1:5173,http://localhost:5173"
