@@ -159,6 +159,12 @@ class RagService:
             "citations": citations,
             "retrieval_used": retrieval_used,
             "retrieved_count": len(hits),
+            "retrieved_document_ids": list(dict.fromkeys(
+                hit.document_id for hit in hits if hit.document_id
+            )),
+            "retrieved_chunk_ids": list(dict.fromkeys(
+                hit.chunk_id for hit in hits if hit.chunk_id
+            )),
             "context_document_count": len({hit.document_id for hit in hits}),
             "catalog_used": bool(knowledge_catalog),
             "attachments_used": bool(attachment_context),

@@ -127,6 +127,8 @@ class RagServiceTest(unittest.TestCase):
         self.assertEqual(models.embed_calls, [["报销制度是什么？"]])
         self.assertEqual(vectors.search_calls, [("kb-1", [0.1, 0.2], 3)])
         self.assertEqual(result["retrieved_count"], 3)
+        self.assertEqual(result["retrieved_document_ids"], ["doc-1", "doc-2"])
+        self.assertEqual(result["retrieved_chunk_ids"], ["chunk-1", "chunk-2", "chunk-3"])
         self.assertEqual([item["chunk_id"] for item in result["citations"]], ["chunk-1", "chunk-3"])
         self.assertEqual(result["citations"][0]["score"], 0.92)
         self.assertIsNone(result["citations"][0]["relevance_score"])
