@@ -29,11 +29,10 @@ from .application.ingestion_service import IngestionService
 from .application.rag_service import RagService
 from .config import Settings
 from .infrastructure.minio.object_store import MinioObjectStore
-from .infrastructure.ollama.gateway import OllamaGateway
-from .infrastructure.openai_compatible.gateway import OpenAICompatibleGateway
 from .infrastructure.parsing.document_parser import DocumentParser
 from .infrastructure.postgres.repository import PostgresRepository
 from .infrastructure.qdrant.vector_store import QdrantVectorStore
+from .model_gateway_factory import ModelGateway, build_model_gateway
 from .testset_tool import TestsetSyncService, TestsetToolClient
 
 
@@ -46,7 +45,7 @@ class Services:
     repository: PostgresRepository
     objects: MinioObjectStore
     vectors: QdrantVectorStore
-    models: OllamaGateway | OpenAICompatibleGateway
+    models: ModelGateway
     ingestion: IngestionService
     deletion: DeletionService
     rag: RagService
@@ -73,22 +72,7 @@ def build_services(settings: Settings) -> Services:
         hnsw_full_scan_threshold=settings.qdrant_hnsw_full_scan_threshold,
         search_hnsw_ef=settings.qdrant_search_hnsw_ef,
     )
-    if settings.model_mode == "local":
-        models = OllamaGateway(settings.ollama_url, settings.ollama_chat_model, settings.ollama_embedding_model)
-    elif settings.model_mode == "remote":
-        models = OpenAICompatibleGateway(
-            settings.remote_llm_provider_name,
-            settings.remote_llm_base_url,
-            settings.remote_llm_api_key,
-            [model.strip() for model in settings.remote_llm_models.split(",") if model.strip()],
-            settings.remote_default_chat_model,
-            settings.remote_embedding_provider_name,
-            settings.remote_embedding_base_url,
-            settings.remote_embedding_api_key,
-            settings.remote_embedding_model,
-        )
-    else:
-        raise ValueError("MODEL_MODE 只能是 local 或 remote")
+    models = build_model_gateway(settings)
     decision_agent = RetrievalDecisionAgent(models)
     retrieval_agent = KnowledgeRetrievalAgent(
         vectors,

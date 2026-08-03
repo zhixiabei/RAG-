@@ -181,10 +181,23 @@ python scripts\evaluate_rag.py `
 
 - `document_hit_rate`：引用命中期望文档的比例。
 - `chunk_hit_rate`：引用命中期望文本块的比例。接口引用按文档去重，因此该指标只检查每个文档最终暴露的首条引用。
-- `average_answer_char_f1`：忽略空白和标点后的字符级答案 F1，适合做稳定的自动回归信号，不替代人工语义评审。
+- `average_answer_score`：非拒答样本的语义 Judge 平均分，范围 0 到 4。
+- `average_answer_correctness`、`average_answer_completeness`、`average_answer_faithfulness`、`average_answer_relevance`：Judge 对正确性、完整性、证据忠实性和相关性的分项均值。
+- `average_answer_char_f1`：忽略空白和标点后的字符级答案 F1，仅保留为诊断信息，不参与通过判定。
 - `average_keyword_recall`：答案覆盖样本关键词的平均比例。
 - `refusal_accuracy`：该拒答和不该拒答的判断准确率。
-- `pass_rate`：拒答判断正确，且非拒答样本命中文档、答案字符 F1 不低于阈值的比例。
+- `pass_rate`：拒答样本正确拒答；非拒答样本未误拒答、命中期望文档，且四项 Judge 分数分别达到阈值的比例。
+
+答案 Judge 使用 `.env` 中配置的聊天模型，基于问题、参考答案、测试集证据原文和实际回答进行评审。它不会因为回答比参考答案更长或措辞不同而扣分，但无证据扩展、事实错误、关键点遗漏和答非所问会降低对应维度分数。默认要求每个维度不低于 3 分；可单独选择 Judge 模型或调整阈值：
+
+```powershell
+python scripts\evaluate_rag.py `
+  --knowledge-base-id "实际的知识库 ID" `
+  --judge-model "deepseek-chat" `
+  --min-answer-score 3
+```
+
+为减少同一模型自评带来的偏差，正式基准测试建议让 `--judge-model` 与被测 `--model` 使用不同模型，并固定模型版本。
 
 评测集中的 `source_document_ids` 和 `source_chunk_ids` 必须与当前知识库聊天接口返回的引用 ID 一致。重新导入文档会生成新的文档 ID；这种情况下要同步更新评测集 ID，否则检索命中指标会错误地显示为 0。
 
@@ -197,7 +210,7 @@ python scripts\evaluate_rag.py `
   --output ".\rag_eval_report.json"
 ```
 
-运行 `python scripts\evaluate_rag.py --help` 可查看模型选择、答案阈值、超时和保留评测对话等选项。
+运行 `python scripts\evaluate_rag.py --help` 可查看回答模型、Judge 模型、答案阈值、超时和保留评测对话等选项。
 
 正式架构见 [docs/rag-knowledge-base-design.md](docs/rag-knowledge-base-design.md)。
 
