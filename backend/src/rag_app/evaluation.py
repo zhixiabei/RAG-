@@ -1,0 +1,399 @@
+from __future__ import annotations
+
+import argparse
+from collections import Counter
+from datetime import datetime, timezone
+import json
+from pathlib import Path
+import re
+import sys
+import unicodedata
+from urllib.parse import quote
+
+import httpx
+
+
+DEFAULT_DATASET = "heishanliang_rag_eval_v1.0.0.jsonl"
+REFUSAL_PATTERNS = (
+    "知识库中无相关内容",
+    "知识库中没有相关内容",
+    "未找到相关内容",
+    "没有找到相关内容",
+    "无法在知识库中找到",
+    "知识库不包含相关",
+    "无法根据知识库回答",
+    "无法依据知识库回答",
+)
+
+
+class EvaluationError(RuntimeError):
+    pass
+
+
+def normalize_text(value: str) -> str:
+    normalized = unicodedata.normalize("NFKC", value or "").casefold()
+    return re.sub(r"[\W_]+", "", normalized, flags=re.UNICODE)
+
+
+def character_f1(expected: str, actual: str) -> float:
+    expected_chars = Counter(normalize_text(expected))
+    actual_chars = Counter(normalize_text(actual))
+    if not expected_chars or not actual_chars:
+        return 0.0
+    overlap = sum((expected_chars & actual_chars).values())
+    precision = overlap / sum(actual_chars.values())
+    recall = overlap / sum(expected_chars.values())
+    return 2 * precision * recall / (precision + recall) if overlap else 0.0
+
+
+def keyword_recall(keywords: list[str], answer: str) -> float | None:
+    normalized_keywords = [normalize_text(keyword) for keyword in keywords]
+    normalized_keywords = [keyword for keyword in normalized_keywords if keyword]
+    if not normalized_keywords:
+        return None
+    normalized_answer = normalize_text(answer)
+    matched = sum(keyword in normalized_answer for keyword in normalized_keywords)
+    return matched / len(normalized_keywords)
+
+
+def is_refusal(answer: str) -> bool:
+    normalized = normalize_text(answer)
+    return any(normalize_text(pattern) in normalized for pattern in REFUSAL_PATTERNS)
+
+
+def score_response(
+    sample: dict,
+    response: dict,
+    min_answer_f1: float,
+    check_source_ids: bool = True,
+) -> dict:
+    citations = response.get("citations") or []
+    retrieved_document_ids = {
+        citation.get("document_id") for citation in citations if citation.get("document_id")
+    }
+    retrieved_chunk_ids = {
+        citation.get("chunk_id") for citation in citations if citation.get("chunk_id")
+    }
+    expected_document_ids = set(sample.get("source_document_ids") or [])
+    expected_chunk_ids = set(sample.get("source_chunk_ids") or [])
+    answer = str(response.get("answer") or "")
+    expected_refusal = bool(sample.get("should_refuse"))
+    refusal_detected = is_refusal(answer)
+
+    document_hit = (
+        bool(expected_document_ids & retrieved_document_ids)
+        if check_source_ids and expected_document_ids
+        else None
+    )
+    chunk_hit = (
+        bool(expected_chunk_ids & retrieved_chunk_ids)
+        if check_source_ids and expected_chunk_ids
+        else None
+    )
+    answer_f1 = character_f1(str(sample.get("expected_answer") or ""), answer)
+    keywords = [str(keyword) for keyword in sample.get("keywords") or []]
+    answer_keyword_recall = keyword_recall(keywords, answer)
+    refusal_correct = expected_refusal == refusal_detected
+
+    if expected_refusal:
+        passed = refusal_correct
+    else:
+        passed = (
+            refusal_correct
+            and (not check_source_ids or document_hit is not False)
+            and answer_f1 >= min_answer_f1
+        )
+
+    return {
+        "question_id": sample.get("question_id"),
+        "question": sample.get("question"),
+        "question_type": sample.get("question_type"),
+        "difficulty": sample.get("difficulty"),
+        "passed": passed,
+        "expected_refusal": expected_refusal,
+        "refusal_detected": refusal_detected,
+        "refusal_correct": refusal_correct,
+        "document_hit": document_hit,
+        "chunk_hit": chunk_hit,
+        "source_id_check_skipped": not check_source_ids,
+        "answer_char_f1": round(answer_f1, 4),
+        "keyword_recall": (
+            round(answer_keyword_recall, 4)
+            if answer_keyword_recall is not None
+            else None
+        ),
+        "retrieval_used": bool(response.get("retrieval_used")),
+        "retrieved_count": int(response.get("retrieved_count") or 0),
+        "retrieved_document_ids": sorted(retrieved_document_ids),
+        "retrieved_chunk_ids": sorted(retrieved_chunk_ids),
+        "expected_document_ids": sorted(expected_document_ids),
+        "expected_chunk_ids": sorted(expected_chunk_ids),
+        "answer": answer,
+        "expected_answer": sample.get("expected_answer") or "",
+    }
+
+
+def _average(values: list[float]) -> float | None:
+    return round(sum(values) / len(values), 4) if values else None
+
+
+def _rate(values: list[bool]) -> float | None:
+    return _average([1.0 if value else 0.0 for value in values])
+
+
+def summarize(results: list[dict]) -> dict:
+    completed = [result for result in results if "error" not in result]
+    return {
+        "sample_count": len(results),
+        "completed_count": len(completed),
+        "error_count": len(results) - len(completed),
+        "passed_count": sum(bool(result.get("passed")) for result in completed),
+        "pass_rate": _rate([bool(result.get("passed")) for result in completed]),
+        "document_hit_rate": _rate([
+            result["document_hit"]
+            for result in completed
+            if result.get("document_hit") is not None
+        ]),
+        "chunk_hit_rate": _rate([
+            result["chunk_hit"]
+            for result in completed
+            if result.get("chunk_hit") is not None
+        ]),
+        "refusal_accuracy": _rate([
+            bool(result.get("refusal_correct")) for result in completed
+        ]),
+        "average_answer_char_f1": _average([
+            float(result["answer_char_f1"]) for result in completed
+        ]),
+        "average_keyword_recall": _average([
+            float(result["keyword_recall"])
+            for result in completed
+            if result.get("keyword_recall") is not None
+        ]),
+    }
+
+
+def load_dataset(path: Path, include_non_approved: bool = False) -> list[dict]:
+    samples = []
+    with path.open("r", encoding="utf-8-sig") as stream:
+        for line_number, raw_line in enumerate(stream, start=1):
+            line = raw_line.strip()
+            if not line:
+                continue
+            try:
+                sample = json.loads(line)
+            except json.JSONDecodeError as exc:
+                raise EvaluationError(f"数据集第 {line_number} 行不是合法 JSON: {exc}") from exc
+            if not sample.get("question_id") or not sample.get("question"):
+                raise EvaluationError(
+                    f"数据集第 {line_number} 行缺少 question_id 或 question"
+                )
+            if include_non_approved or sample.get("status") in {None, "approved"}:
+                samples.append(sample)
+    if not samples:
+        raise EvaluationError("数据集中没有可评测的样本")
+    return samples
+
+
+def _request_json(client: httpx.Client, method: str, url: str, **kwargs) -> dict:
+    response = client.request(method, url, **kwargs)
+    if response.is_error:
+        try:
+            detail = response.json().get("detail")
+        except (ValueError, AttributeError):
+            detail = response.text.strip()
+        raise EvaluationError(
+            f"{method} {url} 返回 {response.status_code}: {detail or '无错误详情'}"
+        )
+    if not response.content:
+        return {}
+    try:
+        payload = response.json()
+    except ValueError as exc:
+        raise EvaluationError(f"{method} {url} 未返回 JSON") from exc
+    if not isinstance(payload, dict):
+        raise EvaluationError(f"{method} {url} 返回的数据不是 JSON 对象")
+    return payload
+
+
+def evaluate_sample(
+    client: httpx.Client,
+    base_url: str,
+    knowledge_base_id: str,
+    sample: dict,
+    model: str | None,
+    min_answer_f1: float,
+    check_source_ids: bool,
+    cleanup: bool,
+) -> dict:
+    kb_path = quote(knowledge_base_id, safe="")
+    conversation_id = None
+    try:
+        conversation = _request_json(
+            client,
+            "POST",
+            f"{base_url}/api/v1/knowledge-bases/{kb_path}/conversations",
+            json={"title": f"评测 {sample['question_id']}"},
+        )
+        conversation_id = conversation.get("id")
+        if not conversation_id:
+            raise EvaluationError("创建评测对话后未获得 conversation id")
+        response = _request_json(
+            client,
+            "POST",
+            f"{base_url}/api/v1/knowledge-bases/{kb_path}/chat",
+            json={
+                "conversation_id": conversation_id,
+                "question": sample["question"],
+                "model": model,
+            },
+        )
+        return score_response(sample, response, min_answer_f1, check_source_ids)
+    finally:
+        if cleanup and conversation_id:
+            try:
+                client.delete(
+                    f"{base_url}/api/v1/conversations/{quote(conversation_id, safe='')}"
+                )
+            except httpx.HTTPError:
+                pass
+
+
+def run_evaluation(
+    dataset_path: Path,
+    knowledge_base_id: str,
+    base_url: str,
+    model: str | None,
+    timeout: float,
+    min_answer_f1: float,
+    check_source_ids: bool,
+    cleanup: bool,
+    include_non_approved: bool,
+) -> dict:
+    samples = load_dataset(dataset_path, include_non_approved)
+    base_url = base_url.rstrip("/")
+    results = []
+    with httpx.Client(timeout=timeout) as client:
+        try:
+            health = client.get(f"{base_url}/health")
+        except httpx.HTTPError as exc:
+            raise EvaluationError(f"无法连接后端 {base_url}: {exc}") from exc
+        if health.status_code != 200:
+            raise EvaluationError(
+                f"后端未就绪，/health 返回 {health.status_code}: {health.text.strip()}"
+            )
+
+        for index, sample in enumerate(samples, start=1):
+            question_id = str(sample["question_id"])
+            print(f"[{index}/{len(samples)}] {question_id} {sample['question']}", flush=True)
+            try:
+                result = evaluate_sample(
+                    client,
+                    base_url,
+                    knowledge_base_id,
+                    sample,
+                    model,
+                    min_answer_f1,
+                    check_source_ids,
+                    cleanup,
+                )
+                state = "PASS" if result["passed"] else "FAIL"
+                print(
+                    f"  {state} doc_hit={result['document_hit']} "
+                    f"chunk_hit={result['chunk_hit']} "
+                    f"answer_f1={result['answer_char_f1']:.4f}",
+                    flush=True,
+                )
+            except (EvaluationError, httpx.HTTPError) as exc:
+                result = {
+                    "question_id": question_id,
+                    "question": sample.get("question"),
+                    "passed": False,
+                    "error": str(exc),
+                }
+                print(f"  ERROR {exc}", file=sys.stderr, flush=True)
+            results.append(result)
+
+    return {
+        "dataset": str(dataset_path.resolve()),
+        "knowledge_base_id": knowledge_base_id,
+        "base_url": base_url,
+        "model": model,
+        "evaluated_at": datetime.now(timezone.utc).isoformat(),
+        "min_answer_f1": min_answer_f1,
+        "source_id_check_skipped": not check_source_ids,
+        "summary": summarize(results),
+        "results": results,
+    }
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="运行 RAG JSONL 端到端评测")
+    parser.add_argument("--knowledge-base-id", required=True, help="已导入评测文档的知识库 ID")
+    parser.add_argument("--dataset", type=Path, default=Path(DEFAULT_DATASET), help="评测集 JSONL 路径")
+    parser.add_argument("--base-url", default="http://127.0.0.1:8080", help="RAG 后端地址")
+    parser.add_argument("--model", default=None, help="可选的聊天模型名称")
+    parser.add_argument("--timeout", type=float, default=180.0, help="单次 HTTP 请求超时秒数")
+    parser.add_argument(
+        "--min-answer-f1",
+        type=float,
+        default=0.35,
+        help="非拒答样本通过所需的最低字符 F1（默认 0.35）",
+    )
+    parser.add_argument(
+        "--skip-source-id-check",
+        action="store_true",
+        help="忽略测试集中的 source_document_ids/source_chunk_ids，仅评估答案和拒答（快速测试）",
+    )
+    parser.add_argument("--output", type=Path, default=Path("rag_eval_report.json"), help="评测报告路径")
+    parser.add_argument("--keep-conversations", action="store_true", help="保留每题创建的评测对话")
+    parser.add_argument("--include-non-approved", action="store_true", help="同时评测未 approved 的样本")
+    parser.add_argument(
+        "--min-pass-rate",
+        type=float,
+        default=None,
+        help="低于该通过率时返回退出码 1，适合 CI",
+    )
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
+    if not 0 <= args.min_answer_f1 <= 1:
+        raise SystemExit("--min-answer-f1 必须在 0 到 1 之间")
+    if args.min_pass_rate is not None and not 0 <= args.min_pass_rate <= 1:
+        raise SystemExit("--min-pass-rate 必须在 0 到 1 之间")
+    if not args.dataset.is_file():
+        raise SystemExit(f"评测集不存在: {args.dataset}")
+
+    try:
+        report = run_evaluation(
+            args.dataset,
+            args.knowledge_base_id,
+            args.base_url,
+            args.model,
+            args.timeout,
+            args.min_answer_f1,
+            not args.skip_source_id_check,
+            not args.keep_conversations,
+            args.include_non_approved,
+        )
+    except EvaluationError as exc:
+        print(f"评测无法启动: {exc}", file=sys.stderr)
+        return 2
+
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    args.output.write_text(
+        json.dumps(report, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    summary = report["summary"]
+    print("\n评测汇总")
+    print(json.dumps(summary, ensure_ascii=False, indent=2))
+    print(f"报告已写入: {args.output.resolve()}")
+
+    if summary["error_count"]:
+        return 2
+    if args.min_pass_rate is not None and (summary["pass_rate"] or 0.0) < args.min_pass_rate:
+        return 1
+    return 0

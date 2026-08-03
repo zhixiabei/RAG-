@@ -160,4 +160,43 @@ python backend\src\rag_app\cli.py import-folder `
 
 不要输入尖括号。`<kb_id>` 只是文档中的占位符；PowerShell 会把尖括号解释为重定向符号。
 
+## 运行 RAG 评测集
+
+先启动后端，并确认评测所需文档在目标知识库中均已完成入库。然后在项目根目录执行：
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:8080/api/v1/knowledge-bases |
+  Format-Table id,name
+```
+
+从列表中取得知识库 ID 后运行：
+
+```powershell
+python scripts\evaluate_rag.py `
+  --knowledge-base-id "实际的知识库 ID" `
+  --dataset ".\heishanliang_rag_eval_v1.0.0.jsonl"
+```
+
+脚本默认只运行 `status=approved` 的样本。每道题使用独立临时对话，完成后自动删除，并把完整结果写入 `rag_eval_report.json`。汇总报告包括：
+
+- `document_hit_rate`：引用命中期望文档的比例。
+- `chunk_hit_rate`：引用命中期望文本块的比例。接口引用按文档去重，因此该指标只检查每个文档最终暴露的首条引用。
+- `average_answer_char_f1`：忽略空白和标点后的字符级答案 F1，适合做稳定的自动回归信号，不替代人工语义评审。
+- `average_keyword_recall`：答案覆盖样本关键词的平均比例。
+- `refusal_accuracy`：该拒答和不该拒答的判断准确率。
+- `pass_rate`：拒答判断正确，且非拒答样本命中文档、答案字符 F1 不低于阈值的比例。
+
+评测集中的 `source_document_ids` 和 `source_chunk_ids` 必须与当前知识库聊天接口返回的引用 ID 一致。重新导入文档会生成新的文档 ID；这种情况下要同步更新评测集 ID，否则检索命中指标会错误地显示为 0。
+
+在 CI 中可以设置最低通过率，未达到时让命令返回非零退出码：
+
+```powershell
+python scripts\evaluate_rag.py `
+  --knowledge-base-id "实际的知识库 ID" `
+  --min-pass-rate 0.8 `
+  --output ".\rag_eval_report.json"
+```
+
+运行 `python scripts\evaluate_rag.py --help` 可查看模型选择、答案阈值、超时和保留评测对话等选项。
+
 正式架构见 [docs/rag-knowledge-base-design.md](docs/rag-knowledge-base-design.md)。
