@@ -47,6 +47,9 @@ SUPPORTED_SUFFIXES = frozenset(
     }
 )
 
+CHUNK_SIZE = 400
+CHUNK_OVERLAP = 50
+
 GEOMAP_MAP_MAGIC = b"Geomap v3.60 Map\x00"
 GEOMAP_LAYER_MAGIC = b"Geomap v3.60 Layer\x00\x00"
 GEOMAP_LAYER_HEADER_SIZE = 2048
@@ -179,7 +182,6 @@ class DocumentParser:
             raise UnsupportedDocumentTypeError(f"暂不支持的文件类型: {suffix or '无扩展名'}")
 
         stream.seek(0)
-        preserve_source_boundaries = False
         if suffix == ".pdf":
             sources = self._parse_pdf_stream(stream)
         elif suffix == ".docx":
@@ -207,13 +209,9 @@ class DocumentParser:
         elif suffix == ".lst":
             sources = self._parse_lst(file_name, stream.read())
         elif suffix == ".att":
-            content = stream.read()
-            preserve_source_boundaries = content.startswith(GEOMAP_LAYER_STYLE_MAGIC)
-            sources = self._parse_att(file_name, content)
+            sources = self._parse_att(file_name, stream.read())
         elif suffix == ".gdb":
-            content = stream.read()
-            preserve_source_boundaries = content.startswith(GEOMAP_MAP_MAGIC)
-            sources = self._parse_gdb(file_name, content)
+            sources = self._parse_gdb(file_name, stream.read())
         elif suffix == ".dll":
             sources = self._parse_binary(file_name, stream.read())
         elif not suffix:
@@ -221,8 +219,6 @@ class DocumentParser:
         else:
             sources = [(None, None, _decode_text(stream.read()))]
 
-        if preserve_source_boundaries:
-            return self._preserve_source_chunks(sources)
         return self._chunk_sources(sources)
 
     def _parse_pdf(self, content: bytes) -> list[tuple[int | None, str | None, str]]:
@@ -1094,49 +1090,28 @@ class DocumentParser:
         self,
         sources: Iterable[tuple[int | None, str | None, str]],
     ) -> list[ParsedChunk]:
-        chunks: list[ParsedChunk] = []
-        for page_number, section_path, raw_text in sources:
+        text_parts = []
+        for _page_number, _section_path, raw_text in sources:
             text = re.sub(
                 r"\n{3,}",
                 "\n\n",
                 re.sub(r"[ \t]+", " ", raw_text.replace("\x00", "")),
             ).strip()
-            start = 0
-            while start < len(text):
-                end = min(start + 1800, len(text))
-                segment = text[start:end].strip()
-                if segment:
-                    chunks.append(
-                        ParsedChunk(
-                            index=len(chunks),
-                            text=segment,
-                            page_number=page_number,
-                            section_path=section_path,
-                        )
-                    )
-                if end >= len(text):
-                    break
-                start = max(start + 1, end - 240)
-        return chunks
-
-    def _preserve_source_chunks(
-        self,
-        sources: Iterable[tuple[int | None, str | None, str]],
-    ) -> list[ParsedChunk]:
-        chunks: list[ParsedChunk] = []
-        for page_number, section_path, raw_text in sources:
-            text = re.sub(
-                r"\n{3,}",
-                "\n\n",
-                re.sub(r" +", " ", raw_text.replace("\x00", "")),
-            ).strip()
             if text:
-                chunks.append(
-                    ParsedChunk(
-                        index=len(chunks),
-                        text=text,
-                        page_number=page_number,
-                        section_path=section_path,
-                    )
+                text_parts.append(text)
+
+        text = "\n\n".join(text_parts)
+        chunks: list[ParsedChunk] = []
+        start = 0
+        while start < len(text):
+            end = min(start + CHUNK_SIZE, len(text))
+            chunks.append(
+                ParsedChunk(
+                    index=len(chunks),
+                    text=text[start:end],
                 )
+            )
+            if end >= len(text):
+                break
+            start = max(start + 1, end - CHUNK_OVERLAP)
         return chunks

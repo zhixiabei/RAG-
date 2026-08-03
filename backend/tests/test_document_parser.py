@@ -6,7 +6,7 @@ from xml.etree import ElementTree
 from zipfile import ZipFile
 
 from docx import Document
-from rag_app.infrastructure.parsing.document_parser import DocumentParser
+from rag_app.infrastructure.parsing.document_parser import CHUNK_OVERLAP, CHUNK_SIZE, DocumentParser
 
 
 class DocumentParserSpecialExtensionTest(unittest.TestCase):
@@ -43,15 +43,15 @@ class DocumentParserSpecialExtensionTest(unittest.TestCase):
 
         chunks = self.parser.parse_stream("large-media.pptx", stream)
 
-        self.assertEqual([chunk.page_number for chunk in chunks], [1, 2])
-        self.assertIn("first", chunks[0].text)
-        self.assertIn("second", chunks[1].text)
+        self.assertEqual(len(chunks), 1)
+        self.assertIsNone(chunks[0].page_number)
+        self.assertIn("first\n\nsecond", chunks[0].text)
 
     def test_att_text_file_is_supported_and_parsed(self):
         chunks = self.parser.parse("长63渗透率.att", "渗透率 12.5 mD".encode("utf-8"))
 
         self.assertTrue(self.parser.supports("长63渗透率.att"))
-        self.assertEqual(len(chunks), 1)
+        self.assertTrue(all(len(chunk.text) <= CHUNK_SIZE for chunk in chunks))
         self.assertIn("渗透率 12.5 mD", chunks[0].text)
 
     def test_docx_ignores_relationship_to_missing_optional_custom_ui_part(self):
@@ -110,7 +110,7 @@ class DocumentParserSpecialExtensionTest(unittest.TestCase):
         self.assertIn("符号大小", text)
         self.assertIn("光滑系数", text)
 
-    def test_geomap_v360_map_extracts_layer_attribute_tables_without_character_chunking(self):
+    def test_geomap_v360_map_extracts_layer_attribute_tables_with_standard_chunking(self):
         content = bytearray(2048)
         content[:17] = b"Geomap v3.60 Map\x00"
         map_name = "长611渗透率".encode("gb18030")
@@ -137,12 +137,12 @@ class DocumentParserSpecialExtensionTest(unittest.TestCase):
         chunks = self.parser.parse("长611渗透率.gdb", bytes(content))
         text = "\n".join(chunk.text for chunk in chunks)
 
-        self.assertEqual(len(chunks), 3)
-        self.assertGreater(len(chunks[1].text), 1800)
-        self.assertIn("格式: Geomap v3.60 Map 属性数据表", chunks[0].text)
-        self.assertIn("图层名称: 井位", chunks[1].text)
-        self.assertIn("300\t化300-1", chunks[1].text)
-        self.assertIn("图层名称: 渗透率", chunks[2].text)
+        self.assertGreater(len(chunks), 3)
+        self.assertTrue(all(len(chunk.text) <= CHUNK_SIZE for chunk in chunks))
+        self.assertIn("格式: Geomap v3.60 Map 属性数据表", text)
+        self.assertIn("图层名称: 井位", text)
+        self.assertIn("300 化300-1", text)
+        self.assertIn("图层名称: 渗透率", text)
         self.assertIn("0.2", text)
         self.assertNotIn("二进制内容", text)
 
@@ -158,10 +158,11 @@ class DocumentParserSpecialExtensionTest(unittest.TestCase):
 
         chunks = self.parser.parse("长612砂体厚度图.GDB", bytes(content))
 
-        self.assertEqual(len(chunks), 2)
-        self.assertIn("图层数: 1", chunks[0].text)
-        self.assertIn("图层名称: 比例尺", chunks[1].text)
-        self.assertIn("属性记录数: 0", chunks[1].text)
+        text = "\n".join(chunk.text for chunk in chunks)
+        self.assertTrue(all(len(chunk.text) <= CHUNK_SIZE for chunk in chunks))
+        self.assertIn("图层数: 1", text)
+        self.assertIn("图层名称: 比例尺", text)
+        self.assertIn("属性记录数: 0", text)
 
     def test_gdb_binary_file_is_supported_and_keeps_file_name(self):
         chunks = self.parser.parse("长63渗透率.gdb", b"\x00\x01permeability=12.5\x00\x02")
@@ -215,8 +216,19 @@ class DocumentParserSpecialExtensionTest(unittest.TestCase):
             chunks = self.parser.parse("2008.12.30.xls", b"legacy workbook")
 
         excel_fallback.assert_called_once_with(b"legacy workbook")
-        self.assertEqual(chunks[0].section_path, "年度数据")
+        self.assertIsNone(chunks[0].section_path)
         self.assertIn("井号 产量", chunks[0].text)
+
+    def test_uses_only_size_and_overlap_across_source_boundaries(self):
+        chunks = self.parser._chunk_sources([
+            (1, "第一页", "A" * 250),
+            (2, "第二页", "B" * 147 + " " + "B" * 152),
+        ])
+
+        self.assertEqual([len(chunk.text) for chunk in chunks], [CHUNK_SIZE, 202])
+        self.assertEqual(chunks[0].text[-CHUNK_OVERLAP:], chunks[1].text[:CHUNK_OVERLAP])
+        self.assertTrue(all(chunk.page_number is None for chunk in chunks))
+        self.assertTrue(all(chunk.section_path is None for chunk in chunks))
 
 
 if __name__ == "__main__":
