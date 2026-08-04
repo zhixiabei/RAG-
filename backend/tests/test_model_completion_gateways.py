@@ -99,6 +99,25 @@ class ModelCompletionGatewayTest(unittest.TestCase):
         self.assertNotIn("response_format", post.call_args.kwargs["json"])
         success.raise_for_status.assert_called_once()
 
+    @patch("rag_app.infrastructure.openai_compatible.gateway.time.sleep")
+    @patch("rag_app.infrastructure.openai_compatible.gateway.httpx.post")
+    def test_openai_compatible_retries_transient_http_failures(self, post, sleep):
+        unavailable = Mock(status_code=503, headers={})
+        success = Mock(status_code=200)
+        success.json.return_value = {"choices": [{"message": {"content": "answer"}}]}
+        post.side_effect = [unavailable, success]
+        gateway = OpenAICompatibleGateway(
+            "DeepSeek", "https://chat.example/v1", "chat-key", ["chat-model"], "chat-model",
+            "EmbeddingProvider", "https://embed.example/v1", "embed-key", "embed-model",
+        )
+
+        result = gateway.complete([{"role": "user", "content": "question"}])
+
+        self.assertEqual(result, "answer")
+        self.assertEqual(post.call_count, 2)
+        sleep.assert_called_once_with(0.5)
+        success.raise_for_status.assert_called_once()
+
     @patch("rag_app.infrastructure.openai_compatible.gateway.httpx.post")
     def test_openai_compatible_identifies_chat_timeout(self, post):
         post.side_effect = httpx.ReadTimeout("timed out")

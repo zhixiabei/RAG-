@@ -1,4 +1,12 @@
+import time
+
 import httpx
+
+
+_TRANSIENT_STATUS_CODES = frozenset({429, 500, 502, 503, 504})
+_MAX_TRANSIENT_RETRIES = 3
+_RETRY_BASE_DELAY_SECONDS = 0.5
+_RETRY_MAX_DELAY_SECONDS = 8.0
 
 
 class OpenAICompatibleGateway:
@@ -49,17 +57,30 @@ class OpenAICompatibleGateway:
 
     @staticmethod
     def _post_json(url: str, api_key: str, payload: dict, operation: str) -> httpx.Response:
-        try:
-            return httpx.post(
-                url,
-                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-                json=payload,
-                timeout=180,
-            )
-        except httpx.TimeoutException as exc:
-            raise RuntimeError(f"{operation}超时（180 秒）") from exc
-        except httpx.RequestError as exc:
-            raise RuntimeError(f"{operation}连接失败: {exc}") from exc
+        for attempt in range(_MAX_TRANSIENT_RETRIES + 1):
+            try:
+                response = httpx.post(
+                    url,
+                    headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                    json=payload,
+                    timeout=180,
+                )
+            except httpx.TimeoutException as exc:
+                raise RuntimeError(f"{operation}超时（180 秒）") from exc
+            except httpx.RequestError as exc:
+                raise RuntimeError(f"{operation}连接失败: {exc}") from exc
+
+            if response.status_code not in _TRANSIENT_STATUS_CODES or attempt >= _MAX_TRANSIENT_RETRIES:
+                return response
+
+            retry_after = response.headers.get("Retry-After")
+            try:
+                delay = float(retry_after)
+            except (TypeError, ValueError):
+                delay = _RETRY_BASE_DELAY_SECONDS * (2 ** attempt)
+            time.sleep(min(max(delay, 0.0), _RETRY_MAX_DELAY_SECONDS))
+
+        raise AssertionError("unreachable")
 
     def complete(
         self,

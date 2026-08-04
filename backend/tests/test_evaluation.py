@@ -100,6 +100,11 @@ class EvaluationTest(unittest.TestCase):
 
         self.assertTrue(is_refusal(answer))
 
+    def test_detects_no_result_refusal_variant(self):
+        answer = "没有找到任何关于北京市2024年PM2.5月均浓度的数据或分析内容。"
+
+        self.assertTrue(is_refusal(answer))
+
     def test_vector_score_replaces_character_f1_as_pass_condition(self):
         sample = {
             "question_id": "q3",
