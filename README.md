@@ -1,63 +1,135 @@
 # RAG Knowledge Assistant
 
-这是一个基于 **PostgreSQL + MinIO + Qdrant** 的 RAG 项目，模型层可选择全本地 Ollama 或全远程 OpenAI 兼容 API。
+一个面向内网文档的检索增强问答（RAG）应用。系统使用 **PostgreSQL + MinIO + Qdrant** 保存业务数据、原始文件和向量索引，模型层支持本地 Ollama 或远程 OpenAI 兼容 API。
 
-本机开发不需要连接公司内网，但必须在本机启动真实基础设施；项目不使用 SQLite、本地文件存储或本地向量索引作为替代实现。
+当前代码是一个可运行的 MVP/内网原型：可以创建知识库、导入文档、进行带引用的多轮问答，并运行离线评测。它还没有登录认证、持久化任务队列或生产级多租户能力。
 
-## 目录职责
+## 能力概览
+
+- 创建、选择和删除多个知识库；文档按文件夹展示，可单独或按文件夹删除。
+- 通过网页选择文件或文件夹导入文档，显示解析、向量化和索引进度，并对重复文件跳过处理。
+- 支持 `jsonl`、`json`、`pdf`、`docx`、`pptx`、`xlsx`、`md`、`markdown`、`txt`。
+- 问答使用固定顺序的三个阶段：检索决策、Qdrant 向量检索、答案生成；回答返回文档级去重引用。
+- 支持多轮对话、对话改名/删除、模型选择、Markdown/LaTeX 渲染，以及临时附件问答。
+- 支持本地 JSONL 评测集，也可以把原始 RAG chunks 同步到测试集生成工具。
+
+### 当前运行边界
+
+文档上传接口在 MinIO 保存源文件并创建 PostgreSQL 记录后返回 `202`，解析、embedding 和 Qdrant 写入由同一后端进程内的后台线程处理，不是独立的 Redis/RabbitMQ 任务队列。后端重启会丢失内存中的待处理队列，数据库中可能留下 `processing` 状态的文档。
+
+应用使用固定的 `OWNER_ID` 做数据范围过滤，但没有登录和身份认证。当前检索只有 dense cosine Top-K，没有 BM25、sparse 检索或 reranker。聊天附件只在当前请求中使用，不会作为知识库文档持久化。
+
+## 架构和目录
+
+```text
+浏览器 Vue 3
+    -> FastAPI API
+        -> PostgreSQL（知识库、文档、chunk、会话和消息）
+        -> MinIO（原始文件）
+        -> Qdrant（embedding 向量）
+        -> Ollama 或 OpenAI 兼容 API（聊天和 embedding）
+```
 
 ```text
 agent/
   retrieval_decision_agent.py  判断本轮是否需要检索
-  knowledge_retrieval_agent.py 执行知识库向量检索
-  answer_agent.py              生成唯一的最终回答
+  knowledge_retrieval_agent.py 执行 Qdrant 向量检索
+  answer_agent.py              生成最终回答和引用
 backend/src/rag_app/
-  api/              HTTP 路由和请求模型
-  application/      入库用例与 Agent 流程编排
+  api/              HTTP 路由和 Pydantic 请求模型
+  application/      入库、删除和 RAG 流程编排
   domain/           领域模型和端口接口
-  infrastructure/  PostgreSQL、MinIO、Qdrant、Ollama、解析器实现
+  infrastructure/  PostgreSQL、MinIO、Qdrant、模型、解析器实现
   config.py         环境配置
-  main.py           应用组装入口
+  main.py           FastAPI 组装入口
 frontend/src/
-  components/       侧边栏、文档列表、导入面板、问答工作区
+  components/       知识库、文档、导入和问答界面
   services/         Backend API 客户端
   stores/           Pinia 状态
-  App.vue           页面布局
-docs/               架构设计文档
+docs/               架构、运行时分析和权限设计
+scripts/            本地/服务器启动和 RAG 评测脚本
 docker-compose.yml  本机 PostgreSQL、MinIO、Qdrant
-requirements.txt    Python 依赖
 .env.example        配置模板
 ```
 
 前端使用 Vue 3 + JavaScript + Vite，不使用 TypeScript。
 
-## 本机依赖
+## 环境要求
 
 - Python 3.12+
-- Docker Desktop + Docker Compose
-- 本地模式：Ollama，以及 `qwen3:4b`、`qwen3-embedding:0.6b`
-- 远程模式：聊天 API Key 和 embedding API Key
+- Node.js 和 npm
+- Docker Desktop 和 Docker Compose
+- 本地模式：正在运行的 Ollama，以及 `qwen3:4b`、`qwen3-embedding:0.6b`
+- 远程模式：聊天 API Key 和支持 OpenAI 兼容 `/embeddings` 的 embedding API Key
 
-## 启动
+## Windows 快速启动
+
+以下命令在项目根目录执行：
 
 ```powershell
+cd D:\startwell\RAG
 Copy-Item .env.example .env
-pip install -r requirements.txt
+python -m pip install -r requirements.txt
+
+Push-Location frontend
+npm.cmd install
+Pop-Location
+```
+
+使用本地模型时，先启动 Ollama 并准备模型：
+
+```powershell
+ollama pull qwen3:4b
+ollama pull qwen3-embedding:0.6b
+```
+
+然后一键启动 Docker 基础设施、FastAPI 和 Vite：
+
+```powershell
+python run_all.py
+```
+
+访问：
+
+- 前端：<http://127.0.0.1:5173>
+- API 文档：<http://127.0.0.1:8080/docs>
+- 健康检查：<http://127.0.0.1:8080/health>
+
+健康检查返回 `200` 且 JSON 中 `ok` 为 `true`，才表示 PostgreSQL、MinIO、Qdrant 和模型服务都已完成初始化。基础设施未就绪时后端仍可启动，但 `/health` 返回 `503`，业务接口不可用。
+
+### 手动启动
+
+需要分别打开终端时：
+
+```powershell
 docker compose up -d postgres qdrant minio
 python -m uvicorn rag_app.main:app --app-dir backend/src --host 127.0.0.1 --port 8080
 ```
 
-上面的命令必须在项目根目录 `D:\startwell\RAG` 执行。`python -m uvicorn --help` 只会显示帮助，不会启动后端。
+另开终端启动前端：
 
-### Linux 服务器一键启动
-
-服务器使用原生 PostgreSQL、Qdrant、MinIO 和 Conda 环境时，在项目根目录执行：
-
-```bash
-bash scripts/start-server.sh
+```powershell
+cd frontend
+npm.cmd run dev
 ```
 
-脚本默认使用以下路径和配置：
+只启动 Docker 和后端也可以运行：
+
+```powershell
+.\scripts\start-local.ps1
+```
+
+停止本机容器：
+
+```powershell
+docker compose down
+```
+
+`docker compose down -v` 会同时删除 PostgreSQL、Qdrant 和 MinIO 数据卷，仅在确认需要清空本地数据时使用。
+
+## Linux 服务器启动
+
+服务器脚本假设 PostgreSQL 使用系统服务，Qdrant 和 MinIO 使用本地二进制，Python/npm 位于 Conda 环境中。默认路径如下：
 
 ```text
 项目目录       ~/startwork/RAG
@@ -67,7 +139,13 @@ Conda 环境     rag
 前端           http://127.0.0.1:6008
 ```
 
-如服务器目录不同，可在启动时覆盖：
+在项目根目录执行：
+
+```bash
+bash scripts/start-server.sh
+```
+
+路径或 Conda 环境不同时覆盖变量：
 
 ```bash
 RAG_PROJECT_DIR=/path/to/RAG \
@@ -76,41 +154,30 @@ CONDA_ENV_NAME=rag \
 bash scripts/start-server.sh
 ```
 
-脚本会启动 PostgreSQL，并以后台进程启动 Qdrant 和 MinIO；已监听的服务不会重复启动。Uvicorn 和 Vite 由脚本统一看护，按 `Ctrl+C` 会停止前后端，PostgreSQL、Qdrant 和 MinIO 会继续运行。Qdrant 和 MinIO 的日志分别写入各自目录下的 `qdrant.log` 和 `minio.log`。
+脚本会复用已经监听的基础服务，统一看护 8080 后端和 6008 前端；按 `Ctrl+C` 只停止前后端，PostgreSQL、Qdrant 和 MinIO 继续运行。Qdrant/MinIO 日志写在基础服务目录下。
 
-文档导入进度保存在 `documents.progress` 和 `documents.stage` 中。切换到问答界面不会中断当前上传；重新打开页面时，文档列表会恢复后台正在处理的文件并自动刷新状态。尚未发送到后端的本地文件选择不会跨页面刷新保存。
+## 配置模型
 
-文档默认允许两个任务同时上传和解析，embedding 阶段保持单并发，并以 32 个文本块为一批写入向量库，兼顾批量导入速度和本地模型稳定性。知识库文档默认没有大小上限（`MAX_DOCUMENT_BYTES=0`）；大体积 PPTX 使用流式上传并逐页读取 XML，不会把图片、音频和视频加载到内存。可通过 `INGESTION_MAX_CONCURRENCY`、`INGESTION_EMBEDDING_MAX_CONCURRENCY`、`INGESTION_EMBEDDING_BATCH_SIZE` 和 `MAX_DOCUMENT_BYTES` 调整。聊天临时附件仍保留独立的 30 MB 限制。使用本地模型时不要同时启动多个 Uvicorn worker，否则每个进程都有独立的导入并发限制。
+复制 `.env.example` 后按实际环境修改。不要提交包含密钥的 `.env`。
 
-如果当前终端位于 `frontend`，先回到项目根目录：
+### 本地 Ollama
 
-```powershell
-cd D:\startwell\RAG
-python backend\src\rag_app\main.py
+```dotenv
+MODEL_MODE=local
+OLLAMA_URL=http://127.0.0.1:11434
+OLLAMA_CHAT_MODEL=qwen3:4b
+OLLAMA_EMBEDDING_MODEL=qwen3-embedding:0.6b
+QDRANT_COLLECTION=rag_chunks_qwen3_embedding
 ```
 
-也可以直接运行后端入口：
-
-```powershell
-python backend/src/rag_app/main.py
-```
-
-API 文档：`http://127.0.0.1:8080/docs`
-
-也可以在 PyCharm 中直接右键运行 `backend/src/rag_app/main.py`，不需要手动配置 Uvicorn 模块参数。
-
-后端进程可以在基础设施未启动时运行，但 `/health` 会返回 `503`，知识库接口也不可用。启动 Docker Desktop 和三个容器后，重启后端即可。
-
-### 全远程 API 模式
-
-远程模式下，聊天和 embedding 都通过 API，不会调用 Ollama。以 DeepSeek 负责聊天、另一个 OpenAI 兼容服务负责 embedding 为例：
+### 远程 OpenAI 兼容 API
 
 ```dotenv
 MODEL_MODE=remote
 
 REMOTE_LLM_PROVIDER_NAME=DeepSeek
 REMOTE_LLM_BASE_URL=https://api.deepseek.com
-REMOTE_LLM_API_KEY=你的_DeepSeek_API_Key
+REMOTE_LLM_API_KEY=你的聊天_API_Key
 REMOTE_LLM_MODELS=deepseek-chat,deepseek-reasoner
 REMOTE_DEFAULT_CHAT_MODEL=deepseek-chat
 
@@ -118,136 +185,149 @@ REMOTE_EMBEDDING_PROVIDER_NAME=你的_embedding_服务
 REMOTE_EMBEDDING_BASE_URL=https://你的_embedding_服务/v1
 REMOTE_EMBEDDING_API_KEY=你的_embedding_API_Key
 REMOTE_EMBEDDING_MODEL=你的_embedding_模型
-
 QDRANT_COLLECTION=rag_chunks_remote_embedding
 ```
 
-DeepSeek 官方 API 不提供 embedding 接口，所以必须配置一个支持 OpenAI 兼容 `/embeddings` 的远程服务。若同一个平台同时提供聊天和 embedding，可将两组 Base URL 和 API Key 配成相同值。
+DeepSeek 官方 API 不提供 embedding，必须另配一个支持 `/embeddings` 的服务。切换 embedding 模型后，应使用新的 `QDRANT_COLLECTION`，新建知识库并重新导入文档；旧 collection 不能用不同维度或不同模型直接查询。
 
-切换 embedding 模型后需要新建知识库并重新导入文档，同时使用新的 `QDRANT_COLLECTION`；系统会阻止用不同 embedding 模型查询旧索引。问答输入框下方的模型菜单用于切换当前模式内配置的聊天模型。
+常用配置：
 
-问答需要检索时，系统直接将当前问题 embedding 后提交给 Qdrant，在对应知识库范围内按 cosine 相似度返回前 `RAG_TOP_K` 个 chunks（默认 10）。这些 chunks 按 Qdrant 的相似度顺序原样交给回答 Agent，不再进行向量宽召回、PostgreSQL 词法补召回、LLM 相关性评分或上下文压缩。引用列表仍按文档去重，每个文档只显示一次。
+| 配置 | 说明 | 默认值 |
+| --- | --- | --- |
+| `DATABASE_URL` | PostgreSQL 连接串 | `postgresql+psycopg://rag:rag@127.0.0.1:5432/rag` |
+| `MINIO_ENDPOINT` / `MINIO_BUCKET` | 对象存储地址和 bucket | `127.0.0.1:9000` / `rag-documents` |
+| `QDRANT_URL` / `QDRANT_COLLECTION` | 向量库地址和 collection | `http://127.0.0.1:6333` / 见模板 |
+| `RAG_TOP_K` | 每次向量召回数量 | `10` |
+| `INGESTION_MAX_CONCURRENCY` | 入库 worker 数量 | `2` |
+| `INGESTION_EMBEDDING_MAX_CONCURRENCY` | embedding 并发数 | `1` |
+| `INGESTION_EMBEDDING_BATCH_SIZE` | 单批 embedding 数量 | `32` |
+| `MAX_DOCUMENT_BYTES` | 单个知识库文档上限，`0` 表示不限制 | `0` |
+| `TESTSET_TOOL_BASE_URL` | 测试集工具地址，留空可禁用同步 | 模板为 `http://localhost:3000` |
 
-## 一键启动前后端
+本地模型占用内存较高时，不要启动多个 Uvicorn worker；每个进程都会创建自己的入库 worker 和 embedding 并发限制。
 
-第一次先安装前端依赖：
+## 导入和问答
 
-```powershell
-cd frontend
-npm.cmd install
-cd ..
-```
+### 网页导入
 
-之后在 PyCharm 中右键运行根目录的 `run_all.py`，它会自动启动：
+1. 在左侧创建知识库。
+2. 在文档页选择文件或文件夹。
+3. 等待文档状态变为 `ready` 后再提问。
+4. 文档列表会显示 `processing`、`ready` 或 `failed`，失败原因由后端保存。
 
-```text
-Docker PostgreSQL / MinIO / Qdrant
-FastAPI 后端 :8080
-Vue 前端 :5173
-```
+网页选择文件夹时会保留相对目录；同一知识库中相同目录和文件名的重复上传会被跳过。刷新页面不会保留尚未提交到后端的本地 `File` 对象。
 
-也可以双击根目录的 `run_all.cmd`。退出一键进程时按 `Ctrl+C`，前后端子进程会一起停止。
+### 命令行导入
 
-## 导入本机文件夹
-
-先创建知识库并取得实际的 `knowledge_base_id`，再执行：
+先从 API 或网页取得真实的 `knowledge_base_id`，再在项目根目录执行：
 
 ```powershell
 python backend\src\rag_app\cli.py import-folder `
   --knowledge-base-id "实际的知识库 ID" `
-  --folder "D:\startwell\黑山梁资料\黑山梁资料"
+  --folder "D:\data\documents"
 ```
 
-不要输入尖括号。`<kb_id>` 只是文档中的占位符；PowerShell 会把尖括号解释为重定向符号。
+CLI 会递归查找支持的格式并逐个导入。当前 CLI 没有把相对目录传给入库服务，批量导入后的文件会落在知识库根目录；需要保留目录树时请使用网页文件夹导入。这是后续应修复的已知差异。
 
-## 运行 RAG 评测集
+### 临时附件
 
-先启动后端，并确认评测所需文档在目标知识库中均已完成入库。然后在项目根目录执行：
+问答输入框支持上传 1～10 个临时附件；直接 multipart 上传接口的附件总大小上限为 30 MB，预解析接口的单个附件上限为 30 MB，送入回答上下文的临时文本上限为 12,000 字符。附件只参与当前问题，不会写入 MinIO、PostgreSQL 或 Qdrant。
+
+## RAG 评测
+
+先启动后端，并确认评测集引用的文档已经在目标知识库中达到 `ready`：
 
 ```powershell
 Invoke-RestMethod http://127.0.0.1:8080/api/v1/knowledge-bases |
   Format-Table id,name
 ```
 
-从列表中取得知识库 ID 后运行：
+### 本地 JSONL 评测集
 
 ```powershell
 python scripts\evaluate_rag.py `
   --knowledge-base-id "实际的知识库 ID" `
-  --dataset ".\heishanliang_rag_eval_v1.0.0.jsonl"
-```
-
-脚本默认只运行 `status=approved` 的样本。每道题使用独立临时对话，完成后自动删除，并把完整结果写入 `rag_eval_report.json`。汇总报告包括：
-
-- `document_hit_rate`：引用命中期望文档的比例。
-- `chunk_hit_rate`：Top-K 完整召回结果命中期望文本块的比例。
-- `average_answer_score`：标准答案与实际答案的 Embedding 余弦相似度平均分，范围 0 到 100。
-- `average_answer_char_f1`：忽略空白和标点后的字符级答案 F1，仅保留为诊断信息，不参与通过判定。
-- `average_keyword_recall`：答案覆盖样本关键词的平均比例。
-- `refusal_accuracy`：该拒答和不该拒答的判断准确率。
-- `pass_rate`：拒答样本正确拒答；非拒答样本未误拒答、命中期望文档，且答案向量相似度达到阈值的比例。
-
-答案评分使用 `.env` 中配置的 Embedding 模型，将标准答案和实际答案放在同一批请求中编码，计算余弦相似度并乘以 100。固定 Embedding 模型时结果是确定的，不调用生成式聊天模型。默认最低分为 75，可按验证集分布调整：
-
-```powershell
-python scripts\evaluate_rag.py `
-  --knowledge-base-id "实际的知识库 ID" `
-  --min-answer-score 75
-```
-
-向量分数衡量语义接近程度；检索是否取到正确证据仍由 `source_document_ids` 和 `source_chunk_ids` 独立判断。
-
-评测集中的 `source_document_ids` 和 `source_chunk_ids` 必须与当前知识库聊天接口返回的引用 ID 一致。重新导入文档会生成新的文档 ID；这种情况下要同步更新评测集 ID，否则检索命中指标会错误地显示为 0。
-
-在 CI 中可以设置最低通过率，未达到时让命令返回非零退出码：
-
-```powershell
-python scripts\evaluate_rag.py `
-  --knowledge-base-id "实际的知识库 ID" `
-  --min-pass-rate 0.8 `
+  --dataset ".\heishanliang_rag_eval_v1.0.0.jsonl" `
   --output ".\rag_eval_report.json"
 ```
 
-运行 `python scripts\evaluate_rag.py --help` 可查看回答模型、答案阈值、超时和保留评测对话等选项。
+默认只评测 `status=approved` 的样本，并在每题结束后删除临时对话。报告包含文档命中率、chunk 命中率、答案 embedding 相似度、关键词召回率、拒答准确率和 `pass_rate`。答案最低向量相似度默认是 75，可用 `--min-answer-score` 调整；用 `--min-pass-rate 0.8` 可以把评测作为 CI 门禁。
 
-正式架构见 [docs/rag-knowledge-base-design.md](docs/rag-knowledge-base-design.md)。
+评测集中的 `source_document_ids` 和 `source_chunk_ids` 必须对应当前知识库中的 ID。重新导入文档会产生新 ID，需同步更新评测集，否则检索命中率会被计算为 0。`--skip-source-id-check` 只适合排查答案质量，不适合正式检索评估。
 
-## 同步到测试集生成工具
+运行以下命令查看全部参数：
 
-RAG 可以在文档完成解析和切分后，将同一批 Chunk 原样推送到测试集生成工具。测试集工具不会再次切分这些文档，因此导出的 `source_document_ids` 和 `source_chunk_ids` 与 RAG 实际检索引用完全一致。
+```powershell
+python scripts\evaluate_rag.py --help
+```
 
-在 `.env` 中配置：
+### 同步到测试集生成工具
 
-```env
+在 `.env` 中配置工具地址；不使用时将 `TESTSET_TOOL_BASE_URL` 清空：
+
+```dotenv
 TESTSET_TOOL_BASE_URL=http://localhost:3000
 TESTSET_TOOL_SYNC_TIMEOUT_SECONDS=60
 ```
 
-先启动 `D:\startwell\RAG_Test_set_tool-main\RAG_Test_set_tool-main`：
+启动测试集工具后，新文档会在完成切分后同步同一批 chunk 和 ID：
 
 ```powershell
-cd D:\startwell\RAG_Test_set_tool-main\RAG_Test_set_tool-main
-npm run dev
-```
-
-之后从 RAG 上传的新文档会自动同步。文档接口中的 `testset_sync_status` 会显示 `pending`、`syncing`、`synced` 或 `failed`。同步失败不会撤销 RAG 入库；工具恢复后，可以补同步整个知识库：
-
-```powershell
-Invoke-RestMethod `
-  -Method Post `
-  -Uri "http://127.0.0.1:8080/api/v1/knowledge-bases/<knowledge-base-id>/testset-sync"
-```
-
-评测脚本可以直接拉取测试集工具中当前 Approved 的样本，无需先下载 JSONL：
-
-直接拉取会导出工具中的全部 Approved 问题。首次切换到同步模式时，应先将仍引用 `doc_hua31_report` 等旧 ID 的示例/历史问题改为非 Approved 或删除，再基于本次同步的 UUID Chunk 创建并审核新问题。
-
-```powershell
-python scripts/evaluate_rag.py `
-  --knowledge-base-id "<knowledge-base-id>" `
+python scripts\evaluate_rag.py `
+  --knowledge-base-id "实际的知识库 ID" `
   --testset-tool-url "http://localhost:3000" `
   --base-url "http://127.0.0.1:8080" `
   --output ".\rag_eval_report.json"
 ```
 
-原有的本地文件模式仍然可用：`scripts/evaluate_rag.py --dataset <path>`。两种模式都直接使用测试集工具保存的 RAG Chunk ID，不需要再转换 ID。
+同步失败不会回滚 RAG 入库，文档的 `testset_sync_status` 会标记为 `failed`。工具恢复后可补同步整个知识库：
+
+```powershell
+Invoke-RestMethod `
+  -Method Post `
+  -Uri "http://127.0.0.1:8080/api/v1/knowledge-bases/实际的知识库 ID/testset-sync"
+```
+
+## API 和验证
+
+FastAPI 自动文档位于 `/docs`。主要接口包括：
+
+```text
+GET    /health
+GET    /api/v1/models
+GET    /api/v1/knowledge-bases
+POST   /api/v1/knowledge-bases
+GET    /api/v1/knowledge-bases/{id}/documents
+POST   /api/v1/knowledge-bases/{id}/documents
+POST   /api/v1/knowledge-bases/{id}/chat
+POST   /api/v1/knowledge-bases/{id}/chat-with-attachments
+GET/POST/PATCH/DELETE  /api/v1/.../conversations
+```
+
+提交代码前执行：
+
+```powershell
+python -m pytest backend/tests -q -p no:cacheprovider
+
+Push-Location frontend
+npm.cmd test
+npm.cmd run build
+Pop-Location
+```
+
+这些测试以单元测试、mock 和前端工具测试为主，不会替代真实 PostgreSQL、MinIO、Qdrant、Ollama 的集成冒烟测试。
+
+## 文档索引
+
+- [docs/project-runtime-code-analysis.md](docs/project-runtime-code-analysis.md)：当前代码调用链、文件职责和已知实现差异。
+- [docs/rag-knowledge-base-design.md](docs/rag-knowledge-base-design.md)：目标架构和后续演进设计，部分内容尚未实现。
+- [docs/knowledge-base-access-control-design.md](docs/knowledge-base-access-control-design.md)：权限和多租户设计草案。
+
+## 后续优先级
+
+1. **P0：真实基础设施冒烟测试。** 修正并验证全新 PostgreSQL volume 的 schema 初始化顺序，覆盖一次完整的上传、解析、Qdrant 写入、问答和删除链路。
+2. **P1：可靠入库。** 将进程内线程队列替换为持久化任务队列，增加重试、恢复 `processing` 任务、幂等写入和跨 PostgreSQL/MinIO/Qdrant 的补偿机制。
+3. **P1：访问控制。** 引入用户/租户身份、知识库成员关系和文档级权限，移除仅依赖固定 `OWNER_ID` 的数据隔离方式。
+4. **P1：评测闭环。** 固定一套可复现的 embedding 和评测集，持续记录 Recall@K、引用准确率、答案质量、延迟和失败原因。
+5. **P2：检索质量。** 在离线评测证明收益后再加入关键词或 sparse 混合检索、reranker、查询改写和上下文预算控制。
+6. **P2：上线运维。** 补齐日志/指标、备份恢复演练、容量规划、反向代理和内网离线交付流程。
