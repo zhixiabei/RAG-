@@ -1,12 +1,14 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { FileStack, LoaderCircle, MessageSquareText, Plus, Search, X } from 'lucide-vue-next'
+import { FileStack, FlaskConical, LoaderCircle, MessageSquareText, Plus, Search, X } from 'lucide-vue-next'
 import KnowledgeSidebar from './components/KnowledgeSidebar.vue'
 import CreateKnowledgeBaseDialog from './components/CreateKnowledgeBaseDialog.vue'
 import DeleteConfirmDialog from './components/DeleteConfirmDialog.vue'
 import DocumentList from './components/DocumentList.vue'
 import ImportPanel from './components/ImportPanel.vue'
 import ChatWorkspace from './components/ChatWorkspace.vue'
+import EvaluationDialog from './components/EvaluationDialog.vue'
+import { evaluateKnowledgeBase } from './services/api'
 import { useKnowledgeBaseStore } from './stores/knowledgeBase'
 
 const store = useKnowledgeBaseStore()
@@ -20,6 +22,10 @@ const deletingId = ref(null)
 const deleteError = ref('')
 const appLoading = ref(true)
 const importActive = ref(false)
+const evaluationOpen = ref(false)
+const evaluationBusy = ref(false)
+const evaluationError = ref('')
+const evaluationResult = ref(null)
 let documentPollTimer = null
 
 const deleteDialogTitle = computed(() => {
@@ -103,6 +109,7 @@ onBeforeUnmount(() => {
 
 watch(() => store.selectedId, () => {
   documentQuery.value = ''
+  evaluationOpen.value = false
 })
 
 watch(
@@ -132,6 +139,31 @@ async function refreshDocuments() {
 function trackImport() {
   importActive.value = true
   scheduleDocumentPolling()
+}
+
+function openEvaluation() {
+  evaluationError.value = ''
+  evaluationResult.value = null
+  evaluationOpen.value = true
+}
+
+function closeEvaluation() {
+  if (evaluationBusy.value) return
+  evaluationOpen.value = false
+}
+
+async function runEvaluation(questionIds) {
+  if (!store.selectedId || evaluationBusy.value) return
+  evaluationBusy.value = true
+  evaluationError.value = ''
+  evaluationResult.value = null
+  try {
+    evaluationResult.value = await evaluateKnowledgeBase(store.selectedId, questionIds)
+  } catch (cause) {
+    evaluationError.value = cause instanceof Error ? cause.message : '评测失败'
+  } finally {
+    evaluationBusy.value = false
+  }
 }
 
 function requestKnowledgeBaseDelete(item) {
@@ -203,6 +235,16 @@ async function confirmDelete() {
           <button :class="{ active: activeTab === 'chat' }" @click="activeTab = 'chat'"><MessageSquareText :size="15" />对话</button>
           <button :class="{ active: activeTab === 'documents' }" @click="activeTab = 'documents'"><FileStack :size="15" />文档</button>
         </nav>
+        <button
+          v-if="store.selected"
+          class="topbar-test-button"
+          type="button"
+          title="选择测试集并运行评测"
+          @click="openEvaluation"
+        >
+          <FlaskConical :size="15" />
+          测试
+        </button>
       </header>
 
       <template v-if="store.selected">
@@ -260,6 +302,15 @@ async function confirmDelete() {
       :error="deleteError"
       @close="closeDeleteDialog"
       @confirm="confirmDelete"
+    />
+    <EvaluationDialog
+      v-if="evaluationOpen && store.selected"
+      :kb-id="store.selected.id"
+      :busy="evaluationBusy"
+      :error="evaluationError"
+      :result="evaluationResult"
+      @close="closeEvaluation"
+      @run="runEvaluation"
     />
   </div>
 </template>

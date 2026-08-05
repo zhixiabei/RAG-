@@ -248,14 +248,49 @@ def load_dataset(path: Path, include_non_approved: bool = False) -> list[dict]:
     return samples
 
 
+def select_dataset_samples(
+    samples: list[dict],
+    question_ids: list[str] | None = None,
+) -> list[dict]:
+    """Restrict a loaded dataset to explicitly requested question IDs."""
+    requested = {str(question_id).strip() for question_id in question_ids or []}
+    requested.discard("")
+    if not requested:
+        return samples
+
+    selected = [
+        sample for sample in samples
+        if str(sample.get("question_id") or "") in requested
+    ]
+    found = {str(sample.get("question_id")) for sample in selected}
+    missing = sorted(requested - found)
+    if missing:
+        raise EvaluationError(
+            "指定的 question_id 不存在于测试集: " + ", ".join(missing)
+        )
+    return selected
+
+
 def load_dataset_from_testset_tool(
     base_url: str,
     timeout: float,
     include_non_approved: bool = False,
     *,
+    question_ids: list[str] | None = None,
     transport: httpx.BaseTransport | None = None,
 ) -> tuple[list[dict], dict]:
     base_url = base_url.rstrip("/")
+    selected_ids = [
+        str(question_id).strip()
+        for question_id in question_ids or []
+        if str(question_id).strip()
+    ]
+    selected_ids = list(dict.fromkeys(selected_ids))
+    export_scope = (
+        "selected"
+        if selected_ids
+        else "all" if include_non_approved else "approved"
+    )
     try:
         with httpx.Client(timeout=timeout, transport=transport) as client:
             payload = _request_json(
@@ -264,7 +299,8 @@ def load_dataset_from_testset_tool(
                 f"{base_url}/api/datasets/export",
                 json={
                     "format": "jsonl",
-                    "scope": "all" if include_non_approved else "approved",
+                    "scope": export_scope,
+                    **({"questionIds": selected_ids} if selected_ids else {}),
                 },
             )
     except httpx.HTTPError as exc:
@@ -281,6 +317,7 @@ def load_dataset_from_testset_tool(
             raise EvaluationError(
                 f"Test-set tool export sample {index} is missing question_id or question"
             )
+    samples = select_dataset_samples(samples, selected_ids)
     metadata = data.get("metadata")
     return samples, metadata if isinstance(metadata, dict) else {}
 
@@ -397,6 +434,7 @@ def run_evaluation(
     cleanup: bool,
     include_non_approved: bool,
     testset_tool_url: str | None = None,
+    question_ids: list[str] | None = None,
 ) -> dict:
     dataset_metadata = {}
     if testset_tool_url:
@@ -404,12 +442,17 @@ def run_evaluation(
             testset_tool_url,
             timeout,
             include_non_approved,
+            question_ids=question_ids,
         )
         dataset_source = f"{testset_tool_url.rstrip('/')}/api/datasets/export"
     else:
         if dataset_path is None:
             raise EvaluationError("A local dataset path is required")
-        samples = load_dataset(dataset_path, include_non_approved)
+        samples = load_dataset(
+            dataset_path,
+            include_non_approved or bool(question_ids),
+        )
+        samples = select_dataset_samples(samples, question_ids)
         dataset_source = str(dataset_path.resolve())
     base_url = base_url.rstrip("/")
     results = []
@@ -491,6 +534,7 @@ def run_evaluation(
     return {
         "dataset": dataset_source,
         "dataset_metadata": dataset_metadata,
+        "question_ids": question_ids or [],
         "knowledge_base_id": knowledge_base_id,
         "base_url": base_url,
         "model": model,
@@ -531,6 +575,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--keep-conversations", action="store_true", help="保留每题创建的评测对话")
     parser.add_argument("--include-non-approved", action="store_true", help="同时评测未 approved 的样本")
     parser.add_argument(
+        "--question-id",
+        dest="question_ids",
+        action="append",
+        metavar="ID",
+        help="只评测指定题目 ID；需要多个题目时重复使用此参数",
+    )
+    parser.add_argument(
         "--min-pass-rate",
         type=float,
         default=None,
@@ -563,6 +614,7 @@ def main(argv: list[str] | None = None) -> int:
             not args.keep_conversations,
             args.include_non_approved,
             args.testset_tool_url,
+            args.question_ids,
         )
     except (EvaluationError, ValueError) as exc:
         print(f"评测无法启动: {exc}", file=sys.stderr)

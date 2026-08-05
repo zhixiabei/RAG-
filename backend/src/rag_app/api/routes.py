@@ -6,13 +6,22 @@ from ..application.ingestion_service import DocumentTooLargeError, DuplicateDocu
 from fastapi.responses import JSONResponse
 from uuid import uuid4
 
-from .schemas import ChatRequest, ConversationCreate, ConversationUpdate, KnowledgeBaseCreate, ParsedAttachmentChatRequest
+from ..evaluation import EvaluationError, load_dataset_from_testset_tool, run_evaluation
+from .schemas import (
+    ChatRequest,
+    ConversationCreate,
+    ConversationUpdate,
+    EvaluationRequest,
+    KnowledgeBaseCreate,
+    ParsedAttachmentChatRequest,
+)
 
 router = APIRouter()
 
 MAX_CHAT_ATTACHMENTS = 10
 MAX_CHAT_ATTACHMENT_BYTES = 30 * 1024 * 1024
 MAX_CHAT_ATTACHMENT_CONTEXT_CHARS = 12_000
+EVALUATION_TIMEOUT_SECONDS = 180.0
 
 
 def services(request: Request):
@@ -102,6 +111,61 @@ def sync_knowledge_base_to_testset(request: Request, knowledge_base_id: str):
     if not testset_sync:
         raise HTTPException(503, "TESTSET_TOOL_BASE_URL is not configured")
     return testset_sync.sync_knowledge_base(knowledge_base_id)
+
+
+@router.get("/api/v1/knowledge-bases/{knowledge_base_id}/evaluation-samples")
+def list_evaluation_samples(request: Request, knowledge_base_id: str):
+    service, _ = owned_knowledge_base(request, knowledge_base_id)
+    testset_url = service.settings.testset_tool_base_url.strip()
+    if not testset_url:
+        raise HTTPException(503, "TESTSET_TOOL_BASE_URL is not configured")
+    try:
+        samples, _ = load_dataset_from_testset_tool(
+            testset_url,
+            EVALUATION_TIMEOUT_SECONDS,
+        )
+    except EvaluationError as exc:
+        raise HTTPException(503, f"读取测试集失败: {exc}") from exc
+    return [
+        {
+            "question_id": sample["question_id"],
+            "question": sample["question"],
+            "question_type": sample.get("question_type"),
+            "difficulty": sample.get("difficulty"),
+        }
+        for sample in samples
+    ]
+
+
+@router.post("/api/v1/knowledge-bases/{knowledge_base_id}/evaluation")
+def evaluate_knowledge_base(
+    request: Request,
+    knowledge_base_id: str,
+    payload: EvaluationRequest,
+):
+    service, _ = owned_knowledge_base(request, knowledge_base_id)
+    testset_url = service.settings.testset_tool_base_url.strip()
+    if not testset_url:
+        raise HTTPException(503, "TESTSET_TOOL_BASE_URL is not configured")
+    try:
+        return run_evaluation(
+            None,
+            knowledge_base_id,
+            str(request.base_url).rstrip("/"),
+            None,
+            service.models,
+            EVALUATION_TIMEOUT_SECONDS,
+            75.0,
+            True,
+            True,
+            False,
+            testset_url,
+            payload.question_ids,
+        )
+    except EvaluationError as exc:
+        raise HTTPException(422, f"评测无法启动: {exc}") from exc
+    except Exception as exc:
+        raise HTTPException(503, f"评测失败: {exc}") from exc
 
 
 @router.get("/api/v1/knowledge-bases/{knowledge_base_id}/documents/{document_id}")

@@ -10,6 +10,7 @@ from rag_app.evaluation import (
     find_samples_outside_knowledge_base,
     is_refusal,
     load_dataset_from_testset_tool,
+    select_dataset_samples,
     score_response,
     semantic_answer_score,
     summarize,
@@ -247,6 +248,41 @@ class EvaluationTest(unittest.TestCase):
 
         self.assertEqual(samples[0]["question_id"], "q1")
         self.assertEqual(metadata["sample_count"], 1)
+
+    def test_exports_only_selected_question_ids_from_testset_tool(self):
+        def handle(request):
+            payload = json.loads(request.content)
+            self.assertEqual(payload["scope"], "selected")
+            self.assertEqual(payload["questionIds"], ["q2", "q1"])
+            return httpx.Response(
+                200,
+                json={
+                    "success": True,
+                    "data": {
+                        "metadata": {"dataset_name": "rag_eval", "sample_count": 2},
+                        "samples": [
+                            {"question_id": "q1", "question": "first", "status": "approved"},
+                            {"question_id": "q2", "question": "second", "status": "approved"},
+                        ],
+                    },
+                },
+            )
+
+        samples, _ = load_dataset_from_testset_tool(
+            "http://testset.local",
+            10,
+            question_ids=["q2", "q1"],
+            transport=httpx.MockTransport(handle),
+        )
+
+        self.assertEqual({sample["question_id"] for sample in samples}, {"q1", "q2"})
+
+    def test_rejects_missing_selected_question_id(self):
+        with self.assertRaisesRegex(EvaluationError, "不存在"):
+            select_dataset_samples(
+                [{"question_id": "q1", "question": "first"}],
+                ["q1", "missing"],
+            )
 
     def test_finds_legacy_source_ids_before_remote_evaluation(self):
         mismatched = find_samples_outside_knowledge_base(

@@ -7,7 +7,6 @@ import { SUPPORTED_DOCUMENT_ACCEPT, documentExtension, isSupportedDocument } fro
 const props = defineProps({ kbId: { type: String, required: true } })
 const emit = defineEmits(['started', 'completed'])
 const fileInput = ref(null)
-const folderInput = ref(null)
 const files = ref([])
 const importing = ref(false)
 const current = ref(0)
@@ -208,7 +207,7 @@ onMounted(() => {
   const snapshot = loadQueueSnapshot()
   if (snapshot && snapshot.count > 0 && snapshot.kbId === props.kbId) {
     const status = snapshot.importing ? '导入中断' : '已选择但未导入'
-    recoveryMessage.value = `检测到上次${status}：${snapshot.count} 个文件（${new Date(snapshot.timestamp).toLocaleString()}）。请重新选择文件夹继续导入。`
+    recoveryMessage.value = `检测到上次${status}：${snapshot.count} 个文件（${new Date(snapshot.timestamp).toLocaleString()}）。请重新选择文件继续导入。`
   }
 })
 
@@ -233,7 +232,6 @@ function resetState() {
   recoveryMessage.value = ''
   expandedFolders.value = new Set()
   if (fileInput.value) fileInput.value.value = ''
-  if (folderInput.value) folderInput.value.value = ''
 }
 
 watch(() => props.kbId, (newId, oldId) => {
@@ -247,7 +245,7 @@ watch(() => props.kbId, (newId, oldId) => {
   const snapshot = loadQueueSnapshot(newId)
   if (snapshot && snapshot.count > 0 && snapshot.kbId === newId) {
     const status = snapshot.importing ? '导入中断' : '已选择但未导入'
-    recoveryMessage.value = `检测到上次${status}：${snapshot.count} 个文件（${new Date(snapshot.timestamp).toLocaleString()}）。请重新选择文件夹继续导入。`
+    recoveryMessage.value = `检测到上次${status}：${snapshot.count} 个文件（${new Date(snapshot.timestamp).toLocaleString()}）。请重新选择文件继续导入。`
   }
 })
 
@@ -435,7 +433,6 @@ async function startImport() {
 
   if (!remaining.length) {
     if (fileInput.value) fileInput.value.value = ''
-    if (folderInput.value) folderInput.value.value = ''
     clearQueueSnapshot()
   } else {
     saveQueueSnapshot()
@@ -451,7 +448,7 @@ async function startImport() {
       <div class="section-icon"><FolderOpen :size="19" /></div>
       <div>
         <h3>批量导入资料</h3>
-        <p>选择文件或文件夹后，系统会逐个解析并写入知识库。</p>
+        <p>选择文件后，系统会逐个解析并写入知识库。</p>
       </div>
     </div>
     <input
@@ -462,19 +459,8 @@ async function startImport() {
       :accept="SUPPORTED_DOCUMENT_ACCEPT"
       @change="chooseFiles"
     />
-    <input
-      ref="folderInput"
-      class="hidden-input"
-      type="file"
-      multiple
-      webkitdirectory
-      directory
-      :accept="SUPPORTED_DOCUMENT_ACCEPT"
-      @change="chooseFiles"
-    />
     <div class="import-actions">
       <button class="button secondary" :disabled="importing" @click="fileInput?.click()"><FileUp :size="16" />选择文件</button>
-      <button class="button secondary" :disabled="importing" @click="folderInput?.click()"><FolderOpen :size="16" />选择文件夹</button>
     </div>
 
     <div v-if="skippedCount" class="skip-summary">

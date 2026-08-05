@@ -22,6 +22,22 @@ class ParsedAttachmentChatRequest(ChatRequest):
     attachments: list[ParsedChatAttachment] = Field(min_length=1, max_length=10)
 
 
+class EvaluationRequest(BaseModel):
+    question_ids: list[str] = Field(default_factory=list, max_length=500)
+
+    @field_validator("question_ids")
+    @classmethod
+    def normalize_question_ids(cls, values: list[str]) -> list[str]:
+        normalized = []
+        seen = set()
+        for value in values:
+            question_id = value.strip()
+            if question_id and question_id not in seen:
+                normalized.append(question_id)
+                seen.add(question_id)
+        return normalized
+
+
 class ConversationCreate(BaseModel):
     title: str = Field(default="新对话", min_length=1, max_length=200)
 

@@ -1,5 +1,6 @@
 import unittest
 from types import SimpleNamespace
+from unittest.mock import patch
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -34,7 +35,11 @@ class PublicRoutesTest(unittest.TestCase):
         app.state.startup_error = None
         app.state.services = SimpleNamespace(
             repository=FakeRepository(),
-            settings=SimpleNamespace(owner_id="personal"),
+            models=SimpleNamespace(),
+            settings=SimpleNamespace(
+                owner_id="personal",
+                testset_tool_base_url="http://testset.local",
+            ),
         )
         app.include_router(router)
         self.client = TestClient(app)
@@ -54,6 +59,32 @@ class PublicRoutesTest(unittest.TestCase):
         self.assertEqual(self.client.post("/api/v1/auth/login", json={}).status_code, 404)
         self.assertEqual(self.client.post("/api/v1/auth/logout").status_code, 404)
         self.assertEqual(self.client.get("/api/v1/auth/me").status_code, 404)
+
+    @patch("rag_app.api.routes.load_dataset_from_testset_tool")
+    def test_lists_approved_evaluation_samples(self, load_samples):
+        load_samples.return_value = (
+            [{"question_id": "q1", "question": "问题一", "question_type": "numeric"}],
+            {},
+        )
+
+        response = self.client.get("/api/v1/knowledge-bases/kb-personal/evaluation-samples")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()[0]["question_id"], "q1")
+        load_samples.assert_called_once()
+
+    @patch("rag_app.api.routes.run_evaluation")
+    def test_runs_evaluation_for_selected_questions(self, run_evaluation):
+        run_evaluation.return_value = {"summary": {"sample_count": 1}}
+
+        response = self.client.post(
+            "/api/v1/knowledge-bases/kb-personal/evaluation",
+            json={"question_ids": ["q1"]},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["summary"]["sample_count"], 1)
+        self.assertEqual(run_evaluation.call_args.args[-1], ["q1"])
 
 
 if __name__ == "__main__":

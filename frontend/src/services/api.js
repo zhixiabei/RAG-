@@ -72,6 +72,18 @@ export function deleteDocumentFolder(knowledgeBaseId, folderPath) {
   return request(`/api/v1/knowledge-bases/${knowledgeBaseId}/documents?${query}`, { method: 'DELETE' })
 }
 
+export function listEvaluationSamples(knowledgeBaseId) {
+  return request(`/api/v1/knowledge-bases/${encodeURIComponent(knowledgeBaseId)}/evaluation-samples`)
+}
+
+export function evaluateKnowledgeBase(knowledgeBaseId, questionIds = []) {
+  return request(`/api/v1/knowledge-bases/${encodeURIComponent(knowledgeBaseId)}/evaluation`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ question_ids: questionIds }),
+  })
+}
+
 export function listChatModels() {
   return request('/api/v1/models')
 }

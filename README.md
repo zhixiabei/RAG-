@@ -253,6 +253,19 @@ python scripts\evaluate_rag.py `
 
 默认只评测 `status=approved` 的样本，并在每题结束后删除临时对话。报告包含文档命中率、chunk 命中率、答案 embedding 相似度、关键词召回率、拒答准确率和 `pass_rate`。答案最低向量相似度默认是 75，可用 `--min-answer-score` 调整；用 `--min-pass-rate 0.8` 可以把评测作为 CI 门禁。
 
+只评测指定题目时，重复传入 `--question-id`；本地 JSONL 和测试集工具模式都支持：
+
+```powershell
+python scripts\evaluate_rag.py `
+  --knowledge-base-id "实际的知识库 ID" `
+  --testset-tool-url "http://localhost:3000" `
+  --question-id "q0012" `
+  --question-id "q0011" `
+  --output ".\rag_eval_selected_report.json"
+```
+
+指定题目后，RAG 会向测试集工具发送 `scope=selected` 和 `questionIds`，工具只返回这些题目；不传 `--question-id` 时仍导出全部 Approved 样本。
+
 评测集中的 `source_document_ids` 和 `source_chunk_ids` 必须对应当前知识库中的 ID。重新导入文档会产生新 ID，需同步更新评测集，否则检索命中率会被计算为 0。`--skip-source-id-check` 只适合排查答案质量，不适合正式检索评估。
 
 运行以下命令查看全部参数：
