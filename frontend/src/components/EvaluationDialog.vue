@@ -49,10 +49,6 @@ function percentage(value) {
   return value == null ? '—' : `${Math.round(value * 100)}%`
 }
 
-function score(value) {
-  return value == null ? '—' : `${Number(value).toFixed(1)}/100`
-}
-
 function hitStatus(value) {
   if (value == null) return '—'
   return value ? '命中' : '未命中'
@@ -118,24 +114,18 @@ onMounted(loadSamples)
       <div v-if="result" class="evaluation-result">
         <div class="evaluation-result-heading"><CheckCircle2 :size="17" /><strong>测试完成</strong></div>
         <div class="evaluation-metrics">
-          <span>样本 <strong>{{ result.summary.sample_count }}</strong></span>
-          <span>通过 <strong>{{ result.summary.passed_count }}</strong></span>
-          <span>通过率 <strong>{{ percentage(result.summary.pass_rate) }}</strong></span>
-          <span>平均答案评分 <strong>{{ score(result.summary.average_answer_score) }}</strong></span>
           <span>文档命中率 <strong>{{ percentage(result.summary.document_hit_rate) }}</strong></span>
           <span>Chunk 命中率 <strong>{{ percentage(result.summary.chunk_hit_rate) }}</strong></span>
-          <span>关键词召回率 <strong>{{ percentage(result.summary.average_keyword_recall) }}</strong></span>
-          <span>答案字符 F1 <strong>{{ percentage(result.summary.average_answer_char_f1) }}</strong></span>
         </div>
         <div v-if="result.results?.length" class="evaluation-result-list">
-          <div v-for="item in result.results" :key="item.question_id" class="evaluation-result-item" :class="{ passed: item.passed }">
+          <div v-for="item in result.results" :key="item.question_id" class="evaluation-result-item" :class="{ error: item.error }">
             <div class="evaluation-result-info">
               <span class="evaluation-result-id">{{ item.question_id }}</span>
               <small v-if="!item.error">
-                答案 {{ score(item.answer_score) }} · 文档 {{ hitStatus(item.document_hit) }} · Chunk {{ hitStatus(item.chunk_hit) }}
+                文档 {{ hitStatus(item.document_hit) }} · Chunk {{ hitStatus(item.chunk_hit) }}
               </small>
             </div>
-            <strong>{{ item.error ? '错误' : item.passed ? '通过' : '未通过' }}</strong>
+            <strong v-if="item.error">错误</strong>
           </div>
         </div>
       </div>

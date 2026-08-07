@@ -39,6 +39,34 @@ class TestsetToolClient:
     def close(self) -> None:
         self._client.close()
 
+    def save_question(self, question: dict[str, Any]) -> dict[str, Any]:
+        try:
+            response = self._client.post("/api/questions", json=question)
+        except httpx.HTTPError as exc:
+            raise TestsetToolSyncError(
+                f"Cannot reach test-set tool at {self.base_url}: {exc}"
+            ) from exc
+
+        try:
+            response_payload = response.json()
+        except ValueError:
+            response_payload = None
+        if (
+            not response.is_success
+            or not isinstance(response_payload, dict)
+            or response_payload.get("success") is not True
+        ):
+            detail = None
+            if isinstance(response_payload, dict):
+                error = response_payload.get("error")
+                if isinstance(error, dict):
+                    detail = error.get("message")
+            raise TestsetToolSyncError(
+                f"Test-set question import failed ({response.status_code}): "
+                f"{detail or response.text or 'invalid response'}"
+            )
+        return response_payload
+
     def sync_document(self, document: dict[str, Any], chunks: list[ParsedChunk]) -> dict[str, Any]:
         document_id = str(document["document_id"])
         knowledge_base_id = str(document["knowledge_base_id"])

@@ -4,36 +4,27 @@
   "base_url": "http://127.0.0.1:8080",
   "model": null,
   "evaluated_at": "2026-08-03T02:30:49.304620+00:00",
-  "min_answer_f1": 0.35,
   "summary": {
     "sample_count": 3,
     "completed_count": 0,
     "error_count": 3,
-    "passed_count": 0,
-    "pass_rate": null,
     "document_hit_rate": null,
-    "chunk_hit_rate": null,
-    "refusal_accuracy": null,
-    "average_answer_char_f1": null,
-    "average_keyword_recall": null
+    "chunk_hit_rate": null
   },
   "results": [
     {
       "question_id": "q0012",
       "question": "化子坪项目区2023年测试了多少口井？测试结果分别是什么？",
-      "passed": false,
       "error": "POST http://127.0.0.1:8080/api/v1/knowledge-bases/3e57469d-e9d1-49b2-aaa7-4046f776a729/chat 返回 503: 问答服务不可用: 检索判断失败（0.34 秒）: RuntimeError: DeepSeek 聊天接口连接失败: [WinError 10013] 以一种访问权限不允许的方式做了一个访问套接字的尝试。"
     },
     {
       "question_id": "q0011",
       "question": "长6油层的特点是什么",
-      "passed": false,
       "error": "POST http://127.0.0.1:8080/api/v1/knowledge-bases/3e57469d-e9d1-49b2-aaa7-4046f776a729/chat 返回 503: 问答服务不可用: 检索判断失败（0.21 秒）: RuntimeError: DeepSeek 聊天接口连接失败: [WinError 10013] 以一种访问权限不允许的方式做了一个访问套接字的尝试。"
     },
     {
       "question_id": "q0007",
       "question": "长6储层的特征是什么",
-      "passed": false,
       "error": "POST http://127.0.0.1:8080/api/v1/knowledge-bases/3e57469d-e9d1-49b2-aaa7-4046f776a729/chat 返回 503: 问答服务不可用: 检索判断失败（0.22 秒）: RuntimeError: DeepSeek 聊天接口连接失败: [WinError 10013] 以一种访问权限不允许的方式做了一个访问套接字的尝试。"
     }
   ]

@@ -203,6 +203,8 @@ DeepSeek 官方 API 不提供 embedding，必须另配一个支持 `/embeddings`
 | `INGESTION_EMBEDDING_BATCH_SIZE` | 单批 embedding 数量 | `32` |
 | `MAX_DOCUMENT_BYTES` | 单个知识库文档上限，`0` 表示不限制 | `0` |
 | `TESTSET_TOOL_BASE_URL` | 测试集工具地址，留空可禁用同步 | 模板为 `http://localhost:3000` |
+| `TESTSET_GENERATOR_BASE_URL` / `TESTSET_GENERATOR_MODEL` | 独立测试集生成模型的 OpenAI 兼容地址和模型 | 必填 |
+| `TESTSET_GENERATOR_TIMEOUT_SECONDS` | 单次独立模型请求超时秒数 | `90` |
 
 本地模型占用内存较高时，不要启动多个 Uvicorn worker；每个进程都会创建自己的入库 worker 和 embedding 并发限制。
 
@@ -242,6 +244,34 @@ Invoke-RestMethod http://127.0.0.1:8080/api/v1/knowledge-bases |
   Format-Table id,name
 ```
 
+### 独立模型生成测试集
+
+测试集生成模型与当前 RAG 问答模型分开配置，且模型名不能相同。脚本会读取已入库的 `ready` 文档和 Chunk，先同步证据到测试集工坊，再将问题以 `draft` 状态写入工坊：
+
+```dotenv
+TESTSET_TOOL_BASE_URL=http://localhost:3000
+TESTSET_GENERATOR_PROVIDER_NAME=Independent Generator
+TESTSET_GENERATOR_BASE_URL=https://你的模型服务/v1
+TESTSET_GENERATOR_API_KEY=你的生成模型_API_Key
+TESTSET_GENERATOR_MODEL=你的独立聊天模型
+TESTSET_GENERATOR_TIMEOUT_SECONDS=90
+```
+
+默认 `--difficulty mixed` 会按 `medium`、`hard`、`easy` 循环生成；中难题优先使用 2 个证据 Chunk，难题优先使用 3 个证据 Chunk。只生成难题：
+
+```powershell
+python scripts\generate_testset.py `
+  --knowledge-base-id "实际的知识库 ID" `
+  --difficulty hard `
+  --max-source-chunks 3 `
+  --questions-per-document 3 `
+  --question-id-prefix "hard_v1" `
+  --output ".\rag_eval_hard_v1.jsonl" `
+  --overwrite
+```
+
+追加 `--local-only` 时只保存 JSONL，不会写入测试集工坊。
+
 ### 本地 JSONL 评测集
 
 ```powershell
@@ -251,7 +281,7 @@ python scripts\evaluate_rag.py `
   --output ".\rag_eval_report.json"
 ```
 
-默认只评测 `status=approved` 的样本，并在每题结束后删除临时对话。报告包含文档命中率、chunk 命中率、答案 embedding 相似度、关键词召回率、拒答准确率和 `pass_rate`。答案最低向量相似度默认是 75，可用 `--min-answer-score` 调整；用 `--min-pass-rate 0.8` 可以把评测作为 CI 门禁。
+默认只评测 `status=approved` 的样本，并在每题结束后删除临时对话。报告只统计文档命中率和 chunk 命中率，不会计算答案向量相似度或字符串匹配指标。
 
 只评测指定题目时，重复传入 `--question-id`；本地 JSONL 和测试集工具模式都支持：
 
@@ -266,7 +296,7 @@ python scripts\evaluate_rag.py `
 
 指定题目后，RAG 会向测试集工具发送 `scope=selected` 和 `questionIds`，工具只返回这些题目；不传 `--question-id` 时仍导出全部 Approved 样本。
 
-评测集中的 `source_document_ids` 和 `source_chunk_ids` 必须对应当前知识库中的 ID。重新导入文档会产生新 ID，需同步更新评测集，否则检索命中率会被计算为 0。`--skip-source-id-check` 只适合排查答案质量，不适合正式检索评估。
+评测集中的 `source_document_ids` 和 `source_chunk_ids` 必须对应当前知识库中的 ID。重新导入文档会产生新 ID，需同步更新评测集，否则检索命中率会被计算为 0。没有配置对应 source ID 的样本不计入相应命中率分母。
 
 运行以下命令查看全部参数：
 

@@ -100,6 +100,27 @@ class TestsetToolClientTest(unittest.TestCase):
         finally:
             client.close()
 
+    def test_saves_a_question_to_the_workshop(self):
+        captured = {}
+
+        def handle(request):
+            captured["path"] = request.url.path
+            captured["payload"] = json.loads(request.content)
+            return httpx.Response(201, json={"success": True, "issues": []})
+
+        client = TestsetToolClient(
+            "http://testset.local",
+            transport=httpx.MockTransport(handle),
+        )
+        try:
+            result = client.save_question({"id": "generated_0001", "question": "问题"})
+        finally:
+            client.close()
+
+        self.assertEqual(captured["path"], "/api/questions")
+        self.assertEqual(captured["payload"]["id"], "generated_0001")
+        self.assertTrue(result["success"])
+
 
 class TestsetSyncServiceTest(unittest.TestCase):
     def test_resyncs_all_ready_documents_from_persisted_chunks(self):
