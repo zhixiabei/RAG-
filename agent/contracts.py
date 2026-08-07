@@ -38,3 +38,10 @@ class VectorStore(Protocol):
         vector: list[float],
         limit: int,
     ) -> Sequence[SearchHit]: ...
+
+    def search_keywords(
+        self,
+        knowledge_base_id: str,
+        keywords: list[str],
+        limit: int,
+    ) -> Sequence[SearchHit]: ...

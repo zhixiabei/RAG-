@@ -1,5 +1,6 @@
 import time
 from typing import Any
+import unicodedata
 
 from qdrant_client import QdrantClient, models
 from qdrant_client.http.exceptions import ResponseHandlingException
@@ -10,6 +11,7 @@ from ...domain.models import SearchHit
 
 class QdrantVectorStore:
     payload_index_fields = ("knowledge_base_id", "document_id", "node_id")
+    text_index_field = "text"
 
     def __init__(
         self,
@@ -95,6 +97,19 @@ class QdrantVectorStore:
                 # Index construction may take time for an existing large collection.
                 wait=False,
             )
+        if self.text_index_field not in indexed_fields:
+            self.client.create_payload_index(
+                collection_name=self.collection,
+                field_name=self.text_index_field,
+                field_schema=models.TextIndexParams(
+                    type=models.TextIndexType.TEXT,
+                    tokenizer=models.TokenizerType.MULTILINGUAL,
+                min_token_len=1,
+                lowercase=True,
+                phrase_matching=True,
+            ),
+                wait=True,
+            )
 
     def upsert(self, points: list[dict[str, Any]], vectors: list[list[float]]) -> None:
         for start in range(0, len(points), self.upsert_batch_size):
@@ -128,31 +143,89 @@ class QdrantVectorStore:
             limit=limit,
             with_payload=True,
         )
-        return [
-            SearchHit(
-                chunk_id=str(point.payload["chunk_id"]),
-                document_id=str(point.payload["document_id"]),
-                knowledge_base_id=str(point.payload["knowledge_base_id"]),
-                title=str(point.payload["title"]),
-                text=str(point.payload["text"]),
-                folder_path=str(point.payload.get("folder_path", "")),
-                page_number=point.payload.get("page_number"),
-                score=float(point.score),
-                file_name=str(point.payload.get("file_name") or point.payload["title"]),
-                relative_path=str(
-                    point.payload.get("relative_path")
-                    or "/".join(
-                        part.strip("/\\")
-                        for part in (
-                            str(point.payload.get("folder_path", "")),
-                            str(point.payload.get("file_name") or point.payload["title"]),
-                        )
-                        if part.strip("/\\")
-                    )
-                ),
+        return [self._to_search_hit(point) for point in result.points]
+
+    def search_keywords(
+        self,
+        knowledge_base_id: str,
+        keywords: list[str],
+        limit: int,
+    ) -> list[SearchHit]:
+        if not keywords or limit <= 0:
+            return []
+        conditions = [
+            models.FieldCondition(
+                key=self.text_index_field,
+                match=models.MatchText(text=keyword),
             )
-            for point in result.points
+            for keyword in keywords
         ]
+        points, _ = self.client.scroll(
+            collection_name=self.collection,
+            scroll_filter=models.Filter(
+                must=[models.FieldCondition(
+                    key="knowledge_base_id",
+                    match=models.MatchValue(value=knowledge_base_id),
+                )],
+                min_should=models.MinShould(conditions=conditions, min_count=1),
+            ),
+            limit=min(256, max(64, limit * 16)),
+            with_payload=True,
+            with_vectors=False,
+        )
+        normalized_keywords = [self._normalize_lexical(keyword) for keyword in keywords]
+
+        def keyword_score(point) -> int:
+            text = self._normalize_lexical(str(point.payload.get("text") or ""))
+            return sum(
+                len(keyword) ** 2 + (100 if any(char.isdigit() for char in keyword) else 0)
+                for keyword in normalized_keywords
+                if keyword and keyword in text
+            )
+
+        ranked = sorted(
+            points,
+            key=lambda point: (
+                keyword_score(point),
+                str(point.payload.get("chunk_id") or ""),
+            ),
+            reverse=True,
+        )[:limit]
+        max_score = max((keyword_score(point) for point in ranked), default=1)
+        return [
+            self._to_search_hit(point, keyword_score(point) / max_score)
+            for point in ranked
+        ]
+
+    @staticmethod
+    def _normalize_lexical(value: str) -> str:
+        return "".join(unicodedata.normalize("NFKC", value).lower().split())
+
+    @staticmethod
+    def _to_search_hit(point, score: float | None = None) -> SearchHit:
+        payload = point.payload
+        return SearchHit(
+            chunk_id=str(payload["chunk_id"]),
+            document_id=str(payload["document_id"]),
+            knowledge_base_id=str(payload["knowledge_base_id"]),
+            title=str(payload["title"]),
+            text=str(payload["text"]),
+            folder_path=str(payload.get("folder_path", "")),
+            page_number=payload.get("page_number"),
+            score=float(point.score if score is None else score),
+            file_name=str(payload.get("file_name") or payload["title"]),
+            relative_path=str(
+                payload.get("relative_path")
+                or "/".join(
+                    part.strip("/\\")
+                    for part in (
+                        str(payload.get("folder_path", "")),
+                        str(payload.get("file_name") or payload["title"]),
+                    )
+                    if part.strip("/\\")
+                )
+            ),
+        )
 
     def delete_document(self, document_id: str) -> None:
         self._delete_by_payload("document_id", document_id)

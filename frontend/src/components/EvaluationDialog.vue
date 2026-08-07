@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { CheckCircle2, FlaskConical, LoaderCircle, X } from 'lucide-vue-next'
+import { CheckCircle2, CircleAlert, FlaskConical, LoaderCircle, X } from 'lucide-vue-next'
 import { listEvaluationSamples } from '../services/api'
 
 const props = defineProps({
@@ -112,16 +112,27 @@ onMounted(loadSamples)
       </template>
 
       <div v-if="result" class="evaluation-result">
-        <div class="evaluation-result-heading"><CheckCircle2 :size="17" /><strong>测试完成</strong></div>
+        <div class="evaluation-result-heading" :class="{ stopped: result.summary.stopped_early }">
+          <CircleAlert v-if="result.summary.stopped_early" :size="17" />
+          <CheckCircle2 v-else :size="17" />
+          <strong>{{ result.summary.stopped_early ? '测试已中止' : '测试完成' }}</strong>
+        </div>
         <div class="evaluation-metrics">
+          <span>
+            已处理
+            <strong>{{ result.summary.sample_count }}/{{ result.summary.requested_count ?? result.summary.sample_count }}</strong>
+          </span>
+          <span v-if="result.summary.error_count">错误 <strong>{{ result.summary.error_count }}</strong></span>
           <span>文档命中率 <strong>{{ percentage(result.summary.document_hit_rate) }}</strong></span>
           <span>Chunk 命中率 <strong>{{ percentage(result.summary.chunk_hit_rate) }}</strong></span>
         </div>
+        <p v-if="result.stop_reason" class="evaluation-stop-message">{{ result.stop_reason }}</p>
         <div v-if="result.results?.length" class="evaluation-result-list">
           <div v-for="item in result.results" :key="item.question_id" class="evaluation-result-item" :class="{ error: item.error }">
             <div class="evaluation-result-info">
               <span class="evaluation-result-id">{{ item.question_id }}</span>
-              <small v-if="!item.error">
+              <small v-if="item.error" class="evaluation-error-detail" :title="item.error">{{ item.error }}</small>
+              <small v-else>
                 文档 {{ hitStatus(item.document_hit) }} · Chunk {{ hitStatus(item.chunk_hit) }}
               </small>
             </div>

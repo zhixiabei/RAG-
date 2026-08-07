@@ -1,4 +1,5 @@
 import unittest
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from qdrant_client.http.exceptions import ResponseHandlingException
@@ -29,9 +30,19 @@ class QdrantVectorStoreTest(unittest.TestCase):
         self.assertEqual(hnsw.full_scan_threshold, 5000)
         self.assertEqual(
             {call.kwargs["field_name"] for call in client.create_payload_index.call_args_list},
-            {"knowledge_base_id", "document_id", "node_id"},
+            {"knowledge_base_id", "document_id", "node_id", "text"},
         )
-        self.assertTrue(all(call.kwargs["wait"] is False for call in client.create_payload_index.call_args_list))
+        text_call = next(
+            call for call in client.create_payload_index.call_args_list
+            if call.kwargs["field_name"] == "text"
+        )
+        self.assertEqual(text_call.kwargs["field_schema"].tokenizer, "multilingual")
+        self.assertTrue(text_call.kwargs["wait"])
+        self.assertTrue(all(
+            call.kwargs["wait"] is False
+            for call in client.create_payload_index.call_args_list
+            if call.kwargs["field_name"] != "text"
+        ))
 
     @patch("rag_app.infrastructure.qdrant.vector_store.QdrantClient")
     def test_search_uses_approximate_hnsw_with_configured_ef(self, client_class):
@@ -45,6 +56,32 @@ class QdrantVectorStoreTest(unittest.TestCase):
         params = client.query_points.call_args.kwargs["search_params"]
         self.assertEqual(params.hnsw_ef, 96)
         self.assertFalse(params.exact)
+
+    @patch("rag_app.infrastructure.qdrant.vector_store.QdrantClient")
+    def test_keyword_search_prioritizes_exact_identifier_matches(self, client_class):
+        client = client_class.return_value
+
+        def point(chunk_id, document_id, text):
+            return SimpleNamespace(payload={
+                "chunk_id": chunk_id,
+                "document_id": document_id,
+                "knowledge_base_id": "kb-1",
+                "title": "文档",
+                "text": text,
+            })
+
+        client.scroll.return_value = ([
+            point("other:1", "other", "年累计增油情况"),
+            point("source:2", "source", "化348-4 年累计增油 66.36"),
+        ], None)
+        store = QdrantVectorStore("http://qdrant:6333", "chunks")
+
+        hits = store.search_keywords("kb-1", ["化348-4", "年累计增油"], 1)
+
+        self.assertEqual([hit.chunk_id for hit in hits], ["source:2"])
+        search_filter = client.scroll.call_args.kwargs["scroll_filter"]
+        self.assertEqual(search_filter.must[0].match.value, "kb-1")
+        self.assertEqual(search_filter.min_should.min_count, 1)
 
     @patch("rag_app.infrastructure.qdrant.vector_store.QdrantClient")
     def test_existing_collection_updates_changed_hnsw_and_only_missing_payload_indexes(self, client_class):
@@ -72,7 +109,7 @@ class QdrantVectorStoreTest(unittest.TestCase):
         self.assertEqual(update.full_scan_threshold, 10_000)
         self.assertEqual(
             {call.kwargs["field_name"] for call in client.create_payload_index.call_args_list},
-            {"document_id", "node_id"},
+            {"document_id", "node_id", "text"},
         )
 
     @patch("rag_app.infrastructure.qdrant.vector_store.QdrantClient")
@@ -88,6 +125,7 @@ class QdrantVectorStoreTest(unittest.TestCase):
             "knowledge_base_id": object(),
             "document_id": object(),
             "node_id": object(),
+            "text": object(),
         }
         store = QdrantVectorStore("http://qdrant:6333", "chunks")
 
@@ -111,7 +149,7 @@ class QdrantVectorStoreTest(unittest.TestCase):
 
         client.get_collections.assert_called_once_with()
         client.update_collection.assert_called_once()
-        self.assertEqual(client.create_payload_index.call_count, 3)
+        self.assertEqual(client.create_payload_index.call_count, 4)
 
     @patch("rag_app.infrastructure.qdrant.vector_store.QdrantClient")
     def test_document_delete_returns_after_qdrant_accepts_operation(self, client_class):

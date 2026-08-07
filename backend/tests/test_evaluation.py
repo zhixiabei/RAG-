@@ -1,5 +1,8 @@
 import json
+from pathlib import Path
+import tempfile
 import unittest
+from unittest.mock import patch
 
 import httpx
 
@@ -8,6 +11,7 @@ from rag_app.evaluation import (
     find_samples_outside_knowledge_base,
     load_dataset_from_testset_tool,
     measure_retrieval_hits,
+    run_evaluation,
     select_dataset_samples,
     summarize,
 )
@@ -166,6 +170,51 @@ class EvaluationTest(unittest.TestCase):
         )
 
         self.assertEqual([sample["question_id"] for sample in mismatched], ["old"])
+
+    @patch("rag_app.evaluation.evaluate_sample")
+    @patch("rag_app.evaluation.httpx.Client")
+    def test_stops_remaining_samples_after_request_timeout(self, client_class, evaluate_sample):
+        client = client_class.return_value.__enter__.return_value
+        client.get.return_value = httpx.Response(200)
+        evaluate_sample.side_effect = [
+            {
+                "question_id": "q1",
+                "question": "first",
+                "document_hit": True,
+                "chunk_hit": True,
+            },
+            httpx.ReadTimeout("timed out"),
+        ]
+
+        with tempfile.TemporaryDirectory() as directory:
+            dataset = Path(directory) / "evaluation.jsonl"
+            dataset.write_text(
+                "\n".join(
+                    json.dumps({
+                        "question_id": f"q{index}",
+                        "question": f"question {index}",
+                        "status": "approved",
+                    })
+                    for index in range(1, 4)
+                ),
+                encoding="utf-8",
+            )
+            report = run_evaluation(
+                dataset,
+                "kb-1",
+                "http://backend.local",
+                None,
+                180.0,
+                True,
+                False,
+            )
+
+        self.assertEqual(evaluate_sample.call_count, 2)
+        self.assertTrue(report["summary"]["stopped_early"])
+        self.assertEqual(report["summary"]["requested_count"], 3)
+        self.assertEqual(report["summary"]["remaining_count"], 1)
+        self.assertIn("q2", report["stop_reason"])
+        self.assertIn("180 秒", report["results"][-1]["error"])
 
 
 if __name__ == "__main__":

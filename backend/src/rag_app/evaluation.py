@@ -292,6 +292,7 @@ def run_evaluation(
         dataset_source = str(dataset_path.resolve())
     base_url = base_url.rstrip("/")
     results = []
+    stop_reason = None
     with httpx.Client(timeout=timeout) as client:
         try:
             health = client.get(f"{base_url}/health")
@@ -350,6 +351,18 @@ def run_evaluation(
                     f"chunk_hit={result['chunk_hit']}",
                     flush=True,
                 )
+            except httpx.TimeoutException:
+                remaining_count = len(samples) - index
+                error = f"单题请求超时（{timeout:g} 秒）"
+                result = {
+                    "question_id": question_id,
+                    "question": sample.get("question"),
+                    "error": error,
+                }
+                stop_reason = (
+                    f"{question_id} {error}，已停止剩余 {remaining_count} 道题"
+                )
+                print(f"  ERROR {stop_reason}", file=sys.stderr, flush=True)
             except (EvaluationError, httpx.HTTPError) as exc:
                 result = {
                     "question_id": question_id,
@@ -358,6 +371,15 @@ def run_evaluation(
                 }
                 print(f"  ERROR {exc}", file=sys.stderr, flush=True)
             results.append(result)
+            if stop_reason:
+                break
+
+    summary = summarize(results)
+    summary.update({
+        "requested_count": len(samples),
+        "remaining_count": len(samples) - len(results),
+        "stopped_early": stop_reason is not None,
+    })
 
     return {
         "dataset": dataset_source,
@@ -367,7 +389,8 @@ def run_evaluation(
         "base_url": base_url,
         "model": model,
         "evaluated_at": datetime.now(timezone.utc).isoformat(),
-        "summary": summarize(results),
+        "summary": summary,
+        "stop_reason": stop_reason,
         "results": results,
     }
 

@@ -34,6 +34,9 @@ class FakeVectorStore:
         self.search_calls.append((knowledge_base_id, vector, limit))
         return self.hits[:limit]
 
+    def search_keywords(self, knowledge_base_id, keywords, limit):
+        return []
+
 
 class FakeModelGateway:
     chat_model = "test-chat"
