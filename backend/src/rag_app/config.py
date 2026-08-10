@@ -56,10 +56,5 @@ class Settings(BaseSettings):
     rag_context_compression_output_tokens: int = 1_000
     testset_tool_base_url: str = ""
     testset_tool_sync_timeout_seconds: float = 60.0
-    testset_generator_provider_name: str = "Testset Generator"
-    testset_generator_base_url: str = ""
-    testset_generator_api_key: str = ""
-    testset_generator_model: str = ""
-    testset_generator_timeout_seconds: float = 90.0
     owner_id: str = "personal"
     cors_origins: str = "http://127.0.0.1:5173,http://localhost:5173"

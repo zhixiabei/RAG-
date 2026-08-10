@@ -203,8 +203,6 @@ DeepSeek 官方 API 不提供 embedding，必须另配一个支持 `/embeddings`
 | `INGESTION_EMBEDDING_BATCH_SIZE` | 单批 embedding 数量 | `32` |
 | `MAX_DOCUMENT_BYTES` | 单个知识库文档上限，`0` 表示不限制 | `0` |
 | `TESTSET_TOOL_BASE_URL` | 测试集工具地址，留空可禁用同步 | 模板为 `http://localhost:3000` |
-| `TESTSET_GENERATOR_BASE_URL` / `TESTSET_GENERATOR_MODEL` | 独立测试集生成模型的 OpenAI 兼容地址和模型 | 必填 |
-| `TESTSET_GENERATOR_TIMEOUT_SECONDS` | 单次独立模型请求超时秒数 | `90` |
 
 本地模型占用内存较高时，不要启动多个 Uvicorn worker；每个进程都会创建自己的入库 worker 和 embedding 并发限制。
 
@@ -243,34 +241,6 @@ CLI 会递归查找支持的格式并逐个导入。当前 CLI 没有把相对�
 Invoke-RestMethod http://127.0.0.1:8080/api/v1/knowledge-bases |
   Format-Table id,name
 ```
-
-### 独立模型生成测试集
-
-测试集生成模型与当前 RAG 问答模型分开配置，且模型名不能相同。脚本会读取已入库的 `ready` 文档和 Chunk，先同步证据到测试集工坊，再将问题以 `draft` 状态写入工坊：
-
-```dotenv
-TESTSET_TOOL_BASE_URL=http://localhost:3000
-TESTSET_GENERATOR_PROVIDER_NAME=Independent Generator
-TESTSET_GENERATOR_BASE_URL=https://你的模型服务/v1
-TESTSET_GENERATOR_API_KEY=你的生成模型_API_Key
-TESTSET_GENERATOR_MODEL=你的独立聊天模型
-TESTSET_GENERATOR_TIMEOUT_SECONDS=90
-```
-
-默认 `--difficulty mixed` 会按 `medium`、`hard`、`easy` 循环生成；中难题优先使用 2 个证据 Chunk，难题优先使用 3 个证据 Chunk。只生成难题：
-
-```powershell
-python scripts\generate_testset.py `
-  --knowledge-base-id "实际的知识库 ID" `
-  --difficulty hard `
-  --max-source-chunks 3 `
-  --questions-per-document 3 `
-  --question-id-prefix "hard_v1" `
-  --output ".\rag_eval_hard_v1.jsonl" `
-  --overwrite
-```
-
-追加 `--local-only` 时只保存 JSONL，不会写入测试集工坊。
 
 ### 本地 JSONL 评测集
 
