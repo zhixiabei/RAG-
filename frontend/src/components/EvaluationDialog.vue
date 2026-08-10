@@ -49,6 +49,17 @@ function percentage(value) {
   return value == null ? '—' : `${Math.round(value * 100)}%`
 }
 
+function duration(value) {
+  const milliseconds = Number(value)
+  if (!Number.isFinite(milliseconds)) return '—'
+  return milliseconds < 1000 ? `${Math.round(milliseconds)} ms` : `${(milliseconds / 1000).toFixed(2)} s`
+}
+
+function integer(value) {
+  const number = Number(value)
+  return Number.isFinite(number) ? Math.round(number).toLocaleString('zh-CN') : '—'
+}
+
 function hitStatus(value) {
   if (value == null) return '—'
   return value ? '命中' : '未命中'
@@ -125,6 +136,11 @@ onMounted(loadSamples)
           <span v-if="result.summary.error_count">错误 <strong>{{ result.summary.error_count }}</strong></span>
           <span>文档命中率 <strong>{{ percentage(result.summary.document_hit_rate) }}</strong></span>
           <span>Chunk 命中率 <strong>{{ percentage(result.summary.chunk_hit_rate) }}</strong></span>
+          <span>Chunk F1 <strong>{{ percentage(result.summary.chunk_f1) }}</strong></span>
+          <span>答案 F1 <strong>{{ percentage(result.summary.answer_f1) }}</strong></span>
+          <span>平均响应 <strong>{{ duration(result.summary.average_response_time_ms) }}</strong></span>
+          <span>P95 响应 <strong>{{ duration(result.summary.p95_response_time_ms) }}</strong></span>
+          <span>Token 总量 <strong>{{ result.summary.token_usage_sample_count ? integer(result.summary.total_tokens) : '—' }}</strong></span>
         </div>
         <p v-if="result.stop_reason" class="evaluation-stop-message">{{ result.stop_reason }}</p>
         <div v-if="result.results?.length" class="evaluation-result-list">
@@ -133,7 +149,7 @@ onMounted(loadSamples)
               <span class="evaluation-result-id">{{ item.question_id }}</span>
               <small v-if="item.error" class="evaluation-error-detail" :title="item.error">{{ item.error }}</small>
               <small v-else>
-                文档 {{ hitStatus(item.document_hit) }} · Chunk {{ hitStatus(item.chunk_hit) }}
+                文档 {{ hitStatus(item.document_hit) }} · Chunk {{ hitStatus(item.chunk_hit) }} · Chunk F1 {{ percentage(item.chunk_f1) }} · 答案 F1 {{ percentage(item.answer_f1) }} · {{ duration(item.response_time_ms) }} · {{ item.token_usage?.available ? `${integer(item.token_usage.total_tokens)} Token` : 'Token 未上报' }}
               </small>
             </div>
             <strong v-if="item.error">错误</strong>

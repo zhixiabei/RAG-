@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 import argparse
+from collections import Counter
 from datetime import datetime, timezone
 import json
 from pathlib import Path
+import re
 import sys
+from time import perf_counter
+import unicodedata
 from urllib.parse import quote
 
 import httpx
@@ -14,6 +18,35 @@ DEFAULT_DATASET = "heishanliang_rag_eval_v1.0.0.jsonl"
 
 class EvaluationError(RuntimeError):
     pass
+
+
+def precision_recall_f1(expected: set[str], actual: set[str]) -> dict[str, float | None]:
+    if not expected:
+        return {"precision": None, "recall": None, "f1": None}
+    true_positives = len(expected & actual)
+    precision = true_positives / len(actual) if actual else 0.0
+    recall = true_positives / len(expected)
+    f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
+    return {
+        "precision": round(precision, 4),
+        "recall": round(recall, 4),
+        "f1": round(f1, 4),
+    }
+
+
+def answer_char_f1(expected_answer: str | None, actual_answer: str | None) -> float | None:
+    expected_tokens = _answer_tokens(expected_answer or "")
+    actual_tokens = _answer_tokens(actual_answer or "")
+    if not expected_tokens:
+        return None
+    if not actual_tokens:
+        return 0.0
+    overlap = sum((Counter(expected_tokens) & Counter(actual_tokens)).values())
+    precision = overlap / len(actual_tokens)
+    recall = overlap / len(expected_tokens)
+    if not precision + recall:
+        return 0.0
+    return round(2 * precision * recall / (precision + recall), 4)
 
 
 def measure_retrieval_hits(
@@ -40,6 +73,9 @@ def measure_retrieval_hits(
         if expected_chunk_ids
         else None
     )
+    document_metrics = precision_recall_f1(expected_document_ids, retrieved_document_ids)
+    chunk_metrics = precision_recall_f1(expected_chunk_ids, retrieved_chunk_ids)
+    generated_answer = str(response.get("answer") or "")
 
     return {
         "question_id": sample.get("question_id"),
@@ -48,12 +84,25 @@ def measure_retrieval_hits(
         "difficulty": sample.get("difficulty"),
         "document_hit": document_hit,
         "chunk_hit": chunk_hit,
+        "document_precision": document_metrics["precision"],
+        "document_recall": document_metrics["recall"],
+        "document_f1": document_metrics["f1"],
+        "chunk_precision": chunk_metrics["precision"],
+        "chunk_recall": chunk_metrics["recall"],
+        "chunk_f1": chunk_metrics["f1"],
+        "answer_f1": answer_char_f1(sample.get("expected_answer"), generated_answer),
+        "answer": generated_answer,
         "retrieval_used": bool(response.get("retrieval_used")),
         "retrieved_count": int(response.get("retrieved_count") or 0),
         "retrieved_document_ids": sorted(retrieved_document_ids),
         "retrieved_chunk_ids": sorted(retrieved_chunk_ids),
         "expected_document_ids": sorted(expected_document_ids),
         "expected_chunk_ids": sorted(expected_chunk_ids),
+        "response_time_ms": _optional_number(
+            response.get("client_response_time_ms", response.get("response_time_ms"))
+        ),
+        "server_response_time_ms": _optional_number(response.get("response_time_ms")),
+        "token_usage": response.get("token_usage") or {"available": False},
     }
 
 
@@ -65,8 +114,29 @@ def _rate(values: list[bool]) -> float | None:
     return _average([1.0 if value else 0.0 for value in values])
 
 
+def _percentile(values: list[float], percentile: float) -> float | None:
+    if not values:
+        return None
+    ordered = sorted(values)
+    position = (len(ordered) - 1) * percentile
+    lower = int(position)
+    upper = min(lower + 1, len(ordered) - 1)
+    fraction = position - lower
+    return round(ordered[lower] + (ordered[upper] - ordered[lower]) * fraction, 2)
+
+
 def summarize(results: list[dict]) -> dict:
     completed = [result for result in results if "error" not in result]
+    latencies = [
+        float(result["response_time_ms"])
+        for result in completed
+        if _optional_number(result.get("response_time_ms")) is not None
+    ]
+    reported_usage = [
+        result.get("token_usage") or {}
+        for result in completed
+        if (result.get("token_usage") or {}).get("available")
+    ]
     return {
         "sample_count": len(results),
         "completed_count": len(completed),
@@ -81,7 +151,50 @@ def summarize(results: list[dict]) -> dict:
             for result in completed
             if result.get("chunk_hit") is not None
         ]),
+        "document_precision": _average_metric(completed, "document_precision"),
+        "document_recall": _average_metric(completed, "document_recall"),
+        "document_f1": _average_metric(completed, "document_f1"),
+        "chunk_precision": _average_metric(completed, "chunk_precision"),
+        "chunk_recall": _average_metric(completed, "chunk_recall"),
+        "chunk_f1": _average_metric(completed, "chunk_f1"),
+        "answer_f1": _average_metric(completed, "answer_f1"),
+        "average_response_time_ms": round(sum(latencies) / len(latencies), 2) if latencies else None,
+        "p50_response_time_ms": _percentile(latencies, 0.50),
+        "p95_response_time_ms": _percentile(latencies, 0.95),
+        "p99_response_time_ms": _percentile(latencies, 0.99),
+        "token_usage_sample_count": len(reported_usage),
+        "input_tokens": sum(int(usage.get("input_tokens") or 0) for usage in reported_usage),
+        "output_tokens": sum(int(usage.get("output_tokens") or 0) for usage in reported_usage),
+        "total_tokens": sum(int(usage.get("total_tokens") or 0) for usage in reported_usage),
+        "average_tokens": (
+            round(
+                sum(int(usage.get("total_tokens") or 0) for usage in reported_usage)
+                / len(reported_usage),
+                2,
+            )
+            if reported_usage
+            else None
+        ),
     }
+
+
+def _answer_tokens(text: str) -> list[str]:
+    normalized = unicodedata.normalize("NFKC", text).casefold()
+    return re.findall(r"[\u4e00-\u9fff]|[a-z0-9]+", normalized)
+
+
+def _optional_number(value: object) -> float | None:
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        return round(float(value), 2)
+    except (TypeError, ValueError):
+        return None
+
+
+def _average_metric(results: list[dict], key: str) -> float | None:
+    values = [float(result[key]) for result in results if result.get(key) is not None]
+    return _average(values)
 
 
 def load_dataset(path: Path, include_non_approved: bool = False) -> list[dict]:
@@ -240,6 +353,7 @@ def evaluate_sample(
         conversation_id = conversation.get("id")
         if not conversation_id:
             raise EvaluationError("创建评测对话后未获得 conversation id")
+        started_at = perf_counter()
         response = _request_json(
             client,
             "POST",
@@ -250,6 +364,7 @@ def evaluate_sample(
                 "model": model,
             },
         )
+        response["client_response_time_ms"] = round((perf_counter() - started_at) * 1_000, 2)
         return measure_retrieval_hits(sample, response)
     finally:
         if cleanup and conversation_id:
@@ -348,7 +463,10 @@ def run_evaluation(
                 )
                 print(
                     f"  doc_hit={result['document_hit']} "
-                    f"chunk_hit={result['chunk_hit']}",
+                    f"chunk_hit={result['chunk_hit']} "
+                    f"chunk_f1={result.get('chunk_f1')} "
+                    f"answer_f1={result.get('answer_f1')} "
+                    f"latency_ms={result.get('response_time_ms')}",
                     flush=True,
                 )
             except httpx.TimeoutException:

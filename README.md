@@ -251,7 +251,7 @@ python scripts\evaluate_rag.py `
   --output ".\rag_eval_report.json"
 ```
 
-默认只评测 `status=approved` 的样本，并在每题结束后删除临时对话。报告只统计文档命中率和 chunk 命中率，不会计算答案向量相似度或字符串匹配指标。
+默认只评测 `status=approved` 的样本，并在每题结束后删除临时对话。报告统计文档与 chunk 的命中率、Precision/Recall/F1，基于 `expected_answer` 的归一化字符 F1，服务端响应时间，以及模型供应商实际返回的 Token Usage；未上报 usage 的模型调用不会使用估算值替代。
 
 只评测指定题目时，重复传入 `--question-id`；本地 JSONL 和测试集工具模式都支持：
 

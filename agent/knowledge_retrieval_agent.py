@@ -3,6 +3,7 @@ from typing import Any
 import unicodedata
 
 from .contracts import ModelGateway, SearchHit, VectorStore
+from .telemetry import model_usage_stage
 
 
 _IDENTIFIER_PATTERNS = (
@@ -65,7 +66,8 @@ class KnowledgeRetrievalAgent:
                 f"知识库使用 {knowledge_base['embedding_model']} 建立索引，当前 embedding 模型是 "
                 f"{self.models.embedding_model}，请重新建立知识库并导入文档"
             )
-        query_vector = self.models.embed([question])[0]
+        with model_usage_stage("query_embedding"):
+            query_vector = self.models.embed([question])[0]
         vector_hits = list(
             self.vectors.search(knowledge_base["id"], query_vector, self.top_k)
         )

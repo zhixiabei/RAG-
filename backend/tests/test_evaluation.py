@@ -8,6 +8,7 @@ import httpx
 
 from rag_app.evaluation import (
     EvaluationError,
+    answer_char_f1,
     find_samples_outside_knowledge_base,
     load_dataset_from_testset_tool,
     measure_retrieval_hits,
@@ -26,6 +27,7 @@ class EvaluationTest(unittest.TestCase):
             "source_chunk_ids": ["doc-1:3"],
         }
         response = {
+            "answer": "标准答案",
             "citations": [
                 {"document_id": "doc-1", "chunk_id": "doc-1:3"},
             ],
@@ -33,12 +35,29 @@ class EvaluationTest(unittest.TestCase):
             "retrieved_chunk_ids": ["doc-1:3", "doc-1:4"],
             "retrieval_used": True,
             "retrieved_count": 3,
+            "response_time_ms": 125.5,
+            "client_response_time_ms": 150.25,
+            "token_usage": {
+                "available": True,
+                "input_tokens": 100,
+                "output_tokens": 20,
+                "total_tokens": 120,
+            },
         }
+        sample["expected_answer"] = "标准答案"
 
         result = measure_retrieval_hits(sample, response)
 
         self.assertTrue(result["document_hit"])
         self.assertTrue(result["chunk_hit"])
+        self.assertEqual(result["document_f1"], 1.0)
+        self.assertEqual(result["chunk_precision"], 0.5)
+        self.assertEqual(result["chunk_recall"], 1.0)
+        self.assertEqual(result["chunk_f1"], 0.6667)
+        self.assertEqual(result["answer_f1"], 1.0)
+        self.assertEqual(result["response_time_ms"], 150.25)
+        self.assertEqual(result["server_response_time_ms"], 125.5)
+        self.assertEqual(result["token_usage"]["total_tokens"], 120)
         self.assertNotIn("answer_score", result)
         self.assertNotIn("answer_char_f1", result)
         self.assertNotIn("keyword_recall", result)
@@ -76,11 +95,30 @@ class EvaluationTest(unittest.TestCase):
         self.assertTrue(result["document_hit"])
         self.assertFalse(result["chunk_hit"])
 
+    def test_answer_f1_normalizes_chinese_punctuation_and_counts_overlap(self):
+        self.assertEqual(answer_char_f1("长6油层，孔隙度为 10%。", "长6油层孔隙度为10%"), 1.0)
+        self.assertEqual(answer_char_f1("甲乙", "甲丙"), 0.5)
+        self.assertIsNone(answer_char_f1("", "任意回答"))
+
     def test_summary_excludes_missing_optional_metrics(self):
         summary = summarize([
             {
                 "document_hit": True,
                 "chunk_hit": False,
+                "document_precision": 0.5,
+                "document_recall": 1.0,
+                "document_f1": 0.6667,
+                "chunk_precision": 0.25,
+                "chunk_recall": 0.5,
+                "chunk_f1": 0.3333,
+                "answer_f1": 0.75,
+                "response_time_ms": 100,
+                "token_usage": {
+                    "available": True,
+                    "input_tokens": 80,
+                    "output_tokens": 20,
+                    "total_tokens": 100,
+                },
             },
             {
                 "document_hit": None,
@@ -90,6 +128,12 @@ class EvaluationTest(unittest.TestCase):
 
         self.assertEqual(summary["document_hit_rate"], 1.0)
         self.assertEqual(summary["chunk_hit_rate"], 0.0)
+        self.assertEqual(summary["document_f1"], 0.6667)
+        self.assertEqual(summary["chunk_f1"], 0.3333)
+        self.assertEqual(summary["answer_f1"], 0.75)
+        self.assertEqual(summary["average_response_time_ms"], 100)
+        self.assertEqual(summary["total_tokens"], 100)
+        self.assertEqual(summary["average_tokens"], 100)
         self.assertNotIn("pass_rate", summary)
         self.assertNotIn("average_answer_score", summary)
         self.assertNotIn("average_keyword_recall", summary)

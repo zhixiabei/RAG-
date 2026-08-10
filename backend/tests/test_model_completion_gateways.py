@@ -5,6 +5,7 @@ import httpx
 
 from rag_app.infrastructure.ollama.gateway import OllamaGateway
 from rag_app.infrastructure.openai_compatible.gateway import OpenAICompatibleGateway
+from agent.telemetry import collect_model_usage, model_usage_stage
 
 
 class ModelCompletionGatewayTest(unittest.TestCase):
@@ -22,18 +23,25 @@ class ModelCompletionGatewayTest(unittest.TestCase):
     @patch("rag_app.infrastructure.ollama.gateway.httpx.post")
     def test_ollama_maps_completion_options(self, post):
         response = Mock()
-        response.json.return_value = {"message": {"content": " SKIP "}}
+        response.json.return_value = {
+            "message": {"content": " SKIP "},
+            "prompt_eval_count": 40,
+            "eval_count": 5,
+        }
         post.return_value = response
         gateway = OllamaGateway("http://ollama", "qwen", "embed")
         messages = [{"role": "user", "content": "question"}]
 
-        result = gateway.complete(messages, temperature=0, max_tokens=8, reasoning=False)
+        with collect_model_usage() as collector, model_usage_stage("retrieval_decision"):
+            result = gateway.complete(messages, temperature=0, max_tokens=8, reasoning=False)
 
         self.assertEqual(result, "SKIP")
         payload = post.call_args.kwargs["json"]
         self.assertEqual(payload["model"], "qwen")
         self.assertEqual(payload["options"], {"temperature": 0, "num_predict": 8})
         self.assertFalse(payload["think"])
+        self.assertEqual(collector.summary()["total_tokens"], 45)
+        self.assertEqual(collector.summary()["by_stage"]["retrieval_decision"]["input_tokens"], 40)
         response.raise_for_status.assert_called_once()
 
     @patch("rag_app.infrastructure.ollama.gateway.httpx.post")
@@ -51,7 +59,10 @@ class ModelCompletionGatewayTest(unittest.TestCase):
     @patch("rag_app.infrastructure.openai_compatible.gateway.httpx.post")
     def test_openai_compatible_maps_completion_options(self, post):
         response = Mock()
-        response.json.return_value = {"choices": [{"message": {"content": " answer "}}]}
+        response.json.return_value = {
+            "choices": [{"message": {"content": " answer "}}],
+            "usage": {"prompt_tokens": 80, "completion_tokens": 20, "total_tokens": 100},
+        }
         post.return_value = response
         gateway = OpenAICompatibleGateway(
             "Provider",
@@ -66,13 +77,17 @@ class ModelCompletionGatewayTest(unittest.TestCase):
         )
         messages = [{"role": "user", "content": "question"}]
 
-        result = gateway.complete(messages, temperature=0, max_tokens=8, reasoning=False)
+        with collect_model_usage() as collector, model_usage_stage("answer_generation"):
+            result = gateway.complete(messages, temperature=0, max_tokens=8, reasoning=False)
 
         self.assertEqual(result, "answer")
         payload = post.call_args.kwargs["json"]
         self.assertEqual(payload["model"], "chat-model")
         self.assertEqual(payload["temperature"], 0)
         self.assertEqual(payload["max_tokens"], 8)
+        self.assertEqual(collector.summary()["input_tokens"], 80)
+        self.assertEqual(collector.summary()["output_tokens"], 20)
+        self.assertEqual(collector.summary()["total_tokens"], 100)
         response.raise_for_status.assert_called_once()
 
     @patch("rag_app.infrastructure.openai_compatible.gateway.httpx.post")

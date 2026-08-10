@@ -7,6 +7,7 @@ from .context import ContextPolicy, build_answer_context, context_window_for_mod
 from .contracts import ModelGateway, SearchHit
 from .history_summarizer import HistorySummarizer
 from .query_intent import is_assistant_identity_question
+from .telemetry import model_usage_stage
 
 
 ANSWER_SYSTEM_PROMPT = (
@@ -195,11 +196,12 @@ class AnswerAgent:
                 )
         context_view.trace["compression"] = compression_trace
         try:
-            answer = self.models.complete(
-                context_view.messages,
-                model=model,
-                temperature=0.1,
-            )
+            with model_usage_stage("answer_generation"):
+                answer = self.models.complete(
+                    context_view.messages,
+                    model=model,
+                    temperature=0.1,
+                )
         except Exception as exc:
             if not _is_context_overflow(exc):
                 raise
@@ -221,11 +223,12 @@ class AnswerAgent:
                 model=selected_model,
                 policy=resolved_policy.scaled(0.6),
             )
-            answer = self.models.complete(
-                retry_view.messages,
-                model=model,
-                temperature=0.1,
-            )
+            with model_usage_stage("answer_generation"):
+                answer = self.models.complete(
+                    retry_view.messages,
+                    model=model,
+                    temperature=0.1,
+                )
             retry_view.trace["overflow_retry"] = True
             retry_view.trace["initial_estimated_input_tokens"] = context_view.trace["estimated_input_tokens"]
             retry_view.trace["compression"] = compression_trace

@@ -2,6 +2,8 @@ import time
 
 import httpx
 
+from agent.telemetry import record_model_usage
+
 
 _TRANSIENT_STATUS_CODES = frozenset({429, 500, 502, 503, 504})
 _MAX_TRANSIENT_RETRIES = 3
@@ -120,10 +122,20 @@ class OpenAICompatibleGateway:
                 f"{self.provider_name} 聊天接口",
             )
         response.raise_for_status()
-        choices = response.json().get("choices") or []
+        response_payload = response.json()
+        choices = response_payload.get("choices") or []
         output = choices[0].get("message", {}).get("content", "").strip() if choices else ""
         if not output:
             raise RuntimeError(f"{self.provider_name} 未返回文本")
+        usage = response_payload.get("usage") or {}
+        record_model_usage(
+            operation="completion",
+            provider=self.provider_name,
+            model=selected_model,
+            input_tokens=usage.get("prompt_tokens"),
+            output_tokens=usage.get("completion_tokens"),
+            total_tokens=usage.get("total_tokens"),
+        )
         return output
 
     def embed(self, texts: list[str]) -> list[list[float]]:
@@ -138,9 +150,19 @@ class OpenAICompatibleGateway:
                 f"{self.embedding_provider_name or '远程 embedding'} 接口",
             )
             response.raise_for_status()
-            data = sorted(response.json().get("data") or [], key=lambda item: item.get("index", 0))
+            response_payload = response.json()
+            data = sorted(response_payload.get("data") or [], key=lambda item: item.get("index", 0))
             embeddings = [item.get("embedding") for item in data]
             if len(embeddings) != len(batch) or any(not embedding for embedding in embeddings):
                 raise RuntimeError(f"{self.embedding_provider_name} 未返回完整 embedding")
+            usage = response_payload.get("usage") or {}
+            record_model_usage(
+                operation="embedding",
+                provider=self.embedding_provider_name or "远程 embedding",
+                model=self.remote_embedding_model,
+                input_tokens=usage.get("prompt_tokens"),
+                output_tokens=0 if usage else None,
+                total_tokens=usage.get("total_tokens"),
+            )
             result.extend(embeddings)
         return result

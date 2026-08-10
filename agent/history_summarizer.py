@@ -3,6 +3,7 @@ from typing import Any, Mapping, Sequence
 
 from .context import estimate_messages_tokens, estimate_text_tokens
 from .contracts import ModelGateway
+from .telemetry import model_usage_stage
 
 
 HISTORY_SUMMARY_SYSTEM_PROMPT = (
@@ -68,17 +69,18 @@ class HistorySummarizer:
         return self._complete_summary(payload)
 
     def _complete_summary(self, payload: str) -> str:
-        output = self.models.complete(
-            [
-                {"role": "system", "content": HISTORY_SUMMARY_SYSTEM_PROMPT},
-                {"role": "user", "content": payload},
-            ],
-            model=self.model_name,
-            temperature=0,
-            max_tokens=self.output_token_limit,
-            reasoning=False,
-            response_schema=HISTORY_SUMMARY_SCHEMA,
-        )
+        with model_usage_stage("history_compression"):
+            output = self.models.complete(
+                [
+                    {"role": "system", "content": HISTORY_SUMMARY_SYSTEM_PROMPT},
+                    {"role": "user", "content": payload},
+                ],
+                model=self.model_name,
+                temperature=0,
+                max_tokens=self.output_token_limit,
+                reasoning=False,
+                response_schema=HISTORY_SUMMARY_SCHEMA,
+            )
         try:
             summary = json.loads(output).get("summary", "")
         except (AttributeError, json.JSONDecodeError):

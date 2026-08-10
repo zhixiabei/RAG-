@@ -1,6 +1,6 @@
 <script setup>
 import { computed, nextTick, ref, watch } from 'vue'
-import { Bot, BrainCircuit, Check, FileText, LoaderCircle, MessageSquareText, Paperclip, Pencil, Plus, RefreshCw, Send, Trash2, UserRound, X } from 'lucide-vue-next'
+import { Bot, BrainCircuit, Check, FileText, Hash, LoaderCircle, MessageSquareText, Paperclip, Pencil, Plus, RefreshCw, Send, Timer, Trash2, UserRound, X } from 'lucide-vue-next'
 import DeleteConfirmDialog from './DeleteConfirmDialog.vue'
 import { renderMarkdown } from '../utils/markdown'
 import { canRecoverAnswerFailure, recoverCompletedAnswer } from '../utils/chatRecovery'
@@ -54,6 +54,24 @@ const canSend = computed(() => (
   && !loadingMessages.value
   && attachmentsReady.value
 ))
+
+function formatResponseTime(value) {
+  const milliseconds = Number(value)
+  if (!Number.isFinite(milliseconds)) return '—'
+  return milliseconds < 1000 ? `${Math.round(milliseconds)} ms` : `${(milliseconds / 1000).toFixed(2)} s`
+}
+
+function formatTokens(value) {
+  const tokens = Number(value)
+  return Number.isFinite(tokens) ? Math.round(tokens).toLocaleString('zh-CN') : '—'
+}
+
+function tokenUsageTitle(usage, serverResponseTimeMs) {
+  const serverTiming = serverResponseTimeMs == null ? '' : `服务端 ${formatResponseTime(serverResponseTimeMs)}；`
+  if (!usage?.available) return `${serverTiming}模型服务未返回 Token 用量`
+  const unreported = usage.unreported_calls ? `；${usage.unreported_calls} 次调用未上报` : ''
+  return `${serverTiming}输入 ${formatTokens(usage.input_tokens)}；输出 ${formatTokens(usage.output_tokens)}${unreported}`
+}
 
 async function parseAttachment(entry, knowledgeBaseId) {
   try {
@@ -330,19 +348,29 @@ async function send() {
       context: entry.parsed.context,
       citations: entry.parsed.citations,
     }))
+    const answerStartedAt = performance.now()
     const answerRequest = entries.length
       ? askKnowledgeBaseWithParsedAttachments(knowledgeBaseId, conversationId, value, selectedModel.value, parsedAttachments)
       : askKnowledgeBase(knowledgeBaseId, conversationId, value, selectedModel.value)
+    const measuredAnswerRequest = answerRequest.then((result) => ({
+      result,
+      responseTimeMs: performance.now() - answerStartedAt,
+    }))
     const saveRequest = entries.length && saveAttachments.value
       ? persistAttachments(knowledgeBaseId, entries)
       : Promise.resolve(0)
-    const [result, saveFailureCount] = await Promise.all([answerRequest, saveRequest])
+    const [{ result, responseTimeMs }, saveFailureCount] = await Promise.all([measuredAnswerRequest, saveRequest])
     if (knowledgeBaseId !== props.kbId || activeConversationId.value !== conversationId) return
     messages.value.push({
       id: `pending:assistant:${Date.now()}`,
       role: 'assistant',
       content: result.answer,
       citations: result.citations || [],
+      metrics: {
+        responseTimeMs,
+        serverResponseTimeMs: result.response_time_ms,
+        tokenUsage: result.token_usage,
+      },
     })
     if (saveFailureCount) attachmentNotice.value = `${saveFailureCount} 个附件未能保存到知识库，但已用于本次回答`
     try {
@@ -458,6 +486,15 @@ async function send() {
               <span class="citation-label">引用</span>
               <span v-for="citation in message.citations" :key="citation.chunk_id" class="citation">
                 {{ citation.title }}<span v-if="citation.page_number"> · 第 {{ citation.page_number }} 页</span><span v-if="citation.relevance_score != null"> · 相关度 {{ Math.round(citation.relevance_score * 100) }}%</span>
+              </span>
+            </div>
+            <div v-if="message.metrics" class="response-metrics">
+              <span v-if="message.metrics.responseTimeMs != null" title="服务端处理耗时">
+                <Timer :size="12" />{{ formatResponseTime(message.metrics.responseTimeMs) }}
+              </span>
+              <span :title="tokenUsageTitle(message.metrics.tokenUsage, message.metrics.serverResponseTimeMs)">
+                <Hash :size="12" />
+                {{ message.metrics.tokenUsage?.available ? `${formatTokens(message.metrics.tokenUsage.total_tokens)} Token` : 'Token 未上报' }}
               </span>
             </div>
           </div>

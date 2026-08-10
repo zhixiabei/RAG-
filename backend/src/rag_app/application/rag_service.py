@@ -4,6 +4,7 @@ from typing import Callable, TypeVar
 
 from agent import AnswerAgent, KnowledgeRetrievalAgent, RetrievalDecisionAgent
 from agent.context import format_knowledge_catalog, format_knowledge_catalog_answer
+from agent.telemetry import capture_request_metrics
 from agent.query_intent import (
     is_knowledge_catalog_file_lookup_question,
     is_knowledge_catalog_inventory_question,
@@ -70,6 +71,7 @@ class RagService:
         self.retrieval_agent = retrieval_agent
         self.answer_agent = answer_agent
 
+    @capture_request_metrics
     def answer(
         self,
         knowledge_base_id: str,

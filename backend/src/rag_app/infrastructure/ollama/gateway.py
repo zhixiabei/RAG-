@@ -1,5 +1,7 @@
 import httpx
 
+from agent.telemetry import record_model_usage
+
 
 class OllamaGateway:
     def __init__(self, base_url: str, chat_model: str, embedding_model: str):
@@ -72,9 +74,24 @@ class OllamaGateway:
             timeout=180,
         )
         response.raise_for_status()
-        output = response.json().get("message", {}).get("content", "").strip()
+        response_payload = response.json()
+        output = response_payload.get("message", {}).get("content", "").strip()
         if not output:
             raise RuntimeError("Ollama 未返回文本")
+        input_tokens = response_payload.get("prompt_eval_count")
+        output_tokens = response_payload.get("eval_count")
+        record_model_usage(
+            operation="completion",
+            provider="Ollama",
+            model=model or self.chat_model,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            total_tokens=(
+                input_tokens + output_tokens
+                if isinstance(input_tokens, int) and isinstance(output_tokens, int)
+                else None
+            ),
+        )
         return output
 
     def embed(self, texts: list[str]) -> list[list[float]]:
@@ -88,8 +105,18 @@ class OllamaGateway:
                 timeout=180,
             )
             response.raise_for_status()
-            embeddings = response.json().get("embeddings")
+            response_payload = response.json()
+            embeddings = response_payload.get("embeddings")
             if not embeddings or len(embeddings) != len(batch):
                 raise RuntimeError("Ollama 未返回完整 embedding")
+            input_tokens = response_payload.get("prompt_eval_count")
+            record_model_usage(
+                operation="embedding",
+                provider="Ollama",
+                model=self.embedding_model,
+                input_tokens=input_tokens,
+                output_tokens=0 if input_tokens is not None else None,
+                total_tokens=input_tokens,
+            )
             result.extend(embeddings)
         return result
