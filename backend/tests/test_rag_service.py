@@ -2,7 +2,7 @@ import json
 import unittest
 
 from agent import AnswerAgent, KnowledgeRetrievalAgent, RetrievalDecisionAgent
-from rag_app.application.rag_service import CONTEXT_HISTORY_MESSAGE_LIMIT, RagService, RagStageError
+from rag_app.application.rag_service import RagService, RagStageError
 from rag_app.domain.models import SearchHit
 
 
@@ -85,13 +85,13 @@ class RagServiceTest(unittest.TestCase):
         self.assertEqual(vectors.search_calls, [])
         self.assertEqual(len(models.completion_calls), 2)
 
-    def test_only_latest_twelve_messages_are_added_to_model_context(self):
+    def test_short_history_is_token_budgeted_instead_of_fixed_to_twelve_messages(self):
         history = [
             {
                 "role": "user" if index % 2 == 0 else "assistant",
                 "content": f"<message-{index:02d}>",
             }
-            for index in range(CONTEXT_HISTORY_MESSAGE_LIMIT + 2)
+            for index in range(14)
         ]
         repository = FakeRepository(history)
         vectors = FakeVectorStore()
@@ -103,14 +103,13 @@ class RagServiceTest(unittest.TestCase):
 
         self.assertEqual(len(models.completion_calls), 2)
         decision_prompt = models.completion_calls[0][0][1]["content"]
-        self.assertNotIn("<message-00>", decision_prompt)
-        self.assertNotIn("<message-01>", decision_prompt)
+        self.assertIn("<message-00>", decision_prompt)
+        self.assertIn("<message-13>", decision_prompt)
 
         answer_messages = models.completion_calls[1][0]
-        answer_history = answer_messages[1:1 + CONTEXT_HISTORY_MESSAGE_LIMIT]
-        self.assertEqual(answer_history, history[-CONTEXT_HISTORY_MESSAGE_LIMIT:])
-        self.assertNotIn("<message-00>", str(answer_messages))
-        self.assertNotIn("<message-01>", str(answer_messages))
+        answer_history = answer_messages[1:1 + len(history)]
+        self.assertEqual(answer_history, history)
+        self.assertEqual(repository.saved[0][2], "current question")
 
     def test_vectorizes_the_question_and_returns_qdrant_ordered_top_k_chunks(self):
         hits = [
@@ -132,6 +131,7 @@ class RagServiceTest(unittest.TestCase):
         self.assertEqual(result["retrieved_count"], 3)
         self.assertEqual(result["retrieved_document_ids"], ["doc-1", "doc-2"])
         self.assertEqual(result["retrieved_chunk_ids"], ["chunk-1", "chunk-2", "chunk-3"])
+        self.assertEqual(result["context_chunk_ids"], ["chunk-1", "chunk-2", "chunk-3"])
         self.assertEqual([item["chunk_id"] for item in result["citations"]], ["chunk-1", "chunk-3"])
         self.assertEqual(result["citations"][0]["score"], 0.92)
         self.assertIsNone(result["citations"][0]["relevance_score"])
@@ -146,6 +146,7 @@ class RagServiceTest(unittest.TestCase):
         self.assertIn("第二段", answer_payload["retrieved_context"])
         self.assertIn("第三段", answer_payload["retrieved_context"])
         self.assertNotIn("第四段", answer_payload["retrieved_context"])
+        self.assertEqual(result["context_trace"]["evidence"]["selected"], 3)
 
     def test_catalog_inventory_uses_metadata_without_vector_search(self):
         repository = FakeRepository()

@@ -20,6 +20,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from agent import (
     AnswerAgent,
+    ContextPolicy,
     KnowledgeRetrievalAgent,
     RetrievalDecisionAgent,
 )
@@ -79,7 +80,16 @@ def build_services(settings: Settings) -> Services:
         models,
         settings.rag_top_k,
     )
-    answer_agent = AnswerAgent(models)
+    answer_agent = AnswerAgent(
+        models,
+        ContextPolicy(
+            max_input_tokens=settings.rag_context_max_input_tokens or None,
+            output_reserve_tokens=settings.rag_context_output_reserve_tokens,
+            history_max_tokens=settings.rag_context_history_max_tokens,
+            catalog_max_tokens=settings.rag_context_catalog_max_tokens,
+            attachment_max_tokens=settings.rag_context_attachment_max_tokens,
+        ),
+    )
     testset_sync = None
     if settings.testset_tool_base_url.strip():
         testset_sync = TestsetSyncService(

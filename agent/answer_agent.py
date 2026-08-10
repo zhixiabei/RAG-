@@ -1,7 +1,8 @@
 import json
+from dataclasses import dataclass, replace
 from typing import Any, Mapping, Sequence
 
-from .context import format_retrieved_context
+from .context import ContextPolicy, build_answer_context, context_window_for_model
 from .contracts import ModelGateway, SearchHit
 from .query_intent import is_assistant_identity_question
 
@@ -14,6 +15,13 @@ ANSWER_SYSTEM_PROMPT = (
     "知识库目录元数据只能证明文件夹、文件名和路径存在，不能证明文件正文内容。"
     "使用 Markdown 输出；行内数学公式必须用 $...$，独立数学公式必须用 $$...$$，不要用普通圆括号充当公式定界符。"
 )
+
+
+@dataclass(frozen=True)
+class AnswerResult:
+    answer: str
+    selected_hits: list[SearchHit]
+    context_trace: dict[str, Any]
 
 
 def answer_messages(
@@ -55,8 +63,9 @@ class AnswerAgent:
 
     name = "answer"
 
-    def __init__(self, models: ModelGateway):
+    def __init__(self, models: ModelGateway, context_policy: ContextPolicy | None = None):
         self.models = models
+        self.context_policy = context_policy or ContextPolicy()
 
     def run(
         self,
@@ -70,25 +79,115 @@ class AnswerAgent:
         catalog_answer: str = "",
         attachment_context: str = "",
     ) -> str:
+        return self.run_with_context(
+            question,
+            history,
+            hits,
+            retrieval_used,
+            model,
+            context_texts,
+            knowledge_catalog,
+            catalog_answer,
+            attachment_context,
+        ).answer
+
+    def run_with_context(
+        self,
+        question: str,
+        history: list[dict[str, Any]],
+        hits: Sequence[SearchHit],
+        retrieval_used: bool,
+        model: str | None = None,
+        context_texts: Mapping[str, str] | None = None,
+        knowledge_catalog: str = "",
+        catalog_answer: str = "",
+        attachment_context: str = "",
+    ) -> AnswerResult:
         if is_assistant_identity_question(question):
             active_model = model or self.models.chat_model
-            return f"我是知识库助手，当前回答使用的模型是 {active_model}。"
+            return AnswerResult(
+                f"我是知识库助手，当前回答使用的模型是 {active_model}。",
+                [],
+                _skipped_context_trace("assistant_identity"),
+            )
         if catalog_answer:
-            return catalog_answer
-        context = ""
-        if hits:
-            context = format_retrieved_context(hits, context_texts)
-        elif knowledge_catalog:
-            context = "本轮没有可用的正文检索片段；只能依据知识库目录元数据回答目录和文件路径问题。"
-        elif retrieval_used and not attachment_context:
-            return "知识库中无相关内容。"
+            return AnswerResult(catalog_answer, [], _skipped_context_trace("deterministic_catalog_answer"))
+        context_override = ""
+        if not hits and knowledge_catalog:
+            context_override = "本轮没有可用的正文检索片段；只能依据知识库目录元数据回答目录和文件路径问题。"
+        elif not hits and retrieval_used and not attachment_context:
+            return AnswerResult("知识库中无相关内容。", [], _skipped_context_trace("no_relevant_content"))
         elif not attachment_context:
-            context = (
+            context_override = (
                 "本轮问题不需要检索新的知识库内容。请仅依据此前对话回答；"
                 "若是问候、致谢等日常交流，可直接简洁回应。"
             )
-        return self.models.complete(
-            answer_messages(question, context, history, knowledge_catalog, attachment_context),
-            model=model,
-            temperature=0.1,
+
+        selected_model = model or getattr(self.models, "chat_model", None)
+        context_view = build_answer_context(
+            system_prompt=ANSWER_SYSTEM_PROMPT,
+            question=question,
+            history=history,
+            hits=hits,
+            knowledge_catalog=knowledge_catalog,
+            attachment_context=attachment_context,
+            retrieved_context_override=context_override,
+            text_by_chunk_id=context_texts,
+            model=selected_model,
+            policy=self.context_policy,
         )
+        try:
+            answer = self.models.complete(
+                context_view.messages,
+                model=model,
+                temperature=0.1,
+            )
+        except Exception as exc:
+            if not _is_context_overflow(exc):
+                raise
+            resolved_policy = replace(
+                self.context_policy,
+                max_input_tokens=self.context_policy.max_input_tokens or context_window_for_model(selected_model),
+            )
+            retry_view = build_answer_context(
+                system_prompt=ANSWER_SYSTEM_PROMPT,
+                question=question,
+                history=history,
+                hits=hits,
+                knowledge_catalog=knowledge_catalog,
+                attachment_context=attachment_context,
+                retrieved_context_override=context_override,
+                text_by_chunk_id=context_texts,
+                model=selected_model,
+                policy=resolved_policy.scaled(0.6),
+            )
+            answer = self.models.complete(
+                retry_view.messages,
+                model=model,
+                temperature=0.1,
+            )
+            retry_view.trace["overflow_retry"] = True
+            retry_view.trace["initial_estimated_input_tokens"] = context_view.trace["estimated_input_tokens"]
+            context_view = retry_view
+        return AnswerResult(answer, context_view.selected_hits, context_view.trace)
+
+
+def _is_context_overflow(exc: Exception) -> bool:
+    message = str(exc).casefold()
+    return any(fragment in message for fragment in (
+        "context length",
+        "context window",
+        "maximum context",
+        "too many tokens",
+        "num_ctx",
+        "上下文长度",
+        "上下文窗口",
+    ))
+
+
+def _skipped_context_trace(reason: str) -> dict[str, Any]:
+    return {
+        "skipped": True,
+        "reason": reason,
+        "overflow_retry": False,
+    }

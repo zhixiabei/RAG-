@@ -16,6 +16,7 @@ from ..domain.ports import MetadataRepository
 
 logger = logging.getLogger(__name__)
 T = TypeVar("T")
+# Kept for API compatibility; model-facing history is now token-budgeted.
 CONTEXT_HISTORY_MESSAGE_LIMIT = 12
 
 
@@ -87,7 +88,7 @@ class RagService:
         history = _run_stage(
             "读取对话历史",
             lambda: self.repository.list_messages(conversation_id),
-        )[-CONTEXT_HISTORY_MESSAGE_LIMIT:]
+        )
 
         knowledge_catalog = ""
         catalog_answer = ""
@@ -116,22 +117,9 @@ class RagService:
                 lambda: self.retrieval_agent.run(knowledge_base, question),
             )
 
-        citations = _deduplicate_citations([
-            *[
-                Citation(
-                    hit.document_id,
-                    hit.chunk_id,
-                    hit.title,
-                    hit.page_number,
-                    hit.score,
-                ).as_dict()
-                for hit in hits
-            ],
-            *list(attachment_citations or []),
-        ])
-        answer = _run_stage(
+        answer_result = _run_stage(
             "生成最终回答",
-            lambda: self.answer_agent.run(
+            lambda: self.answer_agent.run_with_context(
                 question,
                 history,
                 hits,
@@ -142,6 +130,21 @@ class RagService:
                 attachment_context=attachment_context,
             ),
         )
+        answer = answer_result.answer
+        context_hits = answer_result.selected_hits
+        citations = _deduplicate_citations([
+            *[
+                Citation(
+                    hit.document_id,
+                    hit.chunk_id,
+                    hit.title,
+                    hit.page_number,
+                    hit.score,
+                ).as_dict()
+                for hit in context_hits
+            ],
+            *list(attachment_citations or []),
+        ])
         _run_stage(
             "保存回答",
             lambda: self.repository.add_message(
@@ -165,7 +168,9 @@ class RagService:
             "retrieved_chunk_ids": list(dict.fromkeys(
                 hit.chunk_id for hit in hits if hit.chunk_id
             )),
-            "context_document_count": len({hit.document_id for hit in hits}),
+            "context_chunk_ids": [hit.chunk_id for hit in context_hits],
+            "context_document_count": len({hit.document_id for hit in context_hits}),
+            "context_trace": answer_result.context_trace,
             "catalog_used": bool(knowledge_catalog),
             "attachments_used": bool(attachment_context),
             "agent_trace": [

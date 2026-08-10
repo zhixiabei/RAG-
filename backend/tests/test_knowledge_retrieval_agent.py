@@ -60,6 +60,23 @@ class KnowledgeRetrievalAgentTest(unittest.TestCase):
         self.assertEqual([hit.chunk_id for hit in result], ["source:2", "other:1"])
         self.assertIn("化348-4", vectors.keyword_calls[0][1])
 
+    def test_fusion_promotes_a_chunk_recalled_by_both_search_paths(self):
+        vector_only = SearchHit(
+            "vector:1", "doc-1", "kb-1", "方案.doc", "向量命中", 0.95
+        )
+        shared = SearchHit(
+            "shared:1", "doc-2", "kb-1", "实例.docx", "化348-4 年累计增油", 0.80
+        )
+        vectors = FakeVectors([vector_only, shared], [shared])
+        agent = KnowledgeRetrievalAgent(vectors, FakeModels(), top_k=2)
+
+        result = agent.run(
+            {"id": "kb-1", "embedding_model": "test-embedding"},
+            "化348-4 年累计增油",
+        )
+
+        self.assertEqual([hit.chunk_id for hit in result], ["shared:1", "vector:1"])
+
     def test_extracts_identifier_and_chinese_phrase_terms(self):
         terms = extract_keyword_terms("化 348-4 井的年累计增油是多少？")
 

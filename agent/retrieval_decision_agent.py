@@ -3,6 +3,7 @@ import json
 import re
 from typing import Any
 
+from .context import select_history_messages
 from .contracts import ModelGateway
 from .query_intent import is_assistant_identity_question, is_knowledge_catalog_inventory_question
 
@@ -18,14 +19,17 @@ RETRIEVAL_DECISION_SCHEMA = {
     },
     "required": ["decision"],
 }
+RETRIEVAL_DECISION_HISTORY_TOKENS = 3_000
 
 
 def retrieval_decision_messages(question: str, history: list[dict[str, Any]]) -> list[dict[str, str]]:
+    history_view = select_history_messages(history, RETRIEVAL_DECISION_HISTORY_TOKENS)
     transcript = "\n".join(
         f"{item['role']}: {item['content']}"
-        for item in history
-        if item.get("role") in {"user", "assistant"} and item.get("content")
+        for item in history_view.messages
     )
+    if history_view.omission_notice:
+        transcript = f"{history_view.omission_notice}\n{transcript}"
     return [
         {"role": "system", "content": RETRIEVAL_DECISION_PROMPT},
         {"role": "user", "content": f"对话历史：\n{transcript or '（无）'}\n\n当前消息：\n{question}"},

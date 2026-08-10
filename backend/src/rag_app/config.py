@@ -45,6 +45,11 @@ class Settings(BaseSettings):
     remote_embedding_api_key: str = ""
     remote_embedding_model: str = ""
     rag_top_k: int = 10
+    rag_context_max_input_tokens: int = 0
+    rag_context_output_reserve_tokens: int = 4_096
+    rag_context_history_max_tokens: int = 6_000
+    rag_context_catalog_max_tokens: int = 3_000
+    rag_context_attachment_max_tokens: int = 10_000
     testset_tool_base_url: str = ""
     testset_tool_sync_timeout_seconds: float = 60.0
     testset_generator_provider_name: str = "Testset Generator"

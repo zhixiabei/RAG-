@@ -9,6 +9,8 @@ _IDENTIFIER_PATTERNS = (
     re.compile(r"[A-Za-z\u4e00-\u9fff]{1,8}\s*\d+(?:\s*[-\u2010-\u2015./]\s*\d+)+"),
     re.compile(r"[A-Za-z]{1,12}\s*\d+(?:\.\d+)+", re.IGNORECASE),
 )
+_RRF_RANK_CONSTANT = 60
+_KEYWORD_RRF_WEIGHT = 1.25
 
 
 def _normalize_keyword(value: str) -> str:
@@ -77,13 +79,32 @@ class KnowledgeRetrievalAgent:
             )
         ) if keywords else []
 
-        combined = []
-        seen_chunk_ids = set()
-        for hit in [*keyword_hits, *vector_hits]:
-            if hit.chunk_id in seen_chunk_ids:
-                continue
-            seen_chunk_ids.add(hit.chunk_id)
-            combined.append(hit)
-            if len(combined) >= self.top_k:
-                break
-        return combined
+        return _reciprocal_rank_fusion(vector_hits, keyword_hits, self.top_k)
+
+
+def _reciprocal_rank_fusion(
+    vector_hits: list[SearchHit],
+    keyword_hits: list[SearchHit],
+    limit: int,
+) -> list[SearchHit]:
+    """Fuse lexical and vector rankings without comparing incompatible raw scores."""
+    hits_by_id: dict[str, SearchHit] = {}
+    fused_scores: dict[str, float] = {}
+    best_rank: dict[str, int] = {}
+    for weight, hits in ((1.0, vector_hits), (_KEYWORD_RRF_WEIGHT, keyword_hits)):
+        for rank, hit in enumerate(hits, start=1):
+            hits_by_id.setdefault(hit.chunk_id, hit)
+            fused_scores[hit.chunk_id] = fused_scores.get(hit.chunk_id, 0.0) + weight / (
+                _RRF_RANK_CONSTANT + rank
+            )
+            best_rank[hit.chunk_id] = min(best_rank.get(hit.chunk_id, rank), rank)
+    ranked_ids = sorted(
+        hits_by_id,
+        key=lambda chunk_id: (
+            -fused_scores[chunk_id],
+            best_rank[chunk_id],
+            -float(hits_by_id[chunk_id].score),
+            chunk_id,
+        ),
+    )
+    return [hits_by_id[chunk_id] for chunk_id in ranked_ids[:limit]]
