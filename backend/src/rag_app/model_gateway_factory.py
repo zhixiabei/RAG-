@@ -26,3 +26,13 @@ def build_model_gateway(settings: Settings) -> ModelGateway:
             settings.remote_embedding_model,
         )
     raise ValueError("MODEL_MODE 只能是 local 或 remote")
+
+
+def build_context_compression_gateway(settings: Settings) -> OllamaGateway | None:
+    if not settings.rag_context_compression_enabled:
+        return None
+    return OllamaGateway(
+        settings.ollama_url,
+        settings.rag_context_compression_model,
+        settings.ollama_embedding_model,
+    )

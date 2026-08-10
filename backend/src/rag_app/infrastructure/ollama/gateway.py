@@ -7,14 +7,18 @@ class OllamaGateway:
         self.chat_model = chat_model
         self.embedding_model = embedding_model
 
-    def check_connection(self, require_chat_model: bool = True) -> None:
+    def check_connection(
+        self,
+        require_chat_model: bool = True,
+        require_embedding_model: bool = True,
+    ) -> None:
         response = httpx.get(f"{self.base_url}/api/tags", timeout=5)
         response.raise_for_status()
         available = {
             item.get("name") or item.get("model")
             for item in response.json().get("models", [])
         }
-        required = [self.embedding_model]
+        required = [self.embedding_model] if require_embedding_model else []
         if require_chat_model:
             required.append(self.chat_model)
         missing = [model for model in required if model not in available]

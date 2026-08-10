@@ -47,9 +47,14 @@ class HistoryView:
     omitted_count: int
     estimated_tokens: int
     truncated: bool = False
+    summary: str = ""
 
     @property
     def omission_notice(self) -> str:
+        if self.summary:
+            if self.omitted_count:
+                return f"较早的 {self.omitted_count} 条对话消息已由本地模型压缩；摘要仅用于理解指代和延续明确任务。"
+            return "一条过长的最近对话已由本地模型压缩；摘要仅用于理解指代和延续明确任务。"
         if not self.omitted_count:
             return ""
         return _OMITTED_HISTORY_NOTICE.format(count=self.omitted_count)
@@ -142,6 +147,8 @@ def build_answer_context(
     knowledge_catalog: str = "",
     attachment_context: str = "",
     retrieved_context_override: str = "",
+    history_summary: str = "",
+    history_summary_reserve_tokens: int = 0,
     text_by_chunk_id: Mapping[str, str] | None = None,
     model: str | None = None,
     policy: ContextPolicy | None = None,
@@ -161,8 +168,12 @@ def build_answer_context(
     component_budget = max(0, input_budget - fixed_tokens)
 
     deduplicated_hits = _deduplicate_hits(hits, text_by_chunk_id)
+    summary_reserve_tokens = max(
+        history_summary_reserve_tokens,
+        estimate_text_tokens(history_summary) + 16 if history_summary else 0,
+    )
     demands = {
-        "history": estimate_messages_tokens(history),
+        "history": estimate_messages_tokens(history) + summary_reserve_tokens,
         "evidence": (
             sum(estimate_text_tokens(_format_retrieved_hit(hit, text_by_chunk_id)) + 4 for hit in deduplicated_hits)
             if deduplicated_hits
@@ -173,7 +184,17 @@ def build_answer_context(
     }
     allocations = _allocate_component_budgets(component_budget, demands, policy)
 
-    history_view = select_history_messages(history, allocations["history"])
+    summary_budget = min(summary_reserve_tokens, allocations["history"])
+    summary_text = _truncate_text(
+        history_summary,
+        max(0, summary_budget - 16),
+        "\n... [摘要中段省略] ...\n",
+    ) if history_summary and summary_budget > 16 else ""
+    recent_history_budget = max(0, allocations["history"] - summary_reserve_tokens)
+    history_view = replace(
+        select_history_messages(history, recent_history_budget),
+        summary=summary_text,
+    )
     if deduplicated_hits:
         evidence_text, selected_hits, evidence_truncated = _fit_retrieved_hits(
             deduplicated_hits,
@@ -218,6 +239,8 @@ def build_answer_context(
             "selected": len(history_view.messages),
             "omitted": history_view.omitted_count,
             "truncated": history_view.truncated,
+            "summary_included": bool(history_view.summary),
+            "summary_tokens": estimate_text_tokens(history_view.summary),
             "budget_tokens": allocations["history"],
         },
         "evidence": {
@@ -266,6 +289,7 @@ def _answer_messages(
                     "retrieved_context": context,
                     "temporary_attachment_context": attachment_context,
                     "knowledge_base_catalog": knowledge_catalog,
+                    "conversation_history_summary": history.summary,
                 },
                 ensure_ascii=False,
             )

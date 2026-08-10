@@ -1,9 +1,11 @@
 import json
 from dataclasses import dataclass, replace
+import logging
 from typing import Any, Mapping, Sequence
 
 from .context import ContextPolicy, build_answer_context, context_window_for_model
 from .contracts import ModelGateway, SearchHit
+from .history_summarizer import HistorySummarizer
 from .query_intent import is_assistant_identity_question
 
 
@@ -15,6 +17,7 @@ ANSWER_SYSTEM_PROMPT = (
     "知识库目录元数据只能证明文件夹、文件名和路径存在，不能证明文件正文内容。"
     "使用 Markdown 输出；行内数学公式必须用 $...$，独立数学公式必须用 $$...$$，不要用普通圆括号充当公式定界符。"
 )
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -63,9 +66,15 @@ class AnswerAgent:
 
     name = "answer"
 
-    def __init__(self, models: ModelGateway, context_policy: ContextPolicy | None = None):
+    def __init__(
+        self,
+        models: ModelGateway,
+        context_policy: ContextPolicy | None = None,
+        history_summarizer: HistorySummarizer | None = None,
+    ):
         self.models = models
         self.context_policy = context_policy or ContextPolicy()
+        self.history_summarizer = history_summarizer
 
     def run(
         self,
@@ -124,6 +133,12 @@ class AnswerAgent:
             )
 
         selected_model = model or getattr(self.models, "chat_model", None)
+        summary_reserve_tokens = (
+            self.history_summarizer.output_token_limit + 64
+            if self.history_summarizer is not None and history
+            else 0
+        )
+        history_summary = ""
         context_view = build_answer_context(
             system_prompt=ANSWER_SYSTEM_PROMPT,
             question=question,
@@ -135,7 +150,50 @@ class AnswerAgent:
             text_by_chunk_id=context_texts,
             model=selected_model,
             policy=self.context_policy,
+            history_summary_reserve_tokens=summary_reserve_tokens,
         )
+        compression_trace = {
+            "enabled": self.history_summarizer is not None,
+            "used": False,
+            "model": self.history_summarizer.model_name if self.history_summarizer is not None else None,
+            "source_messages": 0,
+        }
+        history_trace = context_view.trace["history"]
+        if self.history_summarizer is not None and (
+            history_trace["omitted"] > 0 or history_trace["truncated"]
+        ):
+            compression_source = _history_for_compression(
+                history,
+                history_trace["omitted"],
+                history_trace["truncated"],
+            )
+            compression_trace["source_messages"] = len(compression_source)
+            try:
+                history_summary = self.history_summarizer.summarize(compression_source)
+            except Exception as exc:
+                logger.warning(
+                    "本地上下文压缩失败，继续使用未压缩的最近历史: %s: %s",
+                    type(exc).__name__,
+                    exc,
+                )
+                compression_trace["error"] = f"{type(exc).__name__}: {exc}"
+            if history_summary:
+                compression_trace["used"] = True
+                context_view = build_answer_context(
+                    system_prompt=ANSWER_SYSTEM_PROMPT,
+                    question=question,
+                    history=history,
+                    hits=hits,
+                    knowledge_catalog=knowledge_catalog,
+                    attachment_context=attachment_context,
+                    retrieved_context_override=context_override,
+                    history_summary=history_summary,
+                    history_summary_reserve_tokens=summary_reserve_tokens,
+                    text_by_chunk_id=context_texts,
+                    model=selected_model,
+                    policy=self.context_policy,
+                )
+        context_view.trace["compression"] = compression_trace
         try:
             answer = self.models.complete(
                 context_view.messages,
@@ -157,6 +215,8 @@ class AnswerAgent:
                 knowledge_catalog=knowledge_catalog,
                 attachment_context=attachment_context,
                 retrieved_context_override=context_override,
+                history_summary=history_summary,
+                history_summary_reserve_tokens=summary_reserve_tokens,
                 text_by_chunk_id=context_texts,
                 model=selected_model,
                 policy=resolved_policy.scaled(0.6),
@@ -168,6 +228,7 @@ class AnswerAgent:
             )
             retry_view.trace["overflow_retry"] = True
             retry_view.trace["initial_estimated_input_tokens"] = context_view.trace["estimated_input_tokens"]
+            retry_view.trace["compression"] = compression_trace
             context_view = retry_view
         return AnswerResult(answer, context_view.selected_hits, context_view.trace)
 
@@ -191,3 +252,18 @@ def _skipped_context_trace(reason: str) -> dict[str, Any]:
         "reason": reason,
         "overflow_retry": False,
     }
+
+
+def _history_for_compression(
+    history: Sequence[Mapping[str, Any]],
+    omitted_count: int,
+    truncated: bool,
+) -> list[dict[str, str]]:
+    normalized = [
+        {"role": str(item["role"]), "content": str(item["content"])}
+        for item in history
+        if item.get("role") in {"user", "assistant"} and item.get("content")
+    ]
+    if omitted_count:
+        return normalized[:omitted_count]
+    return normalized if truncated else []

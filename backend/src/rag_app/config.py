@@ -50,6 +50,10 @@ class Settings(BaseSettings):
     rag_context_history_max_tokens: int = 6_000
     rag_context_catalog_max_tokens: int = 3_000
     rag_context_attachment_max_tokens: int = 10_000
+    rag_context_compression_enabled: bool = True
+    rag_context_compression_model: str = "qwen3:4b"
+    rag_context_compression_input_tokens: int = 6_000
+    rag_context_compression_output_tokens: int = 1_000
     testset_tool_base_url: str = ""
     testset_tool_sync_timeout_seconds: float = 60.0
     testset_generator_provider_name: str = "Testset Generator"

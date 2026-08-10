@@ -8,6 +8,17 @@ from rag_app.infrastructure.openai_compatible.gateway import OpenAICompatibleGat
 
 
 class ModelCompletionGatewayTest(unittest.TestCase):
+    @patch("rag_app.infrastructure.ollama.gateway.httpx.get")
+    def test_ollama_can_check_a_chat_only_compression_model(self, get):
+        response = Mock()
+        response.json.return_value = {"models": [{"name": "qwen3:4b"}]}
+        get.return_value = response
+        gateway = OllamaGateway("http://ollama", "qwen3:4b", "missing-embed")
+
+        gateway.check_connection(require_embedding_model=False)
+
+        response.raise_for_status.assert_called_once()
+
     @patch("rag_app.infrastructure.ollama.gateway.httpx.post")
     def test_ollama_maps_completion_options(self, post):
         response = Mock()

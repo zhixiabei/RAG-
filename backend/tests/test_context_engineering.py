@@ -10,6 +10,7 @@ from agent.context import (
     select_history_messages,
 )
 from rag_app.domain.models import SearchHit
+from agent.history_summarizer import HistorySummarizer
 
 
 class OverflowOnceModels:
@@ -23,6 +24,31 @@ class OverflowOnceModels:
         if len(self.calls) == 1:
             raise RuntimeError("maximum context length exceeded")
         return "重试成功"
+
+
+class OutputModels:
+    chat_model = "deepseek-chat"
+
+    def __init__(self):
+        self.calls = []
+
+    def complete(self, messages, model=None, temperature=0.1, **_kwargs):
+        self.calls.append((messages, model))
+        return "DeepSeek 最终回答"
+
+
+class CompressionModels:
+    chat_model = "qwen3:4b"
+
+    def __init__(self, error=None):
+        self.calls = []
+        self.error = error
+
+    def complete(self, messages, model=None, temperature=0.1, max_tokens=None, **_kwargs):
+        self.calls.append((messages, model, max_tokens))
+        if self.error:
+            raise self.error
+        return "用户此前要求保留关键编号 A-17，尚未解决预算问题。"
 
 
 class ContextEngineeringTest(unittest.TestCase):
@@ -104,6 +130,93 @@ class ContextEngineeringTest(unittest.TestCase):
             estimate_messages_tokens(models.calls[1]),
             estimate_messages_tokens(models.calls[0]),
         )
+
+    def test_long_history_is_compressed_locally_before_deepseek_output(self):
+        output_models = OutputModels()
+        compression_models = CompressionModels()
+        history = [
+            {
+                "role": "user" if index % 2 == 0 else "assistant",
+                "content": f"历史消息 {index} " + "内容" * 200,
+            }
+            for index in range(8)
+        ]
+        agent = AnswerAgent(
+            output_models,
+            ContextPolicy(
+                max_input_tokens=1_200,
+                output_reserve_tokens=200,
+                history_max_tokens=320,
+            ),
+            HistorySummarizer(
+                compression_models,
+                input_token_limit=512,
+                output_token_limit=64,
+            ),
+        )
+
+        result = agent.run_with_context("继续处理", history, [], retrieval_used=False)
+
+        self.assertEqual(result.answer, "DeepSeek 最终回答")
+        self.assertTrue(result.context_trace["compression"]["used"])
+        self.assertEqual(result.context_trace["compression"]["model"], "qwen3:4b")
+        self.assertGreater(len(compression_models.calls), 0)
+        self.assertEqual(compression_models.calls[0][1], "qwen3:4b")
+        self.assertEqual(len(output_models.calls), 1)
+        payload = json.loads(output_models.calls[0][0][-2]["content"].split("\n", 1)[1])
+        self.assertIn("关键编号 A-17", payload["conversation_history_summary"])
+
+    def test_short_history_does_not_call_local_compression_model(self):
+        output_models = OutputModels()
+        compression_models = CompressionModels()
+        history = [
+            {"role": "user", "content": "刚才的问题"},
+            {"role": "assistant", "content": "刚才的回答"},
+        ]
+        agent = AnswerAgent(
+            output_models,
+            ContextPolicy(max_input_tokens=2_048, output_reserve_tokens=256),
+            HistorySummarizer(
+                compression_models,
+                input_token_limit=512,
+                output_token_limit=64,
+            ),
+        )
+
+        result = agent.run_with_context("继续", history, [], retrieval_used=False)
+
+        self.assertEqual(result.answer, "DeepSeek 最终回答")
+        self.assertFalse(result.context_trace["compression"]["used"])
+        self.assertEqual(compression_models.calls, [])
+
+    def test_local_compression_failure_does_not_block_output_model(self):
+        output_models = OutputModels()
+        compression_models = CompressionModels(RuntimeError("Ollama unavailable"))
+        history = [
+            {"role": "user", "content": "甲" * 1_000},
+            {"role": "assistant", "content": "乙" * 1_000},
+        ]
+        agent = AnswerAgent(
+            output_models,
+            ContextPolicy(
+                max_input_tokens=1_000,
+                output_reserve_tokens=200,
+                history_max_tokens=240,
+            ),
+            HistorySummarizer(
+                compression_models,
+                input_token_limit=512,
+                output_token_limit=64,
+            ),
+        )
+
+        with self.assertLogs("agent.answer_agent", level="WARNING"):
+            result = agent.run_with_context("继续", history, [], retrieval_used=False)
+
+        self.assertEqual(result.answer, "DeepSeek 最终回答")
+        self.assertFalse(result.context_trace["compression"]["used"])
+        self.assertIn("Ollama unavailable", result.context_trace["compression"]["error"])
+        self.assertEqual(len(output_models.calls), 1)
 
 
 if __name__ == "__main__":

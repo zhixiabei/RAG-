@@ -21,6 +21,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from agent import (
     AnswerAgent,
     ContextPolicy,
+    HistorySummarizer,
     KnowledgeRetrievalAgent,
     RetrievalDecisionAgent,
 )
@@ -33,7 +34,11 @@ from .infrastructure.minio.object_store import MinioObjectStore
 from .infrastructure.parsing.document_parser import DocumentParser
 from .infrastructure.postgres.repository import PostgresRepository
 from .infrastructure.qdrant.vector_store import QdrantVectorStore
-from .model_gateway_factory import ModelGateway, build_model_gateway
+from .model_gateway_factory import (
+    ModelGateway,
+    build_context_compression_gateway,
+    build_model_gateway,
+)
 from .testset_tool import TestsetSyncService, TestsetToolClient
 
 
@@ -47,6 +52,7 @@ class Services:
     objects: MinioObjectStore
     vectors: QdrantVectorStore
     models: ModelGateway
+    context_compression_models: ModelGateway | None
     ingestion: IngestionService
     deletion: DeletionService
     rag: RagService
@@ -74,6 +80,7 @@ def build_services(settings: Settings) -> Services:
         search_hnsw_ef=settings.qdrant_search_hnsw_ef,
     )
     models = build_model_gateway(settings)
+    context_compression_models = build_context_compression_gateway(settings)
     decision_agent = RetrievalDecisionAgent(models)
     retrieval_agent = KnowledgeRetrievalAgent(
         vectors,
@@ -89,6 +96,11 @@ def build_services(settings: Settings) -> Services:
             catalog_max_tokens=settings.rag_context_catalog_max_tokens,
             attachment_max_tokens=settings.rag_context_attachment_max_tokens,
         ),
+        HistorySummarizer(
+            context_compression_models,
+            input_token_limit=settings.rag_context_compression_input_tokens,
+            output_token_limit=settings.rag_context_compression_output_tokens,
+        ) if context_compression_models is not None else None,
     )
     testset_sync = None
     if settings.testset_tool_base_url.strip():
@@ -116,6 +128,7 @@ def build_services(settings: Settings) -> Services:
         objects=objects,
         vectors=vectors,
         models=models,
+        context_compression_models=context_compression_models,
         ingestion=ingestion,
         deletion=DeletionService(repository, objects, vectors, ingestion.cancel),
         rag=RagService(repository, decision_agent, retrieval_agent, answer_agent),
@@ -124,12 +137,19 @@ def build_services(settings: Settings) -> Services:
 
 
 def initialize_services(services: Services) -> None:
-    checks = (
+    checks = [
         ("PostgreSQL", services.repository.initialize),
         ("MinIO", services.objects.ensure_bucket),
         ("Qdrant", services.vectors.check_connection),
         ("模型服务", services.models.check_connection),
-    )
+    ]
+    if services.context_compression_models is not None:
+        checks.append((
+            "本地上下文压缩模型",
+            lambda: services.context_compression_models.check_connection(
+                require_embedding_model=False,
+            ),
+        ))
     errors = []
     for name, check in checks:
         try:
