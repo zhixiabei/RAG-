@@ -2,6 +2,7 @@ const extensions = [
   '.jsonl',
   '.json',
   '.pdf',
+  '.doc',
   '.docx',
   '.xlsx',
   '.pptx',
