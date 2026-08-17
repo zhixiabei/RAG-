@@ -164,6 +164,7 @@ class RagService:
             "citations": citations,
             "retrieval_used": retrieval_used,
             "retrieved_count": len(hits),
+            "retrieval_k": self.retrieval_agent.top_k,
             "retrieved_document_ids": list(dict.fromkeys(
                 hit.document_id for hit in hits if hit.document_id
             )),

@@ -133,6 +133,7 @@ class RagServiceTest(unittest.TestCase):
         self.assertEqual(vectors.search_calls, [("kb-1", [0.1, 0.2], 3)])
         self.assertEqual(result["retrieved_count"], 3)
         self.assertEqual(result["retrieved_document_ids"], ["doc-1", "doc-2"])
+        self.assertEqual(result["retrieval_k"], 3)
         self.assertEqual(result["retrieved_chunk_ids"], ["chunk-1", "chunk-2", "chunk-3"])
         self.assertEqual(result["context_chunk_ids"], ["chunk-1", "chunk-2", "chunk-3"])
         self.assertEqual([item["chunk_id"] for item in result["citations"]], ["chunk-1", "chunk-3"])

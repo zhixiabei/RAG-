@@ -8,7 +8,6 @@ import httpx
 
 from rag_app.evaluation import (
     EvaluationError,
-    answer_char_f1,
     find_samples_outside_knowledge_base,
     load_dataset_from_testset_tool,
     measure_retrieval_hits,
@@ -24,7 +23,7 @@ class EvaluationTest(unittest.TestCase):
             "question_id": "q1",
             "question": "测试问题",
             "source_document_ids": ["doc-1"],
-            "source_chunk_ids": ["doc-1:3"],
+            "source_chunk_ids": ["doc-1:3", "doc-1:5"],
         }
         response = {
             "answer": "标准答案",
@@ -32,7 +31,8 @@ class EvaluationTest(unittest.TestCase):
                 {"document_id": "doc-1", "chunk_id": "doc-1:3"},
             ],
             "retrieved_document_ids": ["doc-1"],
-            "retrieved_chunk_ids": ["doc-1:3", "doc-1:4"],
+            "retrieved_chunk_ids": ["doc-1:4", "doc-1:3"],
+            "retrieval_k": 2,
             "retrieval_used": True,
             "retrieved_count": 3,
             "response_time_ms": 125.5,
@@ -44,17 +44,20 @@ class EvaluationTest(unittest.TestCase):
                 "total_tokens": 120,
             },
         }
-        sample["expected_answer"] = "标准答案"
 
         result = measure_retrieval_hits(sample, response)
 
         self.assertTrue(result["document_hit"])
         self.assertTrue(result["chunk_hit"])
-        self.assertEqual(result["document_f1"], 1.0)
+        self.assertEqual(result["document_reciprocal_rank"], 1.0)
         self.assertEqual(result["chunk_precision"], 0.5)
-        self.assertEqual(result["chunk_recall"], 1.0)
-        self.assertEqual(result["chunk_f1"], 0.6667)
-        self.assertEqual(result["answer_f1"], 1.0)
+        self.assertEqual(result["chunk_recall"], 0.5)
+        self.assertEqual(result["chunk_reciprocal_rank"], 0.5)
+        self.assertEqual(result["retrieval_k"], 2)
+        self.assertEqual(result["retrieval_recall_at_k"], 0.5)
+        self.assertEqual(result["mrr"], 0.5)
+        self.assertEqual(result["retrieved_chunk_ids"], ["doc-1:4", "doc-1:3"])
+        self.assertFalse(any(key.endswith("_f1") for key in result))
         self.assertEqual(result["response_time_ms"], 150.25)
         self.assertEqual(result["server_response_time_ms"], 125.5)
         self.assertEqual(result["token_usage"]["total_tokens"], 120)
@@ -95,11 +98,6 @@ class EvaluationTest(unittest.TestCase):
         self.assertTrue(result["document_hit"])
         self.assertFalse(result["chunk_hit"])
 
-    def test_answer_f1_normalizes_chinese_punctuation_and_counts_overlap(self):
-        self.assertEqual(answer_char_f1("长6油层，孔隙度为 10%。", "长6油层孔隙度为10%"), 1.0)
-        self.assertEqual(answer_char_f1("甲乙", "甲丙"), 0.5)
-        self.assertIsNone(answer_char_f1("", "任意回答"))
-
     def test_summary_excludes_missing_optional_metrics(self):
         summary = summarize([
             {
@@ -107,11 +105,13 @@ class EvaluationTest(unittest.TestCase):
                 "chunk_hit": False,
                 "document_precision": 0.5,
                 "document_recall": 1.0,
-                "document_f1": 0.6667,
+                "document_reciprocal_rank": 1.0,
                 "chunk_precision": 0.25,
                 "chunk_recall": 0.5,
-                "chunk_f1": 0.3333,
-                "answer_f1": 0.75,
+                "chunk_reciprocal_rank": 0.5,
+                "retrieval_k": 2,
+                "retrieval_recall_at_k": 0.5,
+                "retrieval_reciprocal_rank": 0.5,
                 "response_time_ms": 100,
                 "token_usage": {
                     "available": True,
@@ -128,9 +128,12 @@ class EvaluationTest(unittest.TestCase):
 
         self.assertEqual(summary["document_hit_rate"], 1.0)
         self.assertEqual(summary["chunk_hit_rate"], 0.0)
-        self.assertEqual(summary["document_f1"], 0.6667)
-        self.assertEqual(summary["chunk_f1"], 0.3333)
-        self.assertEqual(summary["answer_f1"], 0.75)
+        self.assertEqual(summary["document_mrr"], 1.0)
+        self.assertEqual(summary["chunk_mrr"], 0.5)
+        self.assertEqual(summary["retrieval_k"], 2)
+        self.assertEqual(summary["retrieval_recall_at_k"], 0.5)
+        self.assertEqual(summary["mrr"], 0.5)
+        self.assertFalse(any(key.endswith("_f1") for key in summary))
         self.assertEqual(summary["average_response_time_ms"], 100)
         self.assertEqual(summary["total_tokens"], 100)
         self.assertEqual(summary["average_tokens"], 100)

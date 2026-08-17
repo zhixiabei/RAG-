@@ -251,7 +251,7 @@ python scripts\evaluate_rag.py `
   --output ".\rag_eval_report.json"
 ```
 
-默认只评测 `status=approved` 的样本，并在每题结束后删除临时对话。报告统计文档与 chunk 的命中率、Precision/Recall/F1，基于 `expected_answer` 的归一化字符 F1，服务端响应时间，以及模型供应商实际返回的 Token Usage；未上报 usage 的模型调用不会使用估算值替代。
+默认只评测 `status=approved` 的样本，并在每题结束后删除临时对话。核心质量指标为 MRR 和 Retrieval Recall@K：MRR 衡量首个相关结果的排名，Recall@K 衡量标注相关 chunk（无 chunk 标注时使用文档）进入 Top-K 的比例。报告同时保留命中率、Precision/Recall、响应时间和模型供应商实际返回的 Token Usage；未上报 usage 的模型调用不会使用估算值替代。
 
 只评测指定题目时，重复传入 `--question-id`；本地 JSONL 和测试集工具模式都支持：
 

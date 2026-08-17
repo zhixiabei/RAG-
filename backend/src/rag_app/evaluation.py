@@ -1,14 +1,11 @@
 from __future__ import annotations
 
 import argparse
-from collections import Counter
 from datetime import datetime, timezone
 import json
 from pathlib import Path
-import re
 import sys
 from time import perf_counter
-import unicodedata
 from urllib.parse import quote
 
 import httpx
@@ -20,33 +17,42 @@ class EvaluationError(RuntimeError):
     pass
 
 
-def precision_recall_f1(expected: set[str], actual: set[str]) -> dict[str, float | None]:
+def precision_recall(expected: set[str], actual: set[str]) -> dict[str, float | None]:
     if not expected:
-        return {"precision": None, "recall": None, "f1": None}
+        return {"precision": None, "recall": None}
     true_positives = len(expected & actual)
     precision = true_positives / len(actual) if actual else 0.0
     recall = true_positives / len(expected)
-    f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
     return {
         "precision": round(precision, 4),
         "recall": round(recall, 4),
-        "f1": round(f1, 4),
     }
 
 
-def answer_char_f1(expected_answer: str | None, actual_answer: str | None) -> float | None:
-    expected_tokens = _answer_tokens(expected_answer or "")
-    actual_tokens = _answer_tokens(actual_answer or "")
-    if not expected_tokens:
+def reciprocal_rank(expected: set[str], ranked_actual: list[str]) -> float | None:
+    if not expected:
         return None
-    if not actual_tokens:
-        return 0.0
-    overlap = sum((Counter(expected_tokens) & Counter(actual_tokens)).values())
-    precision = overlap / len(actual_tokens)
-    recall = overlap / len(expected_tokens)
-    if not precision + recall:
-        return 0.0
-    return round(2 * precision * recall / (precision + recall), 4)
+    for rank, item_id in enumerate(ranked_actual, start=1):
+        if item_id in expected:
+            return round(1 / rank, 4)
+    return 0.0
+
+
+def _ordered_unique(values: object) -> list[str]:
+    if not isinstance(values, (list, tuple)):
+        return []
+    return list(dict.fromkeys(str(value) for value in values if value))
+
+
+def _retrieval_k(response: dict, ranked_ids: list[str]) -> int:
+    for value in (response.get("retrieval_k"), response.get("retrieved_count")):
+        if value is None or isinstance(value, bool):
+            continue
+        try:
+            return max(0, int(value))
+        except (TypeError, ValueError):
+            continue
+    return len(ranked_ids)
 
 
 def measure_retrieval_hits(
@@ -54,12 +60,14 @@ def measure_retrieval_hits(
     response: dict,
 ) -> dict:
     citations = response.get("citations") or []
-    retrieved_document_ids = set(response.get("retrieved_document_ids") or []) or {
-        citation.get("document_id") for citation in citations if citation.get("document_id")
-    }
-    retrieved_chunk_ids = set(response.get("retrieved_chunk_ids") or []) or {
-        citation.get("chunk_id") for citation in citations if citation.get("chunk_id")
-    }
+    ranked_document_ids = _ordered_unique(response.get("retrieved_document_ids")) or _ordered_unique([
+        citation.get("document_id") for citation in citations
+    ])
+    ranked_chunk_ids = _ordered_unique(response.get("retrieved_chunk_ids")) or _ordered_unique([
+        citation.get("chunk_id") for citation in citations
+    ])
+    retrieved_document_ids = set(ranked_document_ids)
+    retrieved_chunk_ids = set(ranked_chunk_ids)
     expected_document_ids = set(sample.get("source_document_ids") or [])
     expected_chunk_ids = set(sample.get("source_chunk_ids") or [])
 
@@ -73,8 +81,18 @@ def measure_retrieval_hits(
         if expected_chunk_ids
         else None
     )
-    document_metrics = precision_recall_f1(expected_document_ids, retrieved_document_ids)
-    chunk_metrics = precision_recall_f1(expected_chunk_ids, retrieved_chunk_ids)
+    document_metrics = precision_recall(expected_document_ids, retrieved_document_ids)
+    chunk_metrics = precision_recall(expected_chunk_ids, retrieved_chunk_ids)
+    expected_retrieval_ids = expected_chunk_ids or expected_document_ids
+    ranked_retrieval_ids = ranked_chunk_ids if expected_chunk_ids else ranked_document_ids
+    retrieval_k = _retrieval_k(response, ranked_retrieval_ids)
+    ranked_at_k = ranked_retrieval_ids[:retrieval_k]
+    retrieval_recall_at_k = (
+        round(len(expected_retrieval_ids & set(ranked_at_k)) / len(expected_retrieval_ids), 4)
+        if expected_retrieval_ids
+        else None
+    )
+    retrieval_reciprocal_rank = reciprocal_rank(expected_retrieval_ids, ranked_at_k)
     generated_answer = str(response.get("answer") or "")
 
     return {
@@ -86,16 +104,19 @@ def measure_retrieval_hits(
         "chunk_hit": chunk_hit,
         "document_precision": document_metrics["precision"],
         "document_recall": document_metrics["recall"],
-        "document_f1": document_metrics["f1"],
+        "document_reciprocal_rank": reciprocal_rank(expected_document_ids, ranked_document_ids),
         "chunk_precision": chunk_metrics["precision"],
         "chunk_recall": chunk_metrics["recall"],
-        "chunk_f1": chunk_metrics["f1"],
-        "answer_f1": answer_char_f1(sample.get("expected_answer"), generated_answer),
+        "chunk_reciprocal_rank": reciprocal_rank(expected_chunk_ids, ranked_chunk_ids),
+        "retrieval_k": retrieval_k,
+        "retrieval_recall_at_k": retrieval_recall_at_k,
+        "retrieval_reciprocal_rank": retrieval_reciprocal_rank,
+        "mrr": retrieval_reciprocal_rank,
         "answer": generated_answer,
         "retrieval_used": bool(response.get("retrieval_used")),
         "retrieved_count": int(response.get("retrieved_count") or 0),
-        "retrieved_document_ids": sorted(retrieved_document_ids),
-        "retrieved_chunk_ids": sorted(retrieved_chunk_ids),
+        "retrieved_document_ids": ranked_document_ids,
+        "retrieved_chunk_ids": ranked_chunk_ids,
         "expected_document_ids": sorted(expected_document_ids),
         "expected_chunk_ids": sorted(expected_chunk_ids),
         "response_time_ms": _optional_number(
@@ -153,11 +174,13 @@ def summarize(results: list[dict]) -> dict:
         ]),
         "document_precision": _average_metric(completed, "document_precision"),
         "document_recall": _average_metric(completed, "document_recall"),
-        "document_f1": _average_metric(completed, "document_f1"),
+        "document_mrr": _average_metric(completed, "document_reciprocal_rank"),
         "chunk_precision": _average_metric(completed, "chunk_precision"),
         "chunk_recall": _average_metric(completed, "chunk_recall"),
-        "chunk_f1": _average_metric(completed, "chunk_f1"),
-        "answer_f1": _average_metric(completed, "answer_f1"),
+        "chunk_mrr": _average_metric(completed, "chunk_reciprocal_rank"),
+        "retrieval_k": _summary_retrieval_k(completed),
+        "retrieval_recall_at_k": _average_metric(completed, "retrieval_recall_at_k"),
+        "mrr": _average_metric(completed, "retrieval_reciprocal_rank"),
         "average_response_time_ms": round(sum(latencies) / len(latencies), 2) if latencies else None,
         "p50_response_time_ms": _percentile(latencies, 0.50),
         "p95_response_time_ms": _percentile(latencies, 0.95),
@@ -178,11 +201,6 @@ def summarize(results: list[dict]) -> dict:
     }
 
 
-def _answer_tokens(text: str) -> list[str]:
-    normalized = unicodedata.normalize("NFKC", text).casefold()
-    return re.findall(r"[\u4e00-\u9fff]|[a-z0-9]+", normalized)
-
-
 def _optional_number(value: object) -> float | None:
     if value is None or isinstance(value, bool):
         return None
@@ -195,6 +213,13 @@ def _optional_number(value: object) -> float | None:
 def _average_metric(results: list[dict], key: str) -> float | None:
     values = [float(result[key]) for result in results if result.get(key) is not None]
     return _average(values)
+
+
+def _summary_retrieval_k(results: list[dict]) -> int | None:
+    values = [int(result["retrieval_k"]) for result in results if result.get("retrieval_k") is not None]
+    if not values or len(set(values)) != 1:
+        return None
+    return values[0]
 
 
 def load_dataset(path: Path, include_non_approved: bool = False) -> list[dict]:
@@ -464,8 +489,8 @@ def run_evaluation(
                 print(
                     f"  doc_hit={result['document_hit']} "
                     f"chunk_hit={result['chunk_hit']} "
-                    f"chunk_f1={result.get('chunk_f1')} "
-                    f"answer_f1={result.get('answer_f1')} "
+                    f"retrieval_recall_at_k={result.get('retrieval_recall_at_k')} "
+                    f"mrr={result.get('mrr')} "
                     f"latency_ms={result.get('response_time_ms')}",
                     flush=True,
                 )
