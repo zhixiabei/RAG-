@@ -142,6 +142,7 @@ class RagService:
                     hit.title,
                     hit.page_number,
                     hit.score,
+                    hit.relevance_score,
                 ).as_dict()
                 for hit in context_hits
             ],
@@ -165,6 +166,8 @@ class RagService:
             "retrieval_used": retrieval_used,
             "retrieved_count": len(hits),
             "retrieval_k": self.retrieval_agent.top_k,
+            "retrieval_candidate_k": self.retrieval_agent.candidate_k,
+            "reranker": getattr(self.retrieval_agent.reranker, "name", None),
             "retrieved_document_ids": list(dict.fromkeys(
                 hit.document_id for hit in hits if hit.document_id
             )),
@@ -187,6 +190,8 @@ class RagService:
                     "status": "completed" if retrieval_used else "skipped",
                     "retrieved_count": len(hits),
                     "top_k": self.retrieval_agent.top_k,
+                    "candidate_k": self.retrieval_agent.candidate_k,
+                    "reranker": getattr(self.retrieval_agent.reranker, "name", None),
                 },
                 {
                     "agent": self.answer_agent.name,

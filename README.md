@@ -17,7 +17,7 @@
 
 文档上传接口在 MinIO 保存源文件并创建 PostgreSQL 记录后返回 `202`，解析、embedding 和 Qdrant 写入由同一后端进程内的后台线程处理，不是独立的 Redis/RabbitMQ 任务队列。后端重启会丢失内存中的待处理队列，数据库中可能留下 `processing` 状态的文档。
 
-应用使用固定的 `OWNER_ID` 做数据范围过滤，但没有登录和身份认证。当前检索只有 dense cosine Top-K，没有 BM25、sparse 检索或 reranker。聊天附件只在当前请求中使用，不会作为知识库文档持久化。
+应用使用固定的 `OWNER_ID` 做数据范围过滤，但没有登录和身份认证。检索采用 dense cosine 与关键词召回，经 RRF 融合后调用 HTTP reranker；reranker 不可用时自动回退到融合排序。当前没有 BM25 或 sparse 检索。聊天附件只在当前请求中使用，不会作为知识库文档持久化。
 
 ## 架构和目录
 
@@ -28,12 +28,13 @@
         -> MinIO（原始文件）
         -> Qdrant（embedding 向量）
         -> Ollama 或 OpenAI 兼容 API（聊天和 embedding）
+        -> HTTP reranker（候选 chunk 重排）
 ```
 
 ```text
 agent/
   retrieval_decision_agent.py  判断本轮是否需要检索
-  knowledge_retrieval_agent.py 执行 Qdrant 向量检索
+  knowledge_retrieval_agent.py 执行向量/关键词召回、RRF 融合和重排
   answer_agent.py              生成最终回答和引用
 backend/src/rag_app/
   api/              HTTP 路由和 Pydantic 请求模型
@@ -197,7 +198,11 @@ DeepSeek 官方 API 不提供 embedding，必须另配一个支持 `/embeddings`
 | `DATABASE_URL` | PostgreSQL 连接串 | `postgresql+psycopg://rag:rag@127.0.0.1:5432/rag` |
 | `MINIO_ENDPOINT` / `MINIO_BUCKET` | 对象存储地址和 bucket | `127.0.0.1:9000` / `rag-documents` |
 | `QDRANT_URL` / `QDRANT_COLLECTION` | 向量库地址和 collection | `http://127.0.0.1:6333` / 见模板 |
-| `RAG_TOP_K` | 每次向量召回数量 | `10` |
+| `RAG_TOP_K` | 重排后最终返回的 chunk 数量 | `10` |
+| `RAG_RETRIEVAL_CANDIDATE_K` | dense 候选召回数量；关键词候选取其一半 | `30` |
+| `RAG_RERANK_ENABLED` | 是否启用 HTTP reranker | `true` |
+| `RAG_RERANK_PROVIDER_NAME` / `RAG_RERANK_BASE_URL` / `RAG_RERANK_API_KEY` | reranker 服务覆盖配置；留空复用 `REMOTE_EMBEDDING_*` | 空 |
+| `RAG_RERANK_MODEL` | reranker 模型 | `BAAI/bge-reranker-v2-m3` |
 | `INGESTION_MAX_CONCURRENCY` | 入库 worker 数量 | `2` |
 | `INGESTION_EMBEDDING_MAX_CONCURRENCY` | embedding 并发数 | `1` |
 | `INGESTION_EMBEDDING_BATCH_SIZE` | 单批 embedding 数量 | `32` |
@@ -251,7 +256,7 @@ python scripts\evaluate_rag.py `
   --output ".\rag_eval_report.json"
 ```
 
-默认只评测 `status=approved` 的样本，并在每题结束后删除临时对话。核心质量指标为 MRR 和 Retrieval Recall@K：MRR 衡量首个相关结果的排名，Recall@K 衡量标注相关 chunk（无 chunk 标注时使用文档）进入 Top-K 的比例。报告同时保留命中率、Precision/Recall、响应时间和模型供应商实际返回的 Token Usage；未上报 usage 的模型调用不会使用估算值替代。
+默认只评测 `status=approved` 的样本，并在每题结束后删除临时对话。核心质量指标为 MRR 和 Retrieval Recall@K：MRR 按 reranker 最终排序衡量首个相关结果的排名，Recall@K 衡量标注相关 chunk（无 chunk 标注时使用文档）进入最终 Top-K 的比例。报告同时保留命中率、Precision/Recall、响应时间和模型供应商实际返回的 Token Usage；未上报 usage 的模型调用不会使用估算值替代。
 
 只评测指定题目时，重复传入 `--question-id`；本地 JSONL 和测试集工具模式都支持：
 

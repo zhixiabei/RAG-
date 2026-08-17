@@ -1,3 +1,4 @@
+from dataclasses import replace
 import json
 import unittest
 
@@ -121,6 +122,7 @@ class RagServiceTest(unittest.TestCase):
             SearchHit("chunk-3", "doc-2", "kb-1", "流程.pdf", "第三段", 0.81, 1),
             SearchHit("chunk-4", "doc-3", "kb-1", "其他.pdf", "第四段", 0.70, 1),
         ]
+        hits[0] = replace(hits[0], relevance_score=0.97)
         repository = FakeRepository()
         vectors = FakeVectorStore(hits)
         models = FakeModelGateway(retrieval_needed=True)
@@ -134,14 +136,17 @@ class RagServiceTest(unittest.TestCase):
         self.assertEqual(result["retrieved_count"], 3)
         self.assertEqual(result["retrieved_document_ids"], ["doc-1", "doc-2"])
         self.assertEqual(result["retrieval_k"], 3)
+        self.assertEqual(result["retrieval_candidate_k"], 3)
+        self.assertIsNone(result["reranker"])
         self.assertEqual(result["retrieved_chunk_ids"], ["chunk-1", "chunk-2", "chunk-3"])
         self.assertEqual(result["context_chunk_ids"], ["chunk-1", "chunk-2", "chunk-3"])
         self.assertEqual([item["chunk_id"] for item in result["citations"]], ["chunk-1", "chunk-3"])
         self.assertEqual(result["citations"][0]["score"], 0.92)
-        self.assertIsNone(result["citations"][0]["relevance_score"])
+        self.assertEqual(result["citations"][0]["relevance_score"], 0.97)
         self.assertEqual(result["agent_trace"], [
             {"agent": "retrieval_decision", "status": "completed", "outcome": "retrieve"},
-            {"agent": "knowledge_retrieval", "status": "completed", "retrieved_count": 3, "top_k": 3},
+            {"agent": "knowledge_retrieval", "status": "completed", "retrieved_count": 3,
+             "top_k": 3, "candidate_k": 3, "reranker": None},
             {"agent": "answer", "status": "completed"},
         ])
 

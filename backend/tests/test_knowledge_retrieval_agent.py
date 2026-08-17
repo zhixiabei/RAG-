@@ -27,6 +27,21 @@ class FakeVectors:
         return self.keyword_hits
 
 
+class FakeReranker:
+    name = "test-reranker"
+
+    def __init__(self, result=None, error=None):
+        self.result = result or []
+        self.error = error
+        self.calls = []
+
+    def rerank(self, query, hits, limit):
+        self.calls.append((query, list(hits), limit))
+        if self.error:
+            raise self.error
+        return self.result
+
+
 class KnowledgeRetrievalAgentTest(unittest.TestCase):
     def test_returns_similarity_ordered_top_k_candidates(self):
         hits = [
@@ -76,6 +91,75 @@ class KnowledgeRetrievalAgentTest(unittest.TestCase):
         )
 
         self.assertEqual([hit.chunk_id for hit in result], ["shared:1", "vector:1"])
+
+    def test_widens_candidates_and_uses_reranked_order(self):
+        vector_hits = [
+            SearchHit("vector:1", "doc-1", "kb-1", "one.txt", "first", 0.9),
+            SearchHit("vector:2", "doc-2", "kb-1", "two.txt", "second", 0.8),
+            SearchHit("vector:3", "doc-3", "kb-1", "three.txt", "third", 0.7),
+        ]
+        keyword_hit = SearchHit(
+            "keyword:1", "doc-4", "kb-1", "keyword.txt", "Policy 12-3", 1.0
+        )
+        reranker = FakeReranker([vector_hits[2]])
+        vectors = FakeVectors(vector_hits, [keyword_hit])
+        agent = KnowledgeRetrievalAgent(
+            vectors,
+            FakeModels(),
+            top_k=2,
+            candidate_k=4,
+            reranker=reranker,
+        )
+
+        result = agent.run(
+            {"id": "kb-1", "embedding_model": "test-embedding"},
+            "Policy 12-3 details",
+        )
+
+        self.assertEqual(vectors.calls, [("kb-1", [0.1, 0.2], 4)])
+        self.assertEqual(vectors.keyword_calls[0][2], 2)
+        query, candidates, limit = reranker.calls[0]
+        self.assertEqual(query, "Policy 12-3 details")
+        self.assertEqual(limit, 2)
+        self.assertEqual(
+            [hit.chunk_id for hit in candidates],
+            ["keyword:1", "vector:1", "vector:2", "vector:3"],
+        )
+        self.assertEqual(
+            [hit.chunk_id for hit in result],
+            ["vector:3", "keyword:1"],
+        )
+
+    def test_falls_back_to_fused_order_when_reranker_fails(self):
+        vector_hits = [
+            SearchHit("vector:1", "doc-1", "kb-1", "one.txt", "first", 0.9),
+            SearchHit("vector:2", "doc-2", "kb-1", "two.txt", "second", 0.8),
+        ]
+        keyword_hit = SearchHit(
+            "keyword:1", "doc-3", "kb-1", "keyword.txt", "Policy 12-3", 1.0
+        )
+        vectors = FakeVectors(vector_hits, [keyword_hit])
+        reranker = FakeReranker(error=TimeoutError("timed out"))
+        agent = KnowledgeRetrievalAgent(
+            vectors, FakeModels(), top_k=2, candidate_k=3, reranker=reranker
+        )
+
+        with self.assertLogs("agent.knowledge_retrieval_agent", level="WARNING"):
+            result = agent.run(
+                {"id": "kb-1", "embedding_model": "test-embedding"},
+                "Policy 12-3 details",
+            )
+
+        self.assertEqual(
+            [hit.chunk_id for hit in result],
+            ["keyword:1", "vector:1"],
+        )
+
+    def test_rejects_candidate_k_smaller_than_top_k(self):
+        with self.assertRaisesRegex(ValueError, "Candidate-K"):
+            KnowledgeRetrievalAgent(
+                FakeVectors([]), FakeModels(), top_k=3, candidate_k=2
+            )
 
     def test_extracts_identifier_and_chinese_phrase_terms(self):
         terms = extract_keyword_terms("化 348-4 井的年累计增油是多少？")

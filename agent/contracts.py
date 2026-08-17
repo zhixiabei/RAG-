@@ -11,6 +11,7 @@ class SearchHit(Protocol):
     score: float
     folder_path: str
     relative_path: str
+    relevance_score: float | None
     page_number: int | None
 
 
@@ -44,4 +45,12 @@ class VectorStore(Protocol):
         knowledge_base_id: str,
         keywords: list[str],
         limit: int,
+    ) -> Sequence[SearchHit]: ...
+
+
+class Reranker(Protocol):
+    name: str
+
+    def rerank(
+        self, query: str, hits: Sequence[SearchHit], limit: int
     ) -> Sequence[SearchHit]: ...

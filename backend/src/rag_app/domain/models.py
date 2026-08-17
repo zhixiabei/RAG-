@@ -22,6 +22,7 @@ class SearchHit:
     folder_path: str = ""
     file_name: str = ""
     relative_path: str = ""
+    relevance_score: float | None = None
 
 
 @dataclass(frozen=True)

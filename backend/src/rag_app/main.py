@@ -34,6 +34,7 @@ from .infrastructure.minio.object_store import MinioObjectStore
 from .infrastructure.parsing.document_parser import DocumentParser
 from .infrastructure.postgres.repository import PostgresRepository
 from .infrastructure.qdrant.vector_store import QdrantVectorStore
+from .infrastructure.rerank import HttpReranker
 from .model_gateway_factory import (
     ModelGateway,
     build_context_compression_gateway,
@@ -53,6 +54,7 @@ class Services:
     vectors: QdrantVectorStore
     models: ModelGateway
     context_compression_models: ModelGateway | None
+    reranker: HttpReranker | None
     ingestion: IngestionService
     deletion: DeletionService
     rag: RagService
@@ -81,11 +83,30 @@ def build_services(settings: Settings) -> Services:
     )
     models = build_model_gateway(settings)
     context_compression_models = build_context_compression_gateway(settings)
+    reranker = None
+    if settings.rag_rerank_enabled:
+        rerank_base_url = (
+            settings.rag_rerank_base_url or settings.remote_embedding_base_url
+        )
+        if rerank_base_url.strip():
+            reranker = HttpReranker(
+                settings.rag_rerank_provider_name
+                or settings.remote_embedding_provider_name,
+                rerank_base_url,
+                settings.rag_rerank_api_key
+                or settings.remote_embedding_api_key,
+                settings.rag_rerank_model,
+                settings.rag_rerank_timeout_seconds,
+            )
+        else:
+            logger.warning("Reranking is enabled but no reranker base URL is configured")
     decision_agent = RetrievalDecisionAgent(models)
     retrieval_agent = KnowledgeRetrievalAgent(
         vectors,
         models,
         settings.rag_top_k,
+        candidate_k=settings.rag_retrieval_candidate_k,
+        reranker=reranker,
     )
     answer_agent = AnswerAgent(
         models,
@@ -129,6 +150,7 @@ def build_services(settings: Settings) -> Services:
         vectors=vectors,
         models=models,
         context_compression_models=context_compression_models,
+        reranker=reranker,
         ingestion=ingestion,
         deletion=DeletionService(repository, objects, vectors, ingestion.cancel),
         rag=RagService(repository, decision_agent, retrieval_agent, answer_agent),
@@ -175,6 +197,8 @@ async def lifespan(app: FastAPI):
     finally:
         if services.testset_sync:
             services.testset_sync.close()
+        if services.reranker:
+            services.reranker.close()
         services.repository.close()
 
 

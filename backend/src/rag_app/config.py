@@ -45,6 +45,13 @@ class Settings(BaseSettings):
     remote_embedding_api_key: str = ""
     remote_embedding_model: str = ""
     rag_top_k: int = 10
+    rag_retrieval_candidate_k: int = 30
+    rag_rerank_enabled: bool = True
+    rag_rerank_provider_name: str = ""
+    rag_rerank_base_url: str = ""
+    rag_rerank_api_key: str = ""
+    rag_rerank_model: str = "BAAI/bge-reranker-v2-m3"
+    rag_rerank_timeout_seconds: float = 60.0
     rag_context_max_input_tokens: int = 0
     rag_context_output_reserve_tokens: int = 4_096
     rag_context_history_max_tokens: int = 6_000

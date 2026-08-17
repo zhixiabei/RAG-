@@ -1,8 +1,9 @@
+import logging
 import re
 from typing import Any
 import unicodedata
 
-from .contracts import ModelGateway, SearchHit, VectorStore
+from .contracts import ModelGateway, Reranker, SearchHit, VectorStore
 from .telemetry import model_usage_stage
 
 
@@ -12,6 +13,7 @@ _IDENTIFIER_PATTERNS = (
 )
 _RRF_RANK_CONSTANT = 60
 _KEYWORD_RRF_WEIGHT = 1.25
+logger = logging.getLogger(__name__)
 
 
 def _normalize_keyword(value: str) -> str:
@@ -53,12 +55,24 @@ class KnowledgeRetrievalAgent:
 
     name = "knowledge_retrieval"
 
-    def __init__(self, vectors: VectorStore, models: ModelGateway, top_k: int):
+    def __init__(
+        self,
+        vectors: VectorStore,
+        models: ModelGateway,
+        top_k: int,
+        candidate_k: int | None = None,
+        reranker: Reranker | None = None,
+    ):
         if top_k <= 0:
             raise ValueError("Top-K 必须大于 0")
+        candidate_k = top_k if candidate_k is None else candidate_k
+        if candidate_k < top_k:
+            raise ValueError("Candidate-K must be greater than or equal to Top-K")
         self.vectors = vectors
         self.models = models
         self.top_k = top_k
+        self.candidate_k = candidate_k
+        self.reranker = reranker
 
     def run(self, knowledge_base: dict[str, Any], question: str) -> list[SearchHit]:
         if knowledge_base["embedding_model"] != self.models.embedding_model:
@@ -69,10 +83,10 @@ class KnowledgeRetrievalAgent:
         with model_usage_stage("query_embedding"):
             query_vector = self.models.embed([question])[0]
         vector_hits = list(
-            self.vectors.search(knowledge_base["id"], query_vector, self.top_k)
+            self.vectors.search(knowledge_base["id"], query_vector, self.candidate_k)
         )
         keywords = extract_keyword_terms(question)
-        keyword_limit = max(1, self.top_k // 2)
+        keyword_limit = max(1, self.candidate_k // 2)
         keyword_hits = list(
             self.vectors.search_keywords(
                 knowledge_base["id"],
@@ -80,8 +94,33 @@ class KnowledgeRetrievalAgent:
                 keyword_limit,
             )
         ) if keywords else []
-
-        return _reciprocal_rank_fusion(vector_hits, keyword_hits, self.top_k)
+        candidates = _reciprocal_rank_fusion(
+            vector_hits,
+            keyword_hits,
+            len(vector_hits) + len(keyword_hits),
+        )
+        if self.reranker is None or not candidates:
+            return candidates[:self.top_k]
+        try:
+            with model_usage_stage("reranking"):
+                reranked = list(
+                    self.reranker.rerank(question, candidates, self.top_k)
+                )
+            if not reranked:
+                raise RuntimeError("Reranker returned no results")
+            seen = {hit.chunk_id for hit in reranked}
+            reranked.extend(
+                hit
+                for hit in candidates
+                if hit.chunk_id not in seen
+            )
+            return reranked[:self.top_k]
+        except Exception:
+            logger.warning(
+                "Reranking failed; falling back to fused retrieval order",
+                exc_info=True,
+            )
+            return candidates[:self.top_k]
 
 
 def _reciprocal_rank_fusion(
