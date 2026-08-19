@@ -10,6 +10,9 @@ from urllib.parse import quote
 
 import httpx
 
+from agent import AnswerJudgeAgent
+from agent.telemetry import collect_model_usage
+
 DEFAULT_DATASET = "heishanliang_rag_eval_v1.0.0.jsonl"
 
 
@@ -148,6 +151,21 @@ def _percentile(values: list[float], percentile: float) -> float | None:
 
 def summarize(results: list[dict]) -> dict:
     completed = [result for result in results if "error" not in result]
+    judgments = [
+        result["judge"]
+        for result in completed
+        if isinstance(result.get("judge"), dict)
+    ]
+    judge_errors = [
+        result["judge_error"]
+        for result in completed
+        if result.get("judge_error")
+    ]
+    judge_reported_usage = [
+        result.get("judge_token_usage") or {}
+        for result in completed
+        if (result.get("judge_token_usage") or {}).get("available")
+    ]
     latencies = [
         float(result["response_time_ms"])
         for result in completed
@@ -181,6 +199,30 @@ def summarize(results: list[dict]) -> dict:
         "retrieval_k": _summary_retrieval_k(completed),
         "retrieval_recall_at_k": _average_metric(completed, "retrieval_recall_at_k"),
         "mrr": _average_metric(completed, "retrieval_reciprocal_rank"),
+        "judge_sample_count": len(judgments),
+        "judge_error_count": len(judge_errors),
+        "answer_pass_rate": _rate([
+            judgment["passed"]
+            for judgment in judgments
+            if judgment.get("passed") is not None
+        ]),
+        "average_answer_score": _average_metric(judgments, "score"),
+        "average_correctness_score": _average_metric(judgments, "correctness_score"),
+        "average_completeness_score": _average_metric(judgments, "completeness_score"),
+        "average_faithfulness_score": _average_metric(judgments, "faithfulness_score"),
+        "judge_token_usage_sample_count": len(judge_reported_usage),
+        "judge_input_tokens": sum(
+            int(usage.get("input_tokens") or 0)
+            for usage in judge_reported_usage
+        ),
+        "judge_output_tokens": sum(
+            int(usage.get("output_tokens") or 0)
+            for usage in judge_reported_usage
+        ),
+        "judge_total_tokens": sum(
+            int(usage.get("total_tokens") or 0)
+            for usage in judge_reported_usage
+        ),
         "average_response_time_ms": round(sum(latencies) / len(latencies), 2) if latencies else None,
         "p50_response_time_ms": _percentile(latencies, 0.50),
         "p95_response_time_ms": _percentile(latencies, 0.95),
@@ -365,6 +407,7 @@ def evaluate_sample(
     sample: dict,
     model: str | None,
     cleanup: bool,
+    judge_agent: AnswerJudgeAgent | None = None,
 ) -> dict:
     kb_path = quote(knowledge_base_id, safe="")
     conversation_id = None
@@ -390,7 +433,18 @@ def evaluate_sample(
             },
         )
         response["client_response_time_ms"] = round((perf_counter() - started_at) * 1_000, 2)
-        return measure_retrieval_hits(sample, response)
+        result = measure_retrieval_hits(sample, response)
+        if judge_agent is not None:
+            with collect_model_usage() as judge_usage:
+                try:
+                    result["judge"] = judge_agent.run(
+                        sample,
+                        result["answer"],
+                    ).as_dict()
+                except Exception as exc:
+                    result["judge_error"] = f"{type(exc).__name__}: {exc}"
+            result["judge_token_usage"] = judge_usage.summary()
+        return result
     finally:
         if cleanup and conversation_id:
             try:
@@ -411,6 +465,7 @@ def run_evaluation(
     include_non_approved: bool,
     testset_tool_url: str | None = None,
     question_ids: list[str] | None = None,
+    judge_agent: AnswerJudgeAgent | None = None,
 ) -> dict:
     dataset_metadata = {}
     if testset_tool_url:
@@ -485,12 +540,14 @@ def run_evaluation(
                     sample,
                     model,
                     cleanup,
+                    judge_agent,
                 )
                 print(
                     f"  doc_hit={result['document_hit']} "
                     f"chunk_hit={result['chunk_hit']} "
                     f"retrieval_recall_at_k={result.get('retrieval_recall_at_k')} "
                     f"mrr={result.get('mrr')} "
+                    f"answer_score={(result.get('judge') or {}).get('score')} "
                     f"latency_ms={result.get('response_time_ms')}",
                     flush=True,
                 )
@@ -531,6 +588,7 @@ def run_evaluation(
         "knowledge_base_id": knowledge_base_id,
         "base_url": base_url,
         "model": model,
+        "judge_model": judge_agent.model_name if judge_agent is not None else None,
         "evaluated_at": datetime.now(timezone.utc).isoformat(),
         "summary": summary,
         "stop_reason": stop_reason,
@@ -550,6 +608,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--base-url", default="http://127.0.0.1:8080", help="RAG 后端地址")
     parser.add_argument("--model", default=None, help="可选的聊天模型名称")
+    parser.add_argument(
+        "--judge-model",
+        default=None,
+        help="可选的 Judge 模型名称；默认使用 RAG_JUDGE_MODEL 或回答模型",
+    )
+    parser.add_argument("--no-judge", action="store_true", help="关闭答案质量模型评分")
     parser.add_argument("--timeout", type=float, default=180.0, help="单次 HTTP 请求超时秒数")
     parser.add_argument("--output", type=Path, default=Path("rag_eval_report.json"), help="评测报告路径")
     parser.add_argument("--keep-conversations", action="store_true", help="保留每题创建的评测对话")
@@ -571,6 +635,26 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit(f"评测集不存在: {dataset_path}")
 
     try:
+        judge_agent = None
+        if not args.no_judge:
+            from .config import Settings
+            from .model_gateway_factory import build_judge_gateway, build_model_gateway
+
+            settings = Settings()
+            if args.judge_model:
+                settings = settings.model_copy(update={
+                    "rag_judge_enabled": True,
+                    "rag_judge_model": args.judge_model,
+                })
+            models = build_model_gateway(settings)
+            judge_models = build_judge_gateway(settings, models)
+            if judge_models is not None:
+                judge_agent = AnswerJudgeAgent(
+                    judge_models,
+                    pass_threshold=settings.rag_judge_pass_threshold,
+                    max_evidence_chars=settings.rag_judge_max_evidence_chars,
+                )
+
         report = run_evaluation(
             dataset_path,
             args.knowledge_base_id,
@@ -581,6 +665,7 @@ def main(argv: list[str] | None = None) -> int:
             args.include_non_approved,
             args.testset_tool_url,
             args.question_ids,
+            judge_agent,
         )
     except (EvaluationError, ValueError) as exc:
         print(f"评测无法启动: {exc}", file=sys.stderr)

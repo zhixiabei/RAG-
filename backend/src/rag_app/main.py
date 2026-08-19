@@ -20,6 +20,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from agent import (
     AnswerAgent,
+    AnswerJudgeAgent,
     ContextPolicy,
     HistorySummarizer,
     KnowledgeRetrievalAgent,
@@ -38,6 +39,7 @@ from .infrastructure.rerank import HttpReranker
 from .model_gateway_factory import (
     ModelGateway,
     build_context_compression_gateway,
+    build_judge_gateway,
     build_model_gateway,
 )
 from .testset_tool import TestsetSyncService, TestsetToolClient
@@ -54,7 +56,9 @@ class Services:
     vectors: QdrantVectorStore
     models: ModelGateway
     context_compression_models: ModelGateway | None
+    judge_models: ModelGateway | None
     reranker: HttpReranker | None
+    answer_judge: AnswerJudgeAgent | None
     ingestion: IngestionService
     deletion: DeletionService
     rag: RagService
@@ -83,6 +87,16 @@ def build_services(settings: Settings) -> Services:
     )
     models = build_model_gateway(settings)
     context_compression_models = build_context_compression_gateway(settings)
+    judge_models = build_judge_gateway(settings, models)
+    answer_judge = (
+        AnswerJudgeAgent(
+            judge_models,
+            pass_threshold=settings.rag_judge_pass_threshold,
+            max_evidence_chars=settings.rag_judge_max_evidence_chars,
+        )
+        if judge_models is not None
+        else None
+    )
     reranker = None
     if settings.rag_rerank_enabled:
         rerank_base_url = (
@@ -150,7 +164,9 @@ def build_services(settings: Settings) -> Services:
         vectors=vectors,
         models=models,
         context_compression_models=context_compression_models,
+        judge_models=judge_models,
         reranker=reranker,
+        answer_judge=answer_judge,
         ingestion=ingestion,
         deletion=DeletionService(repository, objects, vectors, ingestion.cancel),
         rag=RagService(repository, decision_agent, retrieval_agent, answer_agent),
@@ -169,6 +185,13 @@ def initialize_services(services: Services) -> None:
         checks.append((
             "本地上下文压缩模型",
             lambda: services.context_compression_models.check_connection(
+                require_embedding_model=False,
+            ),
+        ))
+    if services.judge_models is not None and services.judge_models is not services.models:
+        checks.append((
+            "Judge 模型",
+            lambda: services.judge_models.check_connection(
                 require_embedding_model=False,
             ),
         ))

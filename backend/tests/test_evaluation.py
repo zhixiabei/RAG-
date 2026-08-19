@@ -8,6 +8,7 @@ import httpx
 
 from rag_app.evaluation import (
     EvaluationError,
+    evaluate_sample,
     find_samples_outside_knowledge_base,
     load_dataset_from_testset_tool,
     measure_retrieval_hits,
@@ -138,9 +139,108 @@ class EvaluationTest(unittest.TestCase):
         self.assertEqual(summary["total_tokens"], 100)
         self.assertEqual(summary["average_tokens"], 100)
         self.assertNotIn("pass_rate", summary)
-        self.assertNotIn("average_answer_score", summary)
+        self.assertIsNone(summary["average_answer_score"])
+        self.assertEqual(summary["judge_sample_count"], 0)
+        self.assertEqual(summary["judge_error_count"], 0)
         self.assertNotIn("average_keyword_recall", summary)
 
+    def test_evaluate_sample_keeps_rag_result_when_judge_fails(self):
+        chat_payloads = []
+
+        def handle(request):
+            if request.method == "POST" and request.url.path.endswith("/conversations"):
+                return httpx.Response(200, json={"id": "conversation-1"})
+            if request.method == "POST" and request.url.path.endswith("/chat"):
+                chat_payloads.append(json.loads(request.content))
+                return httpx.Response(
+                    200,
+                    json={
+                        "answer": "生成答案",
+                        "citations": [],
+                        "retrieval_used": True,
+                        "retrieved_count": 0,
+                        "retrieval_k": 10,
+                    },
+                )
+            if request.method == "DELETE":
+                return httpx.Response(204)
+            return httpx.Response(404)
+
+        class FailingJudge:
+            model_name = "judge-model"
+
+            def run(self, sample, answer):
+                raise RuntimeError("judge unavailable")
+
+        with httpx.Client(transport=httpx.MockTransport(handle)) as client:
+            result = evaluate_sample(
+                client,
+                "http://backend.local",
+                "kb-1",
+                {"question_id": "q1", "question": "问题"},
+                None,
+                True,
+                FailingJudge(),
+            )
+
+        self.assertEqual(result["answer"], "生成答案")
+        self.assertIn("judge unavailable", result["judge_error"])
+        self.assertFalse(result["judge_token_usage"]["available"])
+        self.assertEqual(
+            chat_payloads,
+            [{
+                "conversation_id": "conversation-1",
+                "question": "问题",
+                "model": None,
+            }],
+        )
+    def test_summarizes_judge_scores_and_usage(self):
+        summary = summarize([
+            {
+                "document_hit": True,
+                "chunk_hit": True,
+                "judge": {
+                    "score": 0.8,
+                    "correctness_score": 0.9,
+                    "completeness_score": 0.7,
+                    "faithfulness_score": 0.8,
+                    "passed": True,
+                },
+                "judge_token_usage": {
+                    "available": True,
+                    "input_tokens": 100,
+                    "output_tokens": 20,
+                    "total_tokens": 120,
+                },
+            },
+            {
+                "document_hit": False,
+                "chunk_hit": False,
+                "judge": {
+                    "score": 0.6,
+                    "correctness_score": 0.5,
+                    "completeness_score": 0.7,
+                    "faithfulness_score": 0.6,
+                    "passed": False,
+                },
+                "judge_token_usage": {"available": False},
+            },
+            {
+                "document_hit": True,
+                "chunk_hit": True,
+                "judge_error": "Judge unavailable",
+                "judge_token_usage": {"available": False},
+            },
+        ])
+
+        self.assertEqual(summary["judge_sample_count"], 2)
+        self.assertEqual(summary["judge_error_count"], 1)
+        self.assertEqual(summary["answer_pass_rate"], 0.5)
+        self.assertEqual(summary["average_answer_score"], 0.7)
+        self.assertEqual(summary["average_correctness_score"], 0.7)
+        self.assertEqual(summary["average_completeness_score"], 0.7)
+        self.assertEqual(summary["average_faithfulness_score"], 0.7)
+        self.assertEqual(summary["judge_total_tokens"], 120)
     def test_loads_approved_samples_directly_from_testset_tool(self):
         def handle(request):
             self.assertEqual(request.url.path, "/api/datasets/export")

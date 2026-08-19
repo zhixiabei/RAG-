@@ -203,6 +203,10 @@ DeepSeek 官方 API 不提供 embedding，必须另配一个支持 `/embeddings`
 | `RAG_RERANK_ENABLED` | 是否启用 HTTP reranker | `true` |
 | `RAG_RERANK_PROVIDER_NAME` / `RAG_RERANK_BASE_URL` / `RAG_RERANK_API_KEY` | reranker 服务覆盖配置；留空复用 `REMOTE_EMBEDDING_*` | 空 |
 | `RAG_RERANK_MODEL` | reranker 模型 | `BAAI/bge-reranker-v2-m3` |
+| `RAG_JUDGE_ENABLED` | 是否在评测中启用答案质量 Judge | `true` |
+| `RAG_JUDGE_MODEL` | Judge 模型；留空复用回答模型 | 空 |
+| `RAG_JUDGE_PROVIDER_NAME` / `RAG_JUDGE_BASE_URL` / `RAG_JUDGE_API_KEY` | 独立 OpenAI-compatible Judge 服务；地址留空则复用聊天服务 | 空 |
+| `RAG_JUDGE_PASS_THRESHOLD` | 答案质量通过阈值，范围 0～1 | `0.7` |
 | `INGESTION_MAX_CONCURRENCY` | 入库 worker 数量 | `2` |
 | `INGESTION_EMBEDDING_MAX_CONCURRENCY` | embedding 并发数 | `1` |
 | `INGESTION_EMBEDDING_BATCH_SIZE` | 单批 embedding 数量 | `32` |
@@ -256,7 +260,9 @@ python scripts\evaluate_rag.py `
   --output ".\rag_eval_report.json"
 ```
 
-默认只评测 `status=approved` 的样本，并在每题结束后删除临时对话。核心质量指标为 MRR 和 Retrieval Recall@K：MRR 按 reranker 最终排序衡量首个相关结果的排名，Recall@K 衡量标注相关 chunk（无 chunk 标注时使用文档）进入最终 Top-K 的比例。报告同时保留命中率、Precision/Recall、响应时间和模型供应商实际返回的 Token Usage；未上报 usage 的模型调用不会使用估算值替代。
+默认只评测 `status=approved` 的样本，并在每题结束后删除临时对话。检索质量使用 MRR 和 Retrieval Recall@K；答案质量由独立的 LLM-as-a-Judge 根据 `expected_answer`、`evidence_texts` 和拒答标注，输出正确性、完整性、忠实性及中文理由。总分按正确性 40%、完整性 30%、忠实性 30% 加权，报告中的分数范围为 0～1，并按 `RAG_JUDGE_PASS_THRESHOLD` 计算通过率。Judge 失败只记录该题的 `judge_error`，不会丢弃已经完成的检索指标。RAG 与 Judge 的 Token Usage 分开统计，未上报 usage 的调用不会使用估算值替代。
+
+Judge 默认复用当前回答模型。可通过 `RAG_JUDGE_MODEL` 在同一模型服务中选择其他模型，或同时配置 `RAG_JUDGE_BASE_URL`、`RAG_JUDGE_API_KEY` 和 `RAG_JUDGE_MODEL` 使用独立的 OpenAI-compatible 服务。命令行可用 `--judge-model` 临时覆盖模型，或用 `--no-judge` 只运行检索评测。
 
 只评测指定题目时，重复传入 `--question-id`；本地 JSONL 和测试集工具模式都支持：
 

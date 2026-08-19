@@ -61,6 +61,13 @@ class Settings(BaseSettings):
     rag_context_compression_model: str = "qwen3:4b"
     rag_context_compression_input_tokens: int = 6_000
     rag_context_compression_output_tokens: int = 1_000
+    rag_judge_enabled: bool = True
+    rag_judge_provider_name: str = ""
+    rag_judge_base_url: str = ""
+    rag_judge_api_key: str = ""
+    rag_judge_model: str = ""
+    rag_judge_pass_threshold: float = 0.7
+    rag_judge_max_evidence_chars: int = 12_000
     testset_tool_base_url: str = ""
     testset_tool_sync_timeout_seconds: float = 60.0
     owner_id: str = "personal"

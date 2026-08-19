@@ -127,6 +127,7 @@ onMounted(loadSamples)
           <CircleAlert v-if="result.summary.stopped_early" :size="17" />
           <CheckCircle2 v-else :size="17" />
           <strong>{{ result.summary.stopped_early ? '测试已中止' : '测试完成' }}</strong>
+          <small v-if="result.judge_model" class="evaluation-judge-model">Judge · {{ result.judge_model }}</small>
         </div>
         <div class="evaluation-metrics">
           <span>
@@ -134,6 +135,12 @@ onMounted(loadSamples)
             <strong>{{ result.summary.sample_count }}/{{ result.summary.requested_count ?? result.summary.sample_count }}</strong>
           </span>
           <span v-if="result.summary.error_count">错误 <strong>{{ result.summary.error_count }}</strong></span>
+          <span v-if="result.summary.judge_error_count">评分错误 <strong>{{ result.summary.judge_error_count }}</strong></span>
+          <span v-if="result.summary.judge_sample_count">答案评分 <strong>{{ percentage(result.summary.average_answer_score) }}</strong></span>
+          <span v-if="result.summary.judge_sample_count">通过率 <strong>{{ percentage(result.summary.answer_pass_rate) }}</strong></span>
+          <span v-if="result.summary.judge_sample_count">正确性 <strong>{{ percentage(result.summary.average_correctness_score) }}</strong></span>
+          <span v-if="result.summary.judge_sample_count">完整性 <strong>{{ percentage(result.summary.average_completeness_score) }}</strong></span>
+          <span v-if="result.summary.judge_sample_count">忠实性 <strong>{{ percentage(result.summary.average_faithfulness_score) }}</strong></span>
           <span>文档命中率 <strong>{{ percentage(result.summary.document_hit_rate) }}</strong></span>
           <span>Chunk 命中率 <strong>{{ percentage(result.summary.chunk_hit_rate) }}</strong></span>
           <span>MRR <strong>{{ percentage(result.summary.mrr) }}</strong></span>
@@ -141,6 +148,7 @@ onMounted(loadSamples)
           <span>平均响应 <strong>{{ duration(result.summary.average_response_time_ms) }}</strong></span>
           <span>P95 响应 <strong>{{ duration(result.summary.p95_response_time_ms) }}</strong></span>
           <span>Token 总量 <strong>{{ result.summary.token_usage_sample_count ? integer(result.summary.total_tokens) : '—' }}</strong></span>
+          <span v-if="result.summary.judge_sample_count || result.summary.judge_error_count">Judge Token <strong>{{ result.summary.judge_token_usage_sample_count ? integer(result.summary.judge_total_tokens) : '—' }}</strong></span>
         </div>
         <p v-if="result.stop_reason" class="evaluation-stop-message">{{ result.stop_reason }}</p>
         <div v-if="result.results?.length" class="evaluation-result-list">
@@ -151,8 +159,24 @@ onMounted(loadSamples)
               <small v-else>
                 MRR {{ percentage(item.mrr) }} · Retrieval Recall@{{ item.retrieval_k ?? 'K' }} {{ percentage(item.retrieval_recall_at_k) }} · {{ duration(item.response_time_ms) }} · {{ item.token_usage?.available ? `${integer(item.token_usage.total_tokens)} Token` : 'Token 未上报' }}
               </small>
+              <small v-if="!item.error && item.judge" class="evaluation-judge-detail">
+                答案评分 {{ percentage(item.judge.score) }} · 正确性 {{ percentage(item.judge.correctness_score) }} · 完整性 {{ percentage(item.judge.completeness_score) }} · 忠实性 {{ percentage(item.judge.faithfulness_score) }}
+              </small>
+              <small v-else-if="!item.error && item.judge_error" class="evaluation-error-detail" :title="item.judge_error">
+                Judge {{ item.judge_error }}
+              </small>
+              <small v-if="item.judge?.reason" class="evaluation-judge-reason" :title="item.judge.reason">
+                {{ item.judge.reason }}
+              </small>
             </div>
             <strong v-if="item.error">错误</strong>
+            <strong
+              v-else-if="item.judge"
+              :class="{ passed: item.judge.passed, failed: !item.judge.passed }"
+            >
+              {{ item.judge.passed ? '通过' : '未通过' }}
+            </strong>
+            <strong v-else-if="item.judge_error" class="failed">评分失败</strong>
           </div>
         </div>
       </div>

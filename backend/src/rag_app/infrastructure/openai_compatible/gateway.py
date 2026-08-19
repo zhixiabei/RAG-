@@ -35,13 +35,24 @@ class OpenAICompatibleGateway:
         self.remote_embedding_model = embedding_model
         self.embedding_model = f"{embedding_provider_name}::{embedding_model}"
 
-    def check_connection(self) -> None:
+    def check_connection(
+        self,
+        require_chat_model: bool = True,
+        require_embedding_model: bool = True,
+    ) -> None:
         missing = []
-        if not self.api_key or not self.base_url or not self.models:
+        if require_chat_model and (not self.api_key or not self.base_url or not self.models):
             missing.append("远程聊天 API")
-        if self.chat_model not in self.models:
+        if require_chat_model and self.chat_model not in self.models:
             missing.append(f"默认聊天模型 {self.chat_model}")
-        if not self.embedding_api_key or not self.embedding_base_url or not self.remote_embedding_model:
+        if (
+            require_embedding_model
+            and (
+                not self.embedding_api_key
+                or not self.embedding_base_url
+                or not self.remote_embedding_model
+            )
+        ):
             missing.append("远程 embedding API")
         if missing:
             raise RuntimeError(f"远程模型配置不完整: {', '.join(missing)}")

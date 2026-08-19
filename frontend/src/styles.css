@@ -223,16 +223,21 @@ h1, h2, h3, p { margin: 0; }
 .evaluation-result { margin-top: 16px; padding: 12px; border: 1px solid #dbe7df; border-radius: 7px; background: #f5faf6; }
 .evaluation-result-heading { display: flex; align-items: center; gap: 7px; color: #34734b; font-size: 13px; }
 .evaluation-result-heading.stopped { color: #a24e4e; }
+.evaluation-judge-model { margin-left: auto; color: #6f7d77; font-size: 10px; font-weight: 500; }
 .evaluation-metrics { display: flex; flex-wrap: wrap; gap: 15px; margin-top: 10px; color: #657178; font-size: 12px; }
 .evaluation-metrics strong { color: #2e4d3a; font-variant-numeric: tabular-nums; }
 .evaluation-stop-message { margin-top: 9px; padding: 8px 9px; border: 1px solid #ecd4d1; border-radius: 5px; color: #934848; background: #fff8f7; font-size: 11px; line-height: 1.5; }
-  .evaluation-result-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px 18px; max-height: 180px; margin-top: 10px; overflow-y: auto; }
+  .evaluation-result-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 9px; max-height: 240px; margin-top: 10px; overflow-y: auto; }
 .evaluation-result-item { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; min-width: 0; color: #53656b; font-size: 11px; }
 .evaluation-result-item.error { color: #a24e4e; }
   .evaluation-result-info { display: grid; gap: 2px; min-width: 0; }
   .evaluation-result-id { overflow: hidden; color: inherit; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; text-overflow: ellipsis; white-space: nowrap; }
   .evaluation-result-info small { overflow: hidden; color: #7b8780; font-size: 10px; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
   .evaluation-result-info small.evaluation-error-detail { overflow: visible; color: #934848; text-overflow: clip; white-space: normal; }
+  .evaluation-result-info small.evaluation-judge-detail { color: #3f6c55; }
+  .evaluation-result-info small.evaluation-judge-reason { overflow: visible; color: #66756d; text-overflow: clip; white-space: normal; }
+  .evaluation-result-item > strong.passed { color: #34734b; }
+  .evaluation-result-item > strong.failed { color: #a24e4e; }
   .evaluation-result-item > strong { flex: 0 0 auto; }
 .delete-dialog-heading { display: flex; align-items: flex-start; gap: 11px; }.delete-warning { display: grid; place-items: center; width: 34px; height: 34px; flex: 0 0 34px; border-radius: 7px; color: #b54f4f; background: #f8e9e8; }.delete-dialog-message { color: #657178; font-size: 13px; line-height: 1.65; }
 

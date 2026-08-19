@@ -45,12 +45,14 @@ def owned_knowledge_base(request: Request, knowledge_base_id: str) -> tuple[obje
 @router.get("/health")
 def health(request: Request):
     service = request.app.state.services
+    answer_judge = getattr(service, "answer_judge", None)
     startup_error = getattr(request.app.state, "startup_error", None)
     payload = {
         "ok": startup_error is None,
         "storage": "postgresql+minio+qdrant",
         "model_mode": service.settings.model_mode,
         "embedding_model": service.models.embedding_model,
+        "judge_model": answer_judge.model_name if answer_judge else None,
     }
     if startup_error:
         payload["detail"] = f"基础设施初始化失败: {startup_error}"
@@ -158,6 +160,7 @@ def evaluate_knowledge_base(
             False,
             testset_url,
             payload.question_ids,
+            judge_agent=getattr(service, "answer_judge", None),
         )
     except EvaluationError as exc:
         raise HTTPException(422, f"评测无法启动: {exc}") from exc
