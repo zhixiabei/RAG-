@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { marked } from 'marked'
 
-import { normalizeMathDelimiters } from './markdown.js'
+import { injectInlineCitations, normalizeMathDelimiters, referencedCitations } from './markdown.js'
 
 test('normalizes common LaTeX delimiters', () => {
   assert.equal(normalizeMathDelimiters('inline \\(x^2\\)'), 'inline $x^2$')
@@ -21,4 +21,39 @@ test('does not alter normal parentheses or code', () => {
   const input = '普通括号 (说明)\n`(\\Gamma)`\n```text\n(\\frac{a}{b})\n```'
 
   assert.equal(normalizeMathDelimiters(input), input)
+})
+
+test('renders valid evidence markers as numbered inline citations', () => {
+  const citations = [
+    { chunk_id: 'chunk-1', title: '构造演化.pdf', page_number: 3, excerpt: '原文片段' },
+    { chunk_id: 'chunk-2', title: '盆地研究.pdf', page_number: 8, excerpt: '另一片段' },
+  ]
+
+  const rendered = injectInlineCitations(
+    '第一段。[证据:chunk-1]\n\n第二段。[证据:chunk-1,chunk-2]',
+    citations,
+  )
+
+  assert.match(rendered, /class="inline-citation"[^>]*>\[1\]<\/sup>/)
+  assert.match(rendered, />\[2\]<\/sup>/)
+  assert.match(rendered, /构造演化\.pdf/)
+})
+
+test('marks unknown evidence ids and leaves code examples unchanged', () => {
+  const rendered = injectInlineCitations(
+    '正文。[证据:missing]\n`示例 [证据:chunk-1]`',
+    [{ chunk_id: 'chunk-1', title: '来源.pdf' }],
+  )
+
+  assert.match(rendered, /invalid-citation/)
+  assert.match(rendered, /`示例 \[证据:chunk-1\]`/)
+})
+
+test('returns only sources that the answer actually cites', () => {
+  const sources = referencedCitations('结论。[证据:chunk-2]', [
+    { chunk_id: 'chunk-1', title: '未引用.pdf' },
+    { chunk_id: 'chunk-2', title: '已引用.pdf' },
+  ])
+
+  assert.deepEqual(sources, [{ chunk_id: 'chunk-2', title: '已引用.pdf', number: 1 }])
 })

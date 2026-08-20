@@ -9,7 +9,7 @@
 - 创建、选择和删除多个知识库；文档按文件夹展示，可单独或按文件夹删除。
 - 通过网页选择文件或文件夹导入文档，显示解析、向量化和索引进度，并对重复文件跳过处理。
 - 支持 `jsonl`、`json`、`pdf`、`docx`、`pptx`、`xlsx`、`md`、`markdown`、`txt`。
-- 问答使用固定顺序的三个阶段：检索决策、Qdrant 向量检索、答案生成；回答返回文档级去重引用。
+- 问答使用固定顺序的三个阶段：检索决策、Qdrant 向量检索、答案生成；知识库支持的表述在段落内标注片段级引用，并可展开查看原文摘录。
 - 支持多轮对话、对话改名/删除、模型选择、Markdown/LaTeX 渲染，以及临时附件问答。
 - 支持本地 JSONL 评测集，也可以把原始 RAG chunks 同步到测试集生成工具。
 
@@ -200,6 +200,7 @@ DeepSeek 官方 API 不提供 embedding，必须另配一个支持 `/embeddings`
 | `QDRANT_URL` / `QDRANT_COLLECTION` | 向量库地址和 collection | `http://127.0.0.1:6333` / 见模板 |
 | `RAG_TOP_K` | 重排后最终返回的 chunk 数量 | `10` |
 | `RAG_RETRIEVAL_CANDIDATE_K` | dense 候选召回数量；关键词候选取其一半 | `30` |
+| `RAG_ANSWER_MAX_OUTPUT_TOKENS` | 最终回答的硬输出上限；提示词默认要求 300～600 个中文字 | `1200` |
 | `RAG_RERANK_ENABLED` | 是否启用 HTTP reranker | `true` |
 | `RAG_RERANK_PROVIDER_NAME` / `RAG_RERANK_BASE_URL` / `RAG_RERANK_API_KEY` | reranker 服务覆盖配置；留空复用 `REMOTE_EMBEDDING_*` | 空 |
 | `RAG_RERANK_MODEL` | reranker 模型 | `BAAI/bge-reranker-v2-m3` |

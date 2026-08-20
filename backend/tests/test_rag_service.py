@@ -140,9 +140,10 @@ class RagServiceTest(unittest.TestCase):
         self.assertIsNone(result["reranker"])
         self.assertEqual(result["retrieved_chunk_ids"], ["chunk-1", "chunk-2", "chunk-3"])
         self.assertEqual(result["context_chunk_ids"], ["chunk-1", "chunk-2", "chunk-3"])
-        self.assertEqual([item["chunk_id"] for item in result["citations"]], ["chunk-1", "chunk-3"])
+        self.assertEqual([item["chunk_id"] for item in result["citations"]], ["chunk-1", "chunk-2", "chunk-3"])
         self.assertEqual(result["citations"][0]["score"], 0.92)
         self.assertEqual(result["citations"][0]["relevance_score"], 0.97)
+        self.assertEqual(result["citations"][0]["excerpt"], "第一段")
         self.assertEqual(result["agent_trace"], [
             {"agent": "retrieval_decision", "status": "completed", "outcome": "retrieve"},
             {"agent": "knowledge_retrieval", "status": "completed", "retrieved_count": 3,

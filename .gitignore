@@ -4,3 +4,5 @@ __pycache__/
 .venv/
 frontend/dist/
 .tmp-frontend-build/
+
+.tmp-run-all-*.log

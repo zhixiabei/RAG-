@@ -160,6 +160,8 @@ class ConversationRoutesTest(unittest.TestCase):
         self.assertIn("附件：notes.txt", args[2])
         self.assertIn("temporary evidence", kwargs["attachment_context"])
         self.assertTrue(kwargs["attachment_citations"][0]["temporary"])
+        self.assertIn("[证据ID] attachment:0:0", kwargs["attachment_context"])
+        self.assertEqual(kwargs["attachment_citations"][0]["excerpt"], "temporary evidence")
 
     def test_parses_attachment_before_chat(self):
         response = self.client.post(
@@ -170,6 +172,8 @@ class ConversationRoutesTest(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["name"], "notes.txt")
         self.assertIn("temporary evidence", response.json()["context"])
+        self.assertIn("[证据ID] attachment:0:0", response.json()["context"])
+        self.assertEqual(response.json()["citations"][0]["excerpt"], "temporary evidence")
         self.assertEqual(response.json()["chunk_count"], 1)
         self.assertEqual(self.rag_calls, [])
 
@@ -193,6 +197,8 @@ class ConversationRoutesTest(unittest.TestCase):
         self.assertIn("附件：notes.txt", args[2])
         self.assertIn("temporary evidence", kwargs["attachment_context"])
         self.assertTrue(kwargs["attachment_citations"][0]["temporary"])
+        self.assertIn("[证据ID] attachment:0:0", kwargs["attachment_context"])
+        self.assertEqual(kwargs["attachment_citations"][0]["chunk_id"], "attachment:0:0")
 
 
 if __name__ == "__main__":

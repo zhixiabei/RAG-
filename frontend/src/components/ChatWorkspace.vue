@@ -1,8 +1,8 @@
 <script setup>
 import { computed, nextTick, ref, watch } from 'vue'
-import { Bot, BrainCircuit, Check, FileText, Hash, LoaderCircle, MessageSquareText, Paperclip, Pencil, Plus, RefreshCw, Send, Timer, Trash2, UserRound, X } from 'lucide-vue-next'
+import { Bot, BrainCircuit, Check, FileText, Hash, LoaderCircle, MessageSquareText, Paperclip, Pencil, Plus, RefreshCw, Send, TextQuote, Timer, Trash2, UserRound, X } from 'lucide-vue-next'
 import DeleteConfirmDialog from './DeleteConfirmDialog.vue'
-import { renderMarkdown } from '../utils/markdown'
+import { referencedCitations, renderMarkdown } from '../utils/markdown'
 import { canRecoverAnswerFailure, recoverCompletedAnswer } from '../utils/chatRecovery'
 import { SUPPORTED_DOCUMENT_ACCEPT, isSupportedDocument } from '../utils/supportedDocuments'
 import {
@@ -71,6 +71,20 @@ function tokenUsageTitle(usage, serverResponseTimeMs) {
   if (!usage?.available) return `${serverTiming}模型服务未返回 Token 用量`
   const unreported = usage.unreported_calls ? `；${usage.unreported_calls} 次调用未上报` : ''
   return `${serverTiming}输入 ${formatTokens(usage.input_tokens)}；输出 ${formatTokens(usage.output_tokens)}${unreported}`
+}
+
+function citedSources(message) {
+  return referencedCitations(message.content, message.citations)
+}
+
+function citationSourceMeta(citation) {
+  const parts = []
+  if (citation.page_number) parts.push(`第 ${citation.page_number} 页`)
+  if (citation.relevance_score != null) {
+    parts.push(`相关度 ${Math.round(citation.relevance_score * 100)}%`)
+  }
+  parts.push(`片段 ${citation.chunk_id}`)
+  return parts.join(' · ')
 }
 
 async function parseAttachment(entry, knowledgeBaseId) {
@@ -480,14 +494,21 @@ async function send() {
           <div class="message-avatar"><UserRound v-if="message.role === 'user'" :size="16" /><Bot v-else :size="16" /></div>
           <div class="message-content">
             <div class="message-label">{{ message.role === 'user' ? '你' : '知识库助手' }}</div>
-            <div v-if="message.role === 'assistant'" class="message-text markdown-body" v-html="renderMarkdown(message.content)" />
+            <div v-if="message.role === 'assistant'" class="message-text markdown-body" v-html="renderMarkdown(message.content, message.citations)" />
             <div v-else class="message-text">{{ message.content }}</div>
-            <div v-if="message.citations?.length" class="citations">
-              <span class="citation-label">引用</span>
-              <span v-for="citation in message.citations" :key="citation.chunk_id" class="citation">
-                {{ citation.title }}<span v-if="citation.page_number"> · 第 {{ citation.page_number }} 页</span><span v-if="citation.relevance_score != null"> · 相关度 {{ Math.round(citation.relevance_score * 100) }}%</span>
-              </span>
-            </div>
+            <details v-if="citedSources(message).length" class="citation-sources">
+              <summary><TextQuote :size="13" />引用原文 {{ citedSources(message).length }}</summary>
+              <div class="citation-source-list">
+                <article v-for="citation in citedSources(message)" :key="citation.chunk_id" class="citation-source">
+                  <div class="citation-source-heading">
+                    <strong>[{{ citation.number }}] {{ citation.title }}</strong>
+                    <span>{{ citationSourceMeta(citation) }}</span>
+                  </div>
+                  <p v-if="citation.excerpt">{{ citation.excerpt }}</p>
+                  <p v-else class="citation-excerpt-missing">此历史引用没有保存原文摘录。</p>
+                </article>
+              </div>
+            </details>
             <div v-if="message.metrics" class="response-metrics">
               <span v-if="message.metrics.responseTimeMs != null" title="服务端处理耗时">
                 <Timer :size="12" />{{ formatResponseTime(message.metrics.responseTimeMs) }}

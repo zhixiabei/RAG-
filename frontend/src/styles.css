@@ -179,6 +179,18 @@ h1, h2, h3, p { margin: 0; }
 .markdown-body > :first-child { margin-top: 0; }
 .markdown-body > :last-child { margin-bottom: 0; }
 .markdown-body p { margin: 0 0 10px; }
+.markdown-body .inline-citation { margin-left: 2px; color: #236f76; font-size: .8em; font-weight: 700; line-height: 0; cursor: help; }
+.markdown-body .invalid-citation { color: #b0443c; }
+.citation-sources { margin-top: 8px; border-top: 1px solid #e2e7e8; color: #53636b; font-size: 11px; }
+.citation-sources summary { display: inline-flex; align-items: center; gap: 5px; padding: 7px 0 2px; color: #50777a; font-weight: 600; cursor: pointer; list-style: none; }
+.citation-sources summary::-webkit-details-marker { display: none; }
+.citation-source-list { margin-top: 4px; border-bottom: 1px solid #e6eaeb; }
+.citation-source { padding: 8px 0; border-top: 1px solid #e6eaeb; }
+.citation-source-heading { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 3px 10px; }
+.citation-source-heading strong { color: #35484f; font-size: 11px; }
+.citation-source-heading span { color: #7e8b91; font-size: 10px; overflow-wrap: anywhere; }
+.citation-source p { max-height: 150px; margin: 6px 0 0; padding-left: 18px; overflow-y: auto; color: #5b686e; line-height: 1.6; white-space: pre-wrap; }
+.citation-source .citation-excerpt-missing { color: #8a959a; font-style: italic; }
 .markdown-body h1, .markdown-body h2, .markdown-body h3, .markdown-body h4 { margin: 18px 0 8px; color: #26353d; font-weight: 700; line-height: 1.45; }
 .markdown-body h1 { font-size: 18px; }.markdown-body h2 { font-size: 16px; }.markdown-body h3 { font-size: 15px; }.markdown-body h4 { font-size: 14px; }
 .markdown-body ul, .markdown-body ol { margin: 7px 0 11px; padding-left: 22px; }

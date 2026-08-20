@@ -269,7 +269,8 @@ def parse_chat_attachment(request: Request, knowledge_base_id: str, file: Upload
     for chunk in chunks:
         if remaining_chars <= 0:
             break
-        header = f"[临时附件] {file_name}\n[页码] {chunk.page_number or '未知'}\n[内容] "
+        chunk_id = f"attachment:0:{chunk.index}"
+        header = f"[证据ID] {chunk_id}\n[临时附件] {file_name}\n[页码] {chunk.page_number or '未知'}\n[内容] "
         available = max(0, remaining_chars - len(header) - 2)
         if not available:
             break
@@ -277,12 +278,13 @@ def parse_chat_attachment(request: Request, knowledge_base_id: str, file: Upload
         context_parts.append(f"{header}{text}")
         citations.append({
             "document_id": None,
-            "chunk_id": f"attachment:0:{chunk.index}",
+            "chunk_id": chunk_id,
             "title": file_name,
             "page_number": chunk.page_number,
             "score": 1.0,
             "relevance_score": None,
             "temporary": True,
+            "excerpt": text[:500],
         })
         remaining_chars -= len(header) + len(text) + 2
     return {
@@ -311,16 +313,25 @@ def chat_with_parsed_attachments(
     for attachment_index, attachment in enumerate(payload.attachments):
         if remaining_chars <= 0:
             break
-        context = attachment.context[:remaining_chars]
+        context = attachment.context
+        attachment_citations = []
+        for citation_index, citation in enumerate(attachment.citations):
+            normalized = dict(citation)
+            original_chunk_id = str(citation.get("chunk_id") or citation_index)
+            chunk_id = f"attachment:{attachment_index}:{citation_index}"
+            context = context.replace(f"[证据ID] {original_chunk_id}", f"[证据ID] {chunk_id}")
+            normalized["chunk_id"] = chunk_id
+            normalized["title"] = attachment.name
+            normalized["temporary"] = True
+            attachment_citations.append(normalized)
+        if attachment_citations and "[证据ID]" not in context:
+            context = f"[证据ID] {attachment_citations[0]['chunk_id']}\n{context}"
+        context = context[:remaining_chars]
         context_parts.append(context)
         remaining_chars -= len(context) + 2
         attachment_names.append(attachment.name)
-        for citation in attachment.citations:
-            normalized = dict(citation)
-            normalized["chunk_id"] = f"attachment:{attachment_index}:{citation.get('chunk_id', len(citations))}"
-            normalized["title"] = attachment.name
-            normalized["temporary"] = True
-            citations.append(normalized)
+        citations.extend(attachment_citations)
+
 
     question_with_attachments = f"{payload.question}\n\n附件：{'、'.join(attachment_names)}"
     try:
@@ -379,13 +390,13 @@ def chat_with_attachments(
             for chunk in chunks:
                 if remaining_chars <= 0:
                     break
-                header = f"[临时附件] {file_name}\n[页码] {chunk.page_number or '未知'}\n[内容] "
+                chunk_id = f"attachment:{file_index}:{chunk.index}"
+                header = f"[证据ID] {chunk_id}\n[临时附件] {file_name}\n[页码] {chunk.page_number or '未知'}\n[内容] "
                 available = max(0, remaining_chars - len(header) - 2)
                 if not available:
                     break
                 text = chunk.text[:available]
                 context_parts.append(f"{header}{text}")
-                chunk_id = f"attachment:{file_index}:{chunk.index}"
                 citations.append({
                     "document_id": None,
                     "chunk_id": chunk_id,
@@ -394,6 +405,7 @@ def chat_with_attachments(
                     "score": 1.0,
                     "relevance_score": None,
                     "temporary": True,
+                    "excerpt": text[:500],
                 })
                 remaining_chars -= len(header) + len(text) + 2
     except HTTPException:

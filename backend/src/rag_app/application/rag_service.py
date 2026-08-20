@@ -50,7 +50,7 @@ def _deduplicate_citations(citations: list[dict]) -> list[dict]:
     result = []
     seen = set()
     for citation in citations:
-        key = citation.get("document_id") or citation.get("title") or citation.get("chunk_id")
+        key = citation.get("chunk_id") or citation.get("document_id") or citation.get("title")
         if not key or key in seen:
             continue
         seen.add(key)
@@ -143,6 +143,7 @@ class RagService:
                     hit.page_number,
                     hit.score,
                     hit.relevance_score,
+                    hit.text[:500],
                 ).as_dict()
                 for hit in context_hits
             ],

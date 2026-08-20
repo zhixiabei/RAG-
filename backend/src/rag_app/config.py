@@ -61,6 +61,7 @@ class Settings(BaseSettings):
     rag_context_compression_model: str = "qwen3:4b"
     rag_context_compression_input_tokens: int = 6_000
     rag_context_compression_output_tokens: int = 1_000
+    rag_answer_max_output_tokens: int = 1_200
     rag_judge_enabled: bool = True
     rag_judge_provider_name: str = ""
     rag_judge_base_url: str = ""

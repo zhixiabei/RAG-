@@ -136,6 +136,7 @@ def build_services(settings: Settings) -> Services:
             input_token_limit=settings.rag_context_compression_input_tokens,
             output_token_limit=settings.rag_context_compression_output_tokens,
         ) if context_compression_models is not None else None,
+        max_output_tokens=settings.rag_answer_max_output_tokens,
     )
     testset_sync = None
     if settings.testset_tool_base_url.strip():

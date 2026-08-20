@@ -33,6 +33,7 @@ class Citation:
     page_number: int | None
     score: float
     relevance_score: float | None = None
+    excerpt: str = ""
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -42,4 +43,5 @@ class Citation:
             "page_number": self.page_number,
             "score": self.score,
             "relevance_score": self.relevance_score,
+            "excerpt": self.excerpt,
         }

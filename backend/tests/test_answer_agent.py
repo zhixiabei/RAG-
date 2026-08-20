@@ -77,8 +77,50 @@ class AnswerAgentTest(unittest.TestCase):
         messages = models.calls[0][0]
         self.assertEqual(messages[-1], {"role": "user", "content": "上限是多少？"})
         self.assertIn("行内数学公式必须用 $...$", messages[0]["content"])
+        self.assertIn("默认使用 2 至 5 个简短段落", messages[0]["content"])
+        self.assertIn("每个要点最多两句", messages[0]["content"])
+        self.assertIn("[证据:证据ID]", messages[0]["content"])
+        self.assertEqual(models.calls[0][3], 640)
+        self.assertFalse(models.calls[0][4])
         self.assertIn("制度.pdf", messages[-2]["content"])
         self.assertIn("报销上限为 500 元", messages[-2]["content"])
+
+    def test_uses_tighter_output_limit_for_brief_questions(self):
+        models = FakeModels()
+        hit = SearchHit("chunk-1", "doc-1", "kb-1", "制度.pdf", "报销上限为 500 元", 0.9, 3)
+
+        AnswerAgent(models).run("请简要概括上限", [], [hit], retrieval_used=True)
+
+        self.assertEqual(models.calls[0][3], 512)
+
+
+    def test_drops_incomplete_tail_block_from_brief_answer(self):
+        models = FakeModels()
+        models.complete = lambda *args, **kwargs: "结论。[证据:chunk-1]\n\n- 未完成 [证据:chunk-"
+        hit = SearchHit("chunk-1", "doc-1", "kb-1", "制度.pdf", "报销上限为 500 元", 0.9, 3)
+
+        answer = AnswerAgent(models).run("只概括上限", [], [hit], retrieval_used=True)
+
+        self.assertEqual(answer, "结论。[证据:chunk-1]")
+
+    def test_keeps_complete_brief_answer(self):
+        models = FakeModels()
+        models.complete = lambda *args, **kwargs: "第一点。[证据:chunk-1]\n\n第二点。"
+        hit = SearchHit("chunk-1", "doc-1", "kb-1", "制度.pdf", "报销上限为 500 元", 0.9, 3)
+
+        answer = AnswerAgent(models).run("只概括上限", [], [hit], retrieval_used=True)
+
+        self.assertEqual(answer, "第一点。[证据:chunk-1]\n\n第二点。")
+    def test_allows_configured_output_limit_for_explicit_detailed_questions(self):
+        models = FakeModels()
+        hit = SearchHit("chunk-1", "doc-1", "kb-1", "制度.pdf", "报销上限为 500 元", 0.9, 3)
+
+        AnswerAgent(models, max_output_tokens=900).run(
+            "请详细分析并形成完整报告",
+            [],
+            [hit],
+            retrieval_used=True,
+        )
 
     def test_context_uses_original_file_name_with_suffix(self):
         models = FakeModels()
