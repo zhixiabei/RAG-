@@ -39,6 +39,7 @@ class PublicRoutesTest(unittest.TestCase):
             settings=SimpleNamespace(
                 owner_id="personal",
                 testset_tool_base_url="http://testset.local",
+                evaluation_dataset_dir="testsets",
             ),
         )
         app.include_router(router)
@@ -71,6 +72,21 @@ class PublicRoutesTest(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()[0]["question_id"], "q1")
+        load_samples.assert_called_once()
+
+    @patch("rag_app.api.routes._load_evaluation_samples")
+    def test_lists_local_evaluation_samples_when_selected(self, load_samples):
+        load_samples.return_value = (
+            [{"question_id": "local-1", "question": "local question"}],
+            {},
+        )
+
+        response = self.client.get(
+            "/api/v1/knowledge-bases/kb-personal/evaluation-samples?source=local&dataset=local.jsonl"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()[0]["question_id"], "local-1")
         load_samples.assert_called_once()
 
     @patch("rag_app.api.routes.run_evaluation")

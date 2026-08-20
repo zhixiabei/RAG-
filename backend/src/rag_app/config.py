@@ -69,6 +69,7 @@ class Settings(BaseSettings):
     rag_judge_model: str = ""
     rag_judge_pass_threshold: float = 0.7
     rag_judge_max_evidence_chars: int = 12_000
+    evaluation_dataset_dir: str = "testsets"
     testset_tool_base_url: str = ""
     testset_tool_sync_timeout_seconds: float = 60.0
     owner_id: str = "personal"

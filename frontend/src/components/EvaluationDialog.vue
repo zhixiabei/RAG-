@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { CheckCircle2, CircleAlert, FlaskConical, LoaderCircle, X } from 'lucide-vue-next'
-import { listEvaluationSamples } from '../services/api'
+import { listEvaluationDatasets, listEvaluationSamples } from '../services/api'
 
 const props = defineProps({
   kbId: { type: String, required: true },
@@ -16,6 +16,9 @@ const samples = ref([])
 const loading = ref(true)
 const loadError = ref('')
 const scope = ref('all')
+const source = ref('workshop')
+const localDatasets = ref([])
+const localDatasetId = ref('')
 const selectedIds = ref(new Set())
 
 const selectedCount = computed(() => selectedIds.value.size)
@@ -25,7 +28,7 @@ async function loadSamples() {
   loading.value = true
   loadError.value = ''
   try {
-    samples.value = await listEvaluationSamples(props.kbId)
+    samples.value = await listEvaluationSamples(props.kbId, source.value, localDatasetId.value)
   } catch (cause) {
     loadError.value = cause instanceof Error ? cause.message : '测试集加载失败'
   } finally {
@@ -40,9 +43,24 @@ function toggleSample(questionId) {
   selectedIds.value = next
 }
 
+async function changeSource(nextSource) {
+  if (source.value === nextSource) return
+  source.value = nextSource
+  if (nextSource === 'local' && !localDatasetId.value) {
+    localDatasetId.value = localDatasets.value.find((item) => item.sample_count > 0)?.id || ''
+  }
+  selectedIds.value = new Set()
+  await loadSamples()
+}
+
+async function changeLocalDataset() {
+  selectedIds.value = new Set()
+  await loadSamples()
+}
+
 function submit() {
   if (!canRun.value) return
-  emit('run', scope.value === 'all' ? [] : [...selectedIds.value])
+  emit('run', scope.value === 'all' ? [] : [...selectedIds.value], source.value, localDatasetId.value)
 }
 
 function percentage(value) {
@@ -65,7 +83,16 @@ function hitStatus(value) {
   return value ? '命中' : '未命中'
 }
 
-onMounted(loadSamples)
+onMounted(async () => {
+  try {
+    const catalog = await listEvaluationDatasets(props.kbId)
+    localDatasets.value = catalog.local_datasets || []
+    localDatasetId.value = localDatasets.value.find((item) => item.sample_count > 0)?.id || ''
+  } catch {
+    localDatasets.value = []
+  }
+  await loadSamples()
+})
 </script>
 
 <template>
@@ -83,6 +110,34 @@ onMounted(loadSamples)
       </div>
 
       <p class="evaluation-dialog-message">选择要运行的测试集范围，测试结果不会写入对话历史。</p>
+
+      <div class="evaluation-scope">
+        <label class="evaluation-option">
+          <input type="radio" name="evaluation-source" :checked="source === 'workshop'" @change="changeSource('workshop')" />
+          <span><strong>测试集工坊</strong><small>默认优先读取已配置的工坊数据</small></span>
+        </label>
+        <label class="evaluation-option">
+          <input type="radio" name="evaluation-source" :checked="source === 'local'" :disabled="!localDatasets.length" @change="changeSource('local')" />
+          <span><strong>本地评测集</strong><small>从 testsets 目录选择 JSONL 文件</small></span>
+        </label>
+      </div>
+
+      <select
+        v-if="source === 'local'"
+        v-model="localDatasetId"
+        class="evaluation-dataset-select"
+        :disabled="busy"
+        @change="changeLocalDataset"
+      >
+        <option
+          v-for="dataset in localDatasets"
+          :key="dataset.id"
+          :value="dataset.id"
+          :disabled="dataset.sample_count === 0 || dataset.error"
+        >
+          {{ dataset.name }}?{{ dataset.sample_count }} 道 Approved?
+        </option>
+      </select>
 
       <div v-if="loading" class="evaluation-loading">
         <LoaderCircle :size="17" class="spinning" />正在读取测试集

@@ -152,13 +152,13 @@ function closeEvaluation() {
   evaluationOpen.value = false
 }
 
-async function runEvaluation(questionIds) {
+async function runEvaluation(questionIds, source, datasetId) {
   if (!store.selectedId || evaluationBusy.value) return
   evaluationBusy.value = true
   evaluationError.value = ''
   evaluationResult.value = null
   try {
-    evaluationResult.value = await evaluateKnowledgeBase(store.selectedId, questionIds)
+    evaluationResult.value = await evaluateKnowledgeBase(store.selectedId, questionIds, source, datasetId)
   } catch (cause) {
     evaluationError.value = cause instanceof Error ? cause.message : '评测失败'
   } finally {

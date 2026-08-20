@@ -6,7 +6,14 @@ from ..application.ingestion_service import DocumentTooLargeError, DuplicateDocu
 from fastapi.responses import JSONResponse
 from uuid import uuid4
 
-from ..evaluation import EvaluationError, load_dataset_from_testset_tool, run_evaluation
+from ..config import PROJECT_ROOT
+from ..evaluation import (
+    EvaluationError,
+    load_dataset,
+    load_dataset_from_testset_tool,
+    run_evaluation,
+    select_dataset_samples,
+)
 from .schemas import (
     ChatRequest,
     ConversationCreate,
@@ -22,6 +29,70 @@ MAX_CHAT_ATTACHMENTS = 10
 MAX_CHAT_ATTACHMENT_BYTES = 30 * 1024 * 1024
 MAX_CHAT_ATTACHMENT_CONTEXT_CHARS = 12_000
 EVALUATION_TIMEOUT_SECONDS = 180.0
+
+
+def _local_dataset_dir(settings) -> Path:
+    raw_dir = str(getattr(settings, "evaluation_dataset_dir", "testsets") or "testsets").strip()
+    path = Path(raw_dir).expanduser()
+    return path if path.is_absolute() else PROJECT_ROOT / path
+
+
+def _local_dataset_path(settings, dataset_id: str | None) -> Path:
+    if not dataset_id:
+        raise EvaluationError("dataset_id is required for local evaluation")
+    directory = _local_dataset_dir(settings).resolve()
+    candidate = (directory / dataset_id).resolve()
+    if candidate.parent != directory or candidate.suffix.casefold() != ".jsonl":
+        raise EvaluationError("invalid local dataset_id")
+    if not candidate.is_file():
+        raise EvaluationError(f"Local evaluation dataset does not exist: {dataset_id}")
+    return candidate
+
+
+def _list_local_datasets(settings) -> list[dict]:
+    directory = _local_dataset_dir(settings)
+    if not directory.is_dir():
+        return []
+    datasets = []
+    for path in sorted(directory.glob("*.jsonl")):
+        if not path.is_file():
+            continue
+        try:
+            samples = load_dataset(path, allow_empty=True)
+            error = None
+        except EvaluationError as exc:
+            samples = []
+            error = str(exc)
+        datasets.append({
+            "id": path.name,
+            "name": path.stem,
+            "sample_count": len(samples),
+            "error": error,
+        })
+    return datasets
+
+
+def _load_evaluation_samples(
+    settings,
+    source: str,
+    question_ids=None,
+    dataset_id: str | None = None,
+):
+    if source == "local":
+        path = _local_dataset_path(settings, dataset_id)
+        samples = load_dataset(path, bool(question_ids))
+        return select_dataset_samples(samples, question_ids), {
+            "dataset_source": "local",
+            "dataset_path": str(path),
+        }
+    testset_url = str(getattr(settings, "testset_tool_base_url", "") or "").strip()
+    if not testset_url:
+        raise EvaluationError("TESTSET_TOOL_BASE_URL is not configured")
+    return load_dataset_from_testset_tool(
+        testset_url,
+        EVALUATION_TIMEOUT_SECONDS,
+        question_ids=question_ids,
+    )
 
 
 def services(request: Request):
@@ -115,16 +186,31 @@ def sync_knowledge_base_to_testset(request: Request, knowledge_base_id: str):
     return testset_sync.sync_knowledge_base(knowledge_base_id)
 
 
-@router.get("/api/v1/knowledge-bases/{knowledge_base_id}/evaluation-samples")
-def list_evaluation_samples(request: Request, knowledge_base_id: str):
+@router.get("/api/v1/knowledge-bases/{knowledge_base_id}/evaluation-datasets")
+def list_evaluation_datasets(request: Request, knowledge_base_id: str):
     service, _ = owned_knowledge_base(request, knowledge_base_id)
-    testset_url = service.settings.testset_tool_base_url.strip()
-    if not testset_url:
-        raise HTTPException(503, "TESTSET_TOOL_BASE_URL is not configured")
+    return {
+        "default_source": "workshop",
+        "workshop_available": bool(service.settings.testset_tool_base_url.strip()),
+        "local_datasets": _list_local_datasets(service.settings),
+    }
+
+
+@router.get("/api/v1/knowledge-bases/{knowledge_base_id}/evaluation-samples")
+def list_evaluation_samples(
+    request: Request,
+    knowledge_base_id: str,
+    source: str = "workshop",
+    dataset: str | None = None,
+):
+    service, _ = owned_knowledge_base(request, knowledge_base_id)
+    if source not in {"workshop", "local"}:
+        raise HTTPException(422, "source must be workshop or local")
     try:
-        samples, _ = load_dataset_from_testset_tool(
-            testset_url,
-            EVALUATION_TIMEOUT_SECONDS,
+        samples, _ = _load_evaluation_samples(
+            service.settings,
+            source,
+            dataset_id=dataset,
         )
     except EvaluationError as exc:
         raise HTTPException(503, f"读取测试集失败: {exc}") from exc
@@ -146,19 +232,32 @@ def evaluate_knowledge_base(
     payload: EvaluationRequest,
 ):
     service, _ = owned_knowledge_base(request, knowledge_base_id)
-    testset_url = service.settings.testset_tool_base_url.strip()
-    if not testset_url:
-        raise HTTPException(503, "TESTSET_TOOL_BASE_URL is not configured")
+    source = payload.dataset_source
     try:
+        local_path = (
+            _local_dataset_path(service.settings, payload.dataset_id)
+            if source == "local"
+            else None
+        )
+        testset_url = str(getattr(service.settings, "testset_tool_base_url", "") or "").strip()
+        if source == "local":
+            _load_evaluation_samples(
+                service.settings,
+                source,
+                payload.question_ids,
+                payload.dataset_id,
+            )
+        elif not testset_url:
+            raise EvaluationError("TESTSET_TOOL_BASE_URL is not configured")
         return run_evaluation(
-            None,
+            local_path,
             knowledge_base_id,
             str(request.base_url).rstrip("/"),
             None,
             EVALUATION_TIMEOUT_SECONDS,
             True,
             False,
-            testset_url,
+            None if source == "local" else testset_url,
             payload.question_ids,
             judge_agent=getattr(service, "answer_judge", None),
         )

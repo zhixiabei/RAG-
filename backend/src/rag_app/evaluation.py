@@ -264,7 +264,12 @@ def _summary_retrieval_k(results: list[dict]) -> int | None:
     return values[0]
 
 
-def load_dataset(path: Path, include_non_approved: bool = False) -> list[dict]:
+def load_dataset(
+    path: Path,
+    include_non_approved: bool = False,
+    *,
+    allow_empty: bool = False,
+) -> list[dict]:
     samples = []
     with path.open("r", encoding="utf-8-sig") as stream:
         for line_number, raw_line in enumerate(stream, start=1):
@@ -281,8 +286,8 @@ def load_dataset(path: Path, include_non_approved: bool = False) -> list[dict]:
                 )
             if include_non_approved or sample.get("status") in {None, "approved"}:
                 samples.append(sample)
-    if not samples:
-        raise EvaluationError("数据集中没有可评测的样本")
+    if not samples and not allow_empty:
+        raise EvaluationError("dataset contains no evaluable samples")
     return samples
 
 

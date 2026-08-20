@@ -218,6 +218,7 @@ h1, h2, h3, p { margin: 0; }
 .evaluation-dialog-message { color: #657178; font-size: 13px; line-height: 1.65; }
 .evaluation-loading { display: flex; align-items: center; gap: 8px; min-height: 70px; color: #6d7b81; font-size: 13px; }
 .evaluation-scope { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; margin-top: 17px; }
+.evaluation-dataset-select { width: 100%; margin-top: 9px; padding: 9px 10px; border: 1px solid #dce3e4; border-radius: 6px; color: #3d4b52; background: #fff; font: inherit; }
 .evaluation-option { display: flex; align-items: flex-start; gap: 9px; padding: 12px; border: 1px solid #dce3e4; border-radius: 7px; color: #3d4b52; cursor: pointer; }
 .evaluation-option:has(input:checked) { border-color: #6a9b9b; background: #f2f8f7; }
 .evaluation-option input { margin-top: 2px; accent-color: #2d6f73; }

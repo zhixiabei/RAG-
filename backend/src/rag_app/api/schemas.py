@@ -24,6 +24,8 @@ class ParsedAttachmentChatRequest(ChatRequest):
 
 class EvaluationRequest(BaseModel):
     question_ids: list[str] = Field(default_factory=list, max_length=500)
+    dataset_source: str = Field(default="workshop", pattern="^(workshop|local)$")
+    dataset_id: str | None = Field(default=None, max_length=255)
 
     @field_validator("question_ids")
     @classmethod
