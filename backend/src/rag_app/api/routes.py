@@ -339,7 +339,13 @@ def chat(request: Request, knowledge_base_id: str, payload: ChatRequest):
     if not conversation or conversation["knowledge_base_id"] != knowledge_base_id:
         raise HTTPException(404, "对话不存在")
     try:
-        return service.rag.answer(knowledge_base_id, payload.conversation_id, payload.question, payload.model)
+        return service.rag.answer(
+            knowledge_base_id,
+            payload.conversation_id,
+            payload.question,
+            payload.model,
+            include_retrieved_content=payload.include_retrieved_content,
+        )
     except Exception as exc:
         raise HTTPException(503, f"问答服务不可用: {exc}") from exc
 

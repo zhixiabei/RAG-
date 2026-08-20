@@ -10,6 +10,7 @@ from rag_app.evaluation import (
     EvaluationError,
     evaluate_sample,
     find_samples_outside_knowledge_base,
+    load_dataset,
     load_dataset_from_testset_tool,
     measure_retrieval_hits,
     run_evaluation,

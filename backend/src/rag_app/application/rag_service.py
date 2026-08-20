@@ -80,6 +80,7 @@ class RagService:
         model: str | None = None,
         attachment_context: str = "",
         attachment_citations: list[dict] | None = None,
+        include_retrieved_content: bool = False,
     ) -> dict:
         knowledge_base = _run_stage(
             "读取知识库",
@@ -159,7 +160,7 @@ class RagService:
                 citations,
             ),
         )
-        return {
+        response = {
             "conversation_id": conversation_id,
             "model": model or self.answer_agent.models.chat_model,
             "answer": answer,
@@ -200,3 +201,15 @@ class RagService:
                 },
             ],
         }
+        if include_retrieved_content:
+            response["retrieved_chunks"] = [
+                {
+                    "chunk_id": hit.chunk_id,
+                    "document_id": hit.document_id,
+                    "title": hit.file_name or hit.title,
+                    "page_number": hit.page_number,
+                    "text": hit.text,
+                }
+                for hit in hits
+            ]
+        return response

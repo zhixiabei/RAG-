@@ -10,6 +10,7 @@ class ChatRequest(BaseModel):
     question: str = Field(min_length=1, max_length=4000)
     conversation_id: str = Field(min_length=1, max_length=200)
     model: str | None = Field(default=None, min_length=1, max_length=200)
+    include_retrieved_content: bool = False
 
 
 class ParsedChatAttachment(BaseModel):

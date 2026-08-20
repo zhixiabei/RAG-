@@ -197,9 +197,17 @@ onMounted(async () => {
           <span v-if="result.summary.judge_sample_count">完整性 <strong>{{ percentage(result.summary.average_completeness_score) }}</strong></span>
           <span v-if="result.summary.judge_sample_count">忠实性 <strong>{{ percentage(result.summary.average_faithfulness_score) }}</strong></span>
           <span>文档命中率 <strong>{{ percentage(result.summary.document_hit_rate) }}</strong></span>
-          <span>Chunk 命中率 <strong>{{ percentage(result.summary.chunk_hit_rate) }}</strong></span>
-          <span>MRR <strong>{{ percentage(result.summary.mrr) }}</strong></span>
-          <span>Retrieval Recall@{{ result.summary.retrieval_k ?? 'K' }} <strong>{{ percentage(result.summary.retrieval_recall_at_k) }}</strong></span>
+          <template v-if="result.summary.evidence_sample_count">
+            <span>Evidence 命中率 <strong>{{ percentage(result.summary.evidence_hit_rate) }}</strong></span>
+            <span>Evidence MRR <strong>{{ percentage(result.summary.evidence_mrr) }}</strong></span>
+            <span>Evidence Recall@{{ result.summary.retrieval_k ?? 'K' }} <strong>{{ percentage(result.summary.evidence_recall_at_k) }}</strong></span>
+            <span>Evidence 覆盖率 <strong>{{ percentage(result.summary.evidence_coverage_at_k) }}</strong></span>
+          </template>
+          <template v-else>
+            <span>Chunk 命中率 <strong>{{ percentage(result.summary.chunk_hit_rate) }}</strong></span>
+            <span>MRR <strong>{{ percentage(result.summary.mrr) }}</strong></span>
+            <span>Retrieval Recall@{{ result.summary.retrieval_k ?? 'K' }} <strong>{{ percentage(result.summary.retrieval_recall_at_k) }}</strong></span>
+          </template>
           <span>平均响应 <strong>{{ duration(result.summary.average_response_time_ms) }}</strong></span>
           <span>P95 响应 <strong>{{ duration(result.summary.p95_response_time_ms) }}</strong></span>
           <span>Token 总量 <strong>{{ result.summary.token_usage_sample_count ? integer(result.summary.total_tokens) : '—' }}</strong></span>
@@ -212,7 +220,7 @@ onMounted(async () => {
               <span class="evaluation-result-id">{{ item.question_id }}</span>
               <small v-if="item.error" class="evaluation-error-detail" :title="item.error">{{ item.error }}</small>
               <small v-else>
-                MRR {{ percentage(item.mrr) }} · Retrieval Recall@{{ item.retrieval_k ?? 'K' }} {{ percentage(item.retrieval_recall_at_k) }} · {{ duration(item.response_time_ms) }} · {{ item.token_usage?.available ? `${integer(item.token_usage.total_tokens)} Token` : 'Token 未上报' }}
+                {{ item.retrieval_basis === 'evidence' ? 'Evidence' : 'Retrieval' }} MRR {{ percentage(item.mrr) }} · {{ item.retrieval_basis === 'evidence' ? 'Evidence' : 'Retrieval' }} Recall@{{ item.retrieval_k ?? 'K' }} {{ percentage(item.retrieval_recall_at_k) }} · {{ duration(item.response_time_ms) }} · {{ item.token_usage?.available ? `${integer(item.token_usage.total_tokens)} Token` : 'Token 未上报' }}
               </small>
               <small v-if="!item.error && item.judge" class="evaluation-judge-detail">
                 答案评分 {{ percentage(item.judge.score) }} · 正确性 {{ percentage(item.judge.correctness_score) }} · 完整性 {{ percentage(item.judge.completeness_score) }} · 忠实性 {{ percentage(item.judge.faithfulness_score) }}

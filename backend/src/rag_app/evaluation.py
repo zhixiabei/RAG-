@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 import sys
 from time import perf_counter
+import unicodedata
 from urllib.parse import quote
 
 import httpx
@@ -14,6 +15,8 @@ from agent import AnswerJudgeAgent
 from agent.telemetry import collect_model_usage
 
 DEFAULT_DATASET = "heishanliang_rag_eval_v1.0.0.jsonl"
+EVIDENCE_COVERAGE_THRESHOLD = 0.8
+EVIDENCE_SHINGLE_SIZE = 5
 
 
 class EvaluationError(RuntimeError):
@@ -58,44 +61,209 @@ def _retrieval_k(response: dict, ranked_ids: list[str]) -> int:
     return len(ranked_ids)
 
 
+def _normalize_match_text(value: object) -> str:
+    text = unicodedata.normalize("NFKC", str(value or "")).casefold()
+    return "".join(character for character in text if character.isalnum())
+
+
+def _text_shingles(value: object) -> set[str]:
+    text = _normalize_match_text(value)
+    if not text:
+        return set()
+    size = min(EVIDENCE_SHINGLE_SIZE, len(text))
+    return {text[index:index + size] for index in range(len(text) - size + 1)}
+
+
+def _document_key(value: object) -> str:
+    normalized = unicodedata.normalize("NFKC", str(value or "")).strip().replace("\\", "/")
+    return normalized.rsplit("/", 1)[-1].casefold()
+
+
+def _gold_answer_text(value: object) -> str:
+    if isinstance(value, (list, tuple)):
+        return "\n".join(str(item).strip() for item in value if str(item).strip())
+    return str(value or "").strip()
+
+
+def normalize_dataset_sample(sample: dict) -> dict:
+    """Map the evidence-first JSONL schema to the internal judge/evaluation contract."""
+    normalized = dict(sample)
+    if not normalized.get("question") and normalized.get("query"):
+        normalized["question"] = str(normalized["query"]).strip()
+    if "expected_answer" not in normalized and "gold_answer" in normalized:
+        normalized["expected_answer"] = _gold_answer_text(normalized.get("gold_answer"))
+
+    evidence = normalized.get("evidence")
+    if isinstance(evidence, list):
+        evidence_items = []
+        evidence_texts = []
+        for item in evidence:
+            if not isinstance(item, dict):
+                continue
+            text_span = str(item.get("text_span") or "").strip()
+            if not text_span:
+                continue
+            evidence_items.append({
+                "document": str(item.get("document") or "").strip() or None,
+                "page": item.get("page"),
+                "section": str(item.get("section") or "").strip() or None,
+                "text_span": text_span,
+            })
+            evidence_texts.append(text_span)
+        normalized["evidence"] = evidence_items
+        normalized["evidence_texts"] = evidence_texts
+    return normalized
+
+
+def _ranked_retrieved_chunks(response: dict, citations: list[dict]) -> list[dict]:
+    chunks = response.get("retrieved_chunks")
+    if isinstance(chunks, list):
+        return [chunk for chunk in chunks if isinstance(chunk, dict)]
+    return [
+        {
+            "chunk_id": citation.get("chunk_id"),
+            "document_id": citation.get("document_id"),
+            "title": citation.get("title"),
+            "text": citation.get("excerpt") or "",
+        }
+        for citation in citations
+        if isinstance(citation, dict)
+    ]
+
+
+def _measure_evidence_retrieval(evidence: list[dict], ranked_chunks: list[dict], retrieval_k: int) -> dict:
+    ranked_at_k = ranked_chunks[:retrieval_k]
+    chunk_shingles = [_text_shingles(chunk.get("text")) for chunk in ranked_at_k]
+    coverages = []
+    reciprocal_ranks = []
+    details = []
+
+    for index, item in enumerate(evidence, start=1):
+        expected_shingles = _text_shingles(item.get("text_span"))
+        cumulative_shingles: set[str] = set()
+        first_cover_rank = None
+        coverage = 0.0
+        for rank, retrieved_shingles in enumerate(chunk_shingles, start=1):
+            cumulative_shingles.update(retrieved_shingles)
+            coverage = (
+                len(expected_shingles & cumulative_shingles) / len(expected_shingles)
+                if expected_shingles
+                else 0.0
+            )
+            if first_cover_rank is None and coverage >= EVIDENCE_COVERAGE_THRESHOLD:
+                first_cover_rank = rank
+        coverages.append(coverage)
+        reciprocal_ranks.append(1 / first_cover_rank if first_cover_rank else 0.0)
+        details.append({
+            "index": index,
+            "document": item.get("document"),
+            "page": item.get("page"),
+            "section": item.get("section"),
+            "coverage_at_k": round(coverage, 4),
+            "first_cover_rank": first_cover_rank,
+        })
+
+    covered_count = sum(detail["first_cover_rank"] is not None for detail in details)
+    first_relevant_rank = min(
+        (detail["first_cover_rank"] for detail in details if detail["first_cover_rank"] is not None),
+        default=None,
+    )
+    return {
+        "evidence_hit": covered_count > 0 if evidence else None,
+        "evidence_recall_at_k": round(covered_count / len(evidence), 4) if evidence else None,
+        "evidence_coverage_at_k": _average(coverages),
+        "evidence_mrr": round(1 / first_relevant_rank, 4) if first_relevant_rank else 0.0,
+        "evidence_macro_mrr": _average(reciprocal_ranks),
+        "evidence_count": len(evidence),
+        "evidence_covered_count": covered_count,
+        "evidence_details": details,
+    }
+
+
 def measure_retrieval_hits(
     sample: dict,
     response: dict,
 ) -> dict:
     citations = response.get("citations") or []
+    ranked_chunks = _ranked_retrieved_chunks(response, citations)
     ranked_document_ids = _ordered_unique(response.get("retrieved_document_ids")) or _ordered_unique([
         citation.get("document_id") for citation in citations
     ])
     ranked_chunk_ids = _ordered_unique(response.get("retrieved_chunk_ids")) or _ordered_unique([
-        citation.get("chunk_id") for citation in citations
+        chunk.get("chunk_id") for chunk in ranked_chunks
     ])
     retrieved_document_ids = set(ranked_document_ids)
     retrieved_chunk_ids = set(ranked_chunk_ids)
     expected_document_ids = set(sample.get("source_document_ids") or [])
     expected_chunk_ids = set(sample.get("source_chunk_ids") or [])
+    evidence = [
+        item for item in sample.get("evidence") or []
+        if isinstance(item, dict) and str(item.get("text_span") or "").strip()
+    ]
 
-    document_hit = (
-        bool(expected_document_ids & retrieved_document_ids)
-        if expected_document_ids
-        else None
-    )
-    chunk_hit = (
-        bool(expected_chunk_ids & retrieved_chunk_ids)
-        if expected_chunk_ids
-        else None
-    )
-    document_metrics = precision_recall(expected_document_ids, retrieved_document_ids)
-    chunk_metrics = precision_recall(expected_chunk_ids, retrieved_chunk_ids)
-    expected_retrieval_ids = expected_chunk_ids or expected_document_ids
-    ranked_retrieval_ids = ranked_chunk_ids if expected_chunk_ids else ranked_document_ids
-    retrieval_k = _retrieval_k(response, ranked_retrieval_ids)
-    ranked_at_k = ranked_retrieval_ids[:retrieval_k]
-    retrieval_recall_at_k = (
-        round(len(expected_retrieval_ids & set(ranked_at_k)) / len(expected_retrieval_ids), 4)
-        if expected_retrieval_ids
-        else None
-    )
-    retrieval_reciprocal_rank = reciprocal_rank(expected_retrieval_ids, ranked_at_k)
+    expected_document_names = _ordered_unique([item.get("document") for item in evidence])
+    ranked_document_names = _ordered_unique([
+        chunk.get("title") or chunk.get("file_name") or chunk.get("relative_path")
+        for chunk in ranked_chunks
+    ])
+    if evidence and expected_document_names:
+        expected_document_keys = {_document_key(name) for name in expected_document_names if _document_key(name)}
+        retrieved_document_keys = {_document_key(name) for name in ranked_document_names if _document_key(name)}
+        document_hit = bool(expected_document_keys & retrieved_document_keys)
+        document_metrics = precision_recall(expected_document_keys, retrieved_document_keys)
+        document_reciprocal_rank = reciprocal_rank(
+            expected_document_keys,
+            [_document_key(name) for name in ranked_document_names if _document_key(name)],
+        )
+    else:
+        document_hit = (
+            bool(expected_document_ids & retrieved_document_ids)
+            if expected_document_ids
+            else None
+        )
+        document_metrics = precision_recall(expected_document_ids, retrieved_document_ids)
+        document_reciprocal_rank = reciprocal_rank(expected_document_ids, ranked_document_ids)
+
+    if evidence:
+        retrieval_k = _retrieval_k(
+            response,
+            [str(chunk.get("chunk_id") or index) for index, chunk in enumerate(ranked_chunks, start=1)],
+        )
+        evidence_metrics = _measure_evidence_retrieval(evidence, ranked_chunks, retrieval_k)
+        chunk_hit = None
+        chunk_metrics = {"precision": None, "recall": None}
+        chunk_reciprocal_rank = None
+        retrieval_recall_at_k = evidence_metrics["evidence_recall_at_k"]
+        retrieval_reciprocal_rank = evidence_metrics["evidence_mrr"]
+        retrieval_basis = "evidence"
+    else:
+        evidence_metrics = {
+            "evidence_hit": None,
+            "evidence_recall_at_k": None,
+            "evidence_coverage_at_k": None,
+            "evidence_mrr": None,
+            "evidence_count": 0,
+            "evidence_covered_count": 0,
+            "evidence_details": [],
+        }
+        chunk_hit = (
+            bool(expected_chunk_ids & retrieved_chunk_ids)
+            if expected_chunk_ids
+            else None
+        )
+        chunk_metrics = precision_recall(expected_chunk_ids, retrieved_chunk_ids)
+        chunk_reciprocal_rank = reciprocal_rank(expected_chunk_ids, ranked_chunk_ids)
+        expected_retrieval_ids = expected_chunk_ids or expected_document_ids
+        ranked_retrieval_ids = ranked_chunk_ids if expected_chunk_ids else ranked_document_ids
+        retrieval_k = _retrieval_k(response, ranked_retrieval_ids)
+        ranked_at_k = ranked_retrieval_ids[:retrieval_k]
+        retrieval_recall_at_k = (
+            round(len(expected_retrieval_ids & set(ranked_at_k)) / len(expected_retrieval_ids), 4)
+            if expected_retrieval_ids
+            else None
+        )
+        retrieval_reciprocal_rank = reciprocal_rank(expected_retrieval_ids, ranked_at_k)
+        retrieval_basis = "chunk" if expected_chunk_ids else "document" if expected_document_ids else None
     generated_answer = str(response.get("answer") or "")
 
     return {
@@ -105,12 +273,14 @@ def measure_retrieval_hits(
         "difficulty": sample.get("difficulty"),
         "document_hit": document_hit,
         "chunk_hit": chunk_hit,
+        **evidence_metrics,
+        "retrieval_basis": retrieval_basis,
         "document_precision": document_metrics["precision"],
         "document_recall": document_metrics["recall"],
-        "document_reciprocal_rank": reciprocal_rank(expected_document_ids, ranked_document_ids),
+        "document_reciprocal_rank": document_reciprocal_rank,
         "chunk_precision": chunk_metrics["precision"],
         "chunk_recall": chunk_metrics["recall"],
-        "chunk_reciprocal_rank": reciprocal_rank(expected_chunk_ids, ranked_chunk_ids),
+        "chunk_reciprocal_rank": chunk_reciprocal_rank,
         "retrieval_k": retrieval_k,
         "retrieval_recall_at_k": retrieval_recall_at_k,
         "retrieval_reciprocal_rank": retrieval_reciprocal_rank,
@@ -122,6 +292,8 @@ def measure_retrieval_hits(
         "retrieved_chunk_ids": ranked_chunk_ids,
         "expected_document_ids": sorted(expected_document_ids),
         "expected_chunk_ids": sorted(expected_chunk_ids),
+        "retrieved_documents": ranked_document_names,
+        "expected_documents": expected_document_names,
         "response_time_ms": _optional_number(
             response.get("client_response_time_ms", response.get("response_time_ms"))
         ),
@@ -190,6 +362,17 @@ def summarize(results: list[dict]) -> dict:
             for result in completed
             if result.get("chunk_hit") is not None
         ]),
+        "evidence_sample_count": sum(
+            1 for result in completed if int(result.get("evidence_count") or 0) > 0
+        ),
+        "evidence_hit_rate": _rate([
+            result["evidence_hit"]
+            for result in completed
+            if result.get("evidence_hit") is not None
+        ]),
+        "evidence_recall_at_k": _average_metric(completed, "evidence_recall_at_k"),
+        "evidence_coverage_at_k": _average_metric(completed, "evidence_coverage_at_k"),
+        "evidence_mrr": _average_metric(completed, "evidence_mrr"),
         "document_precision": _average_metric(completed, "document_precision"),
         "document_recall": _average_metric(completed, "document_recall"),
         "document_mrr": _average_metric(completed, "document_reciprocal_rank"),
@@ -280,6 +463,9 @@ def load_dataset(
                 sample = json.loads(line)
             except json.JSONDecodeError as exc:
                 raise EvaluationError(f"数据集第 {line_number} 行不是合法 JSON: {exc}") from exc
+            if not isinstance(sample, dict):
+                raise EvaluationError(f"Dataset line {line_number} is not a JSON object")
+            sample = normalize_dataset_sample(sample)
             if not sample.get("question_id") or not sample.get("question"):
                 raise EvaluationError(
                     f"数据集第 {line_number} 行缺少 question_id 或 question"
@@ -355,12 +541,14 @@ def load_dataset_from_testset_tool(
     samples = data.get("samples")
     if not isinstance(samples, list) or not samples:
         raise EvaluationError("Test-set tool export contains no evaluable samples")
+    normalized_samples = []
     for index, sample in enumerate(samples, start=1):
+        sample = normalize_dataset_sample(sample) if isinstance(sample, dict) else sample
         if not isinstance(sample, dict) or not sample.get("question_id") or not sample.get("question"):
             raise EvaluationError(
                 f"Test-set tool export sample {index} is missing question_id or question"
             )
-    samples = select_dataset_samples(samples, selected_ids)
+    samples = select_dataset_samples(normalized_samples, selected_ids)
     metadata = data.get("metadata")
     return samples, metadata if isinstance(metadata, dict) else {}
 
@@ -435,6 +623,7 @@ def evaluate_sample(
                 "conversation_id": conversation_id,
                 "question": sample["question"],
                 "model": model,
+                "include_retrieved_content": bool(sample.get("evidence")),
             },
         )
         response["client_response_time_ms"] = round((perf_counter() - started_at) * 1_000, 2)
@@ -547,11 +736,22 @@ def run_evaluation(
                     cleanup,
                     judge_agent,
                 )
+                if result.get("retrieval_basis") == "evidence":
+                    retrieval_metrics = (
+                        f"evidence_hit={result.get('evidence_hit')} "
+                        f"evidence_recall_at_k={result.get('evidence_recall_at_k')} "
+                        f"evidence_mrr={result.get('evidence_mrr')} "
+                        f"evidence_coverage_at_k={result.get('evidence_coverage_at_k')}"
+                    )
+                else:
+                    retrieval_metrics = (
+                        f"chunk_hit={result.get('chunk_hit')} "
+                        f"retrieval_recall_at_k={result.get('retrieval_recall_at_k')} "
+                        f"mrr={result.get('mrr')}"
+                    )
                 print(
                     f"  doc_hit={result['document_hit']} "
-                    f"chunk_hit={result['chunk_hit']} "
-                    f"retrieval_recall_at_k={result.get('retrieval_recall_at_k')} "
-                    f"mrr={result.get('mrr')} "
+                    f"{retrieval_metrics} "
                     f"answer_score={(result.get('judge') or {}).get('score')} "
                     f"latency_ms={result.get('response_time_ms')}",
                     flush=True,
