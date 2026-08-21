@@ -40,6 +40,8 @@ class PublicRoutesTest(unittest.TestCase):
                 owner_id="personal",
                 testset_tool_base_url="http://testset.local",
                 evaluation_dataset_dir="testsets",
+                evaluation_request_timeout_seconds=45.0,
+                evaluation_max_concurrency=3,
             ),
         )
         app.include_router(router)
@@ -101,6 +103,8 @@ class PublicRoutesTest(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["summary"]["sample_count"], 1)
         self.assertEqual(run_evaluation.call_args.args[-1], ["q1"])
+        self.assertEqual(run_evaluation.call_args.args[4], 45.0)
+        self.assertEqual(run_evaluation.call_args.kwargs["max_concurrency"], 3)
 
 
 if __name__ == "__main__":

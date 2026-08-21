@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 import json
 import math
@@ -509,6 +510,11 @@ def summarize(results: list[dict]) -> dict:
         for result in completed
         if (result.get("judge_token_usage") or {}).get("available")
     ]
+    judge_latencies = [
+        float(result["judge_time_ms"])
+        for result in completed
+        if _optional_number(result.get("judge_time_ms")) is not None
+    ]
     latencies = [
         float(result["response_time_ms"])
         for result in completed
@@ -577,6 +583,12 @@ def summarize(results: list[dict]) -> dict:
             int(usage.get("total_tokens") or 0)
             for usage in judge_reported_usage
         ),
+        "average_judge_time_ms": (
+            round(sum(judge_latencies) / len(judge_latencies), 2)
+            if judge_latencies
+            else None
+        ),
+        "p95_judge_time_ms": _percentile(judge_latencies, 0.95),
         "average_response_time_ms": round(sum(latencies) / len(latencies), 2) if latencies else None,
         "p50_response_time_ms": _percentile(latencies, 0.50),
         "p95_response_time_ms": _percentile(latencies, 0.95),
@@ -808,6 +820,7 @@ def evaluate_sample(
             evidence_embedding_models,
         )
         if judge_agent is not None:
+            judge_started_at = perf_counter()
             with collect_model_usage() as judge_usage:
                 try:
                     result["judge"] = judge_agent.run(
@@ -816,6 +829,7 @@ def evaluate_sample(
                     ).as_dict()
                 except Exception as exc:
                     result["judge_error"] = f"{type(exc).__name__}: {exc}"
+            result["judge_time_ms"] = round((perf_counter() - judge_started_at) * 1_000, 2)
             result["judge_token_usage"] = judge_usage.summary()
         return result
     finally:
@@ -826,6 +840,46 @@ def evaluate_sample(
                 )
             except httpx.HTTPError:
                 pass
+
+
+def _print_evaluation_result(completed_count: int, total_count: int, result: dict) -> None:
+    question_id = str(result.get("question_id") or "")
+    print(
+        f"[{completed_count}/{total_count}] {question_id} {result.get('question') or ''}",
+        flush=True,
+    )
+    if result.get("error"):
+        print(f"  ERROR {result['error']}", file=sys.stderr, flush=True)
+        return
+
+    if result.get("retrieval_basis") == "evidence":
+        retrieval_metrics = (
+            f"evidence_hit={result.get('evidence_hit')} "
+            f"evidence_recall_at_k={result.get('evidence_recall_at_k')} "
+            f"evidence_mrr={result.get('evidence_mrr')} "
+            f"evidence_coverage_at_k={result.get('evidence_coverage_at_k')} "
+            f"evidence_facts={result.get('evidence_covered_count')}/{result.get('evidence_count')}"
+        )
+    else:
+        retrieval_metrics = (
+            f"chunk_hit={result.get('chunk_hit')} "
+            f"retrieval_recall_at_k={result.get('retrieval_recall_at_k')} "
+            f"mrr={result.get('mrr')}"
+        )
+    print(
+        f"  doc_hit={result['document_hit']} "
+        f"{retrieval_metrics} "
+        f"answer_score={(result.get('judge') or {}).get('score')} "
+        f"latency_ms={result.get('response_time_ms')} "
+        f"judge_ms={result.get('judge_time_ms')}",
+        flush=True,
+    )
+    if result.get("judge_error"):
+        print(
+            f"  JUDGE_ERROR {result['judge_error']}",
+            file=sys.stderr,
+            flush=True,
+        )
 
 
 def run_evaluation(
@@ -840,7 +894,13 @@ def run_evaluation(
     question_ids: list[str] | None = None,
     judge_agent: AnswerJudgeAgent | None = None,
     evidence_embedding_models=None,
+    max_concurrency: int = 1,
 ) -> dict:
+    if timeout <= 0:
+        raise EvaluationError("单题请求超时必须大于 0 秒")
+    if max_concurrency <= 0:
+        raise EvaluationError("评测并发数必须大于 0")
+
     dataset_metadata = {}
     if testset_tool_url:
         samples, dataset_metadata = load_dataset_from_testset_tool(
@@ -859,9 +919,12 @@ def run_evaluation(
         )
         samples = select_dataset_samples(samples, question_ids)
         dataset_source = str(dataset_path.resolve())
+
     base_url = base_url.rstrip("/")
-    results = []
-    stop_reason = None
+    evaluation_started_at = perf_counter()
+    worker_count = max(1, min(max_concurrency, len(samples)))
+    ordered_results: list[dict | None] = [None] * len(samples)
+
     with httpx.Client(timeout=timeout) as client:
         try:
             health = client.get(f"{base_url}/health")
@@ -903,11 +966,13 @@ def run_evaluation(
                     "请将旧问题改为非 Approved，并基于同步后的 UUID Chunk 重新生成问题。"
                 )
 
-        for index, sample in enumerate(samples, start=1):
-            question_id = str(sample["question_id"])
-            print(f"[{index}/{len(samples)}] {question_id} {sample['question']}", flush=True)
-            try:
-                result = evaluate_sample(
+        with ThreadPoolExecutor(
+            max_workers=worker_count,
+            thread_name_prefix="rag-evaluation",
+        ) as executor:
+            future_items = {
+                executor.submit(
+                    evaluate_sample,
                     client,
                     base_url,
                     knowledge_base_id,
@@ -916,62 +981,49 @@ def run_evaluation(
                     cleanup,
                     judge_agent,
                     evidence_embedding_models,
-                )
-                if result.get("retrieval_basis") == "evidence":
-                    retrieval_metrics = (
-                        f"evidence_hit={result.get('evidence_hit')} "
-                        f"evidence_recall_at_k={result.get('evidence_recall_at_k')} "
-                        f"evidence_mrr={result.get('evidence_mrr')} "
-                        f"evidence_coverage_at_k={result.get('evidence_coverage_at_k')} "
-                        f"evidence_facts={result.get('evidence_covered_count')}/{result.get('evidence_count')}"
-                    )
-                else:
-                    retrieval_metrics = (
-                        f"chunk_hit={result.get('chunk_hit')} "
-                        f"retrieval_recall_at_k={result.get('retrieval_recall_at_k')} "
-                        f"mrr={result.get('mrr')}"
-                    )
-                print(
-                    f"  doc_hit={result['document_hit']} "
-                    f"{retrieval_metrics} "
-                    f"answer_score={(result.get('judge') or {}).get('score')} "
-                    f"latency_ms={result.get('response_time_ms')}",
-                    flush=True,
-                )
-                if result.get("judge_error"):
-                    print(
-                        f"  JUDGE_ERROR {result['judge_error']}",
-                        file=sys.stderr,
-                        flush=True,
-                    )
-            except httpx.TimeoutException:
-                remaining_count = len(samples) - index
-                error = f"单题请求超时（{timeout:g} 秒）"
-                result = {
-                    "question_id": question_id,
-                    "question": sample.get("question"),
-                    "error": error,
-                }
-                stop_reason = (
-                    f"{question_id} {error}，已停止剩余 {remaining_count} 道题"
-                )
-                print(f"  ERROR {stop_reason}", file=sys.stderr, flush=True)
-            except (EvaluationError, httpx.HTTPError) as exc:
-                result = {
-                    "question_id": question_id,
-                    "question": sample.get("question"),
-                    "error": str(exc),
-                }
-                print(f"  ERROR {exc}", file=sys.stderr, flush=True)
-            results.append(result)
-            if stop_reason:
-                break
+                ): (index, sample)
+                for index, sample in enumerate(samples)
+            }
+            for completed_count, future in enumerate(as_completed(future_items), start=1):
+                index, sample = future_items[future]
+                question_id = str(sample["question_id"])
+                try:
+                    result = future.result()
+                except httpx.TimeoutException:
+                    result = {
+                        "question_id": question_id,
+                        "question": sample.get("question"),
+                        "error": f"单题请求超时（{timeout:g} 秒）",
+                    }
+                except (EvaluationError, httpx.HTTPError) as exc:
+                    result = {
+                        "question_id": question_id,
+                        "question": sample.get("question"),
+                        "error": str(exc),
+                    }
+                except Exception as exc:
+                    result = {
+                        "question_id": question_id,
+                        "question": sample.get("question"),
+                        "error": f"{type(exc).__name__}: {exc}",
+                    }
+                ordered_results[index] = result
+                _print_evaluation_result(completed_count, len(samples), result)
 
+    results = [result for result in ordered_results if result is not None]
+    evaluation_time_ms = round((perf_counter() - evaluation_started_at) * 1_000, 2)
     summary = summarize(results)
     summary.update({
         "requested_count": len(samples),
         "remaining_count": len(samples) - len(results),
-        "stopped_early": stop_reason is not None,
+        "stopped_early": False,
+        "concurrency": worker_count,
+        "evaluation_time_ms": evaluation_time_ms,
+        "throughput_per_minute": (
+            round(len(results) * 60_000 / evaluation_time_ms, 2)
+            if evaluation_time_ms > 0
+            else None
+        ),
     })
 
     return {
@@ -985,7 +1037,7 @@ def run_evaluation(
         "judge_model": judge_agent.model_name if judge_agent is not None else None,
         "evaluated_at": datetime.now(timezone.utc).isoformat(),
         "summary": summary,
-        "stop_reason": stop_reason,
+        "stop_reason": None,
         "results": results,
     }
 
@@ -1008,7 +1060,8 @@ def build_parser() -> argparse.ArgumentParser:
         help="可选的 Judge 模型名称；默认使用 RAG_JUDGE_MODEL 或回答模型",
     )
     parser.add_argument("--no-judge", action="store_true", help="关闭答案质量模型评分")
-    parser.add_argument("--timeout", type=float, default=180.0, help="单次 HTTP 请求超时秒数")
+    parser.add_argument("--timeout", type=float, default=None, help="单题 HTTP 请求超时秒数")
+    parser.add_argument("--concurrency", type=int, default=None, help="同时评测的题目数")
     parser.add_argument("--output", type=Path, default=Path("rag_eval_report.json"), help="评测报告路径")
     parser.add_argument("--keep-conversations", action="store_true", help="保留每题创建的评测对话")
     parser.add_argument("--include-non-approved", action="store_true", help="同时评测未 approved 的样本")
@@ -1047,6 +1100,8 @@ def main(argv: list[str] | None = None) -> int:
                     judge_models,
                     pass_threshold=settings.rag_judge_pass_threshold,
                     max_evidence_chars=settings.rag_judge_max_evidence_chars,
+                    max_output_tokens=settings.rag_judge_max_output_tokens,
+                    max_concurrency=settings.rag_judge_max_concurrency,
                 )
 
         report = run_evaluation(
@@ -1054,13 +1109,14 @@ def main(argv: list[str] | None = None) -> int:
             args.knowledge_base_id,
             args.base_url,
             args.model,
-            args.timeout,
+            args.timeout or settings.evaluation_request_timeout_seconds,
             not args.keep_conversations,
             args.include_non_approved,
             args.testset_tool_url,
             args.question_ids,
             judge_agent,
             models,
+            args.concurrency or settings.evaluation_max_concurrency,
         )
     except (EvaluationError, ValueError) as exc:
         print(f"评测无法启动: {exc}", file=sys.stderr)

@@ -13,10 +13,10 @@ def settings(**overrides):
         "rag_judge_base_url": "",
         "rag_judge_api_key": "",
         "rag_judge_model": "",
-        "rag_judge_timeout_seconds": 180.0,
-        "rag_judge_max_retries": 3,
+        "rag_judge_timeout_seconds": 30.0,
+        "rag_judge_max_retries": 1,
         "rag_judge_retry_base_delay_seconds": 1.0,
-        "rag_judge_retry_max_delay_seconds": 30.0,
+        "rag_judge_retry_max_delay_seconds": 5.0,
         "model_mode": "local",
         "ollama_url": "http://ollama",
         "ollama_embedding_model": "embed",
@@ -81,10 +81,10 @@ class JudgeGatewayFactoryTest(unittest.TestCase):
         self.assertEqual(result.base_url, "https://judge.example/v1")
         self.assertEqual(result.chat_model, "judge-model")
         self.assertEqual(result.models, ["judge-model"])
-        self.assertEqual(result.request_timeout_seconds, 180.0)
-        self.assertEqual(result.max_transient_retries, 3)
+        self.assertEqual(result.request_timeout_seconds, 30.0)
+        self.assertEqual(result.max_transient_retries, 1)
         self.assertEqual(result.retry_base_delay_seconds, 1.0)
-        self.assertEqual(result.retry_max_delay_seconds, 30.0)
+        self.assertEqual(result.retry_max_delay_seconds, 5.0)
         result.check_connection(require_embedding_model=False)
         result.close()
 

@@ -93,6 +93,8 @@ def build_services(settings: Settings) -> Services:
             judge_models,
             pass_threshold=settings.rag_judge_pass_threshold,
             max_evidence_chars=settings.rag_judge_max_evidence_chars,
+            max_output_tokens=settings.rag_judge_max_output_tokens,
+            max_concurrency=settings.rag_judge_max_concurrency,
         )
         if judge_models is not None
         else None

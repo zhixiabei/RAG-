@@ -28,7 +28,12 @@ router = APIRouter()
 MAX_CHAT_ATTACHMENTS = 10
 MAX_CHAT_ATTACHMENT_BYTES = 30 * 1024 * 1024
 MAX_CHAT_ATTACHMENT_CONTEXT_CHARS = 12_000
-EVALUATION_TIMEOUT_SECONDS = 180.0
+def _evaluation_request_timeout(settings) -> float:
+    return max(1.0, float(getattr(settings, "evaluation_request_timeout_seconds", 90.0)))
+
+
+def _evaluation_max_concurrency(settings) -> int:
+    return max(1, int(getattr(settings, "evaluation_max_concurrency", 4)))
 
 
 def _local_dataset_dir(settings) -> Path:
@@ -94,7 +99,7 @@ def _load_evaluation_samples(
         raise EvaluationError("TESTSET_TOOL_BASE_URL is not configured")
     return load_dataset_from_testset_tool(
         testset_url,
-        EVALUATION_TIMEOUT_SECONDS,
+        _evaluation_request_timeout(settings),
         question_ids=question_ids,
     )
 
@@ -258,13 +263,14 @@ def evaluate_knowledge_base(
             knowledge_base_id,
             str(request.base_url).rstrip("/"),
             None,
-            EVALUATION_TIMEOUT_SECONDS,
+            _evaluation_request_timeout(service.settings),
             True,
             False,
             None if source == "local" else testset_url,
             payload.question_ids,
             judge_agent=getattr(service, "answer_judge", None),
             evidence_embedding_models=service.models,
+            max_concurrency=_evaluation_max_concurrency(service.settings),
         )
     except EvaluationError as exc:
         raise HTTPException(422, f"评测无法启动: {exc}") from exc

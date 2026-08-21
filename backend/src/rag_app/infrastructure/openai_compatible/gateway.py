@@ -156,6 +156,8 @@ class OpenAICompatibleGateway:
         }
         if max_tokens is not None:
             payload["max_tokens"] = max_tokens
+        if reasoning is not None and "qwen" in selected_model.casefold():
+            payload["enable_thinking"] = reasoning
         if response_schema is not None:
             payload["response_format"] = {"type": "json_object"}
         response = self._post_json(

@@ -92,6 +92,23 @@ class ModelCompletionGatewayTest(unittest.TestCase):
         response.raise_for_status.assert_called_once()
 
     @patch("rag_app.infrastructure.openai_compatible.gateway.httpx.Client")
+    def test_qwen_completion_disables_thinking(self, client_class):
+        post = client_class.return_value.post
+        response = Mock(status_code=200)
+        response.json.return_value = {
+            "choices": [{"message": {"content": "answer"}}],
+        }
+        post.return_value = response
+        gateway = OpenAICompatibleGateway(
+            "SiliconFlow", "https://chat.example/v1", "chat-key",
+            ["Qwen/Qwen3-8B"], "Qwen/Qwen3-8B",
+            "EmbeddingProvider", "https://embed.example/v1", "embed-key", "embed-model",
+        )
+
+        gateway.complete([], reasoning=False)
+
+        self.assertIs(post.call_args.kwargs["json"]["enable_thinking"], False)
+    @patch("rag_app.infrastructure.openai_compatible.gateway.httpx.Client")
     def test_openai_compatible_reuses_client_across_completions(self, client_class):
         post = client_class.return_value.post
         response = Mock(status_code=200)

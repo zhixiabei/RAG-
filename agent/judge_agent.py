@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import json
+from threading import BoundedSemaphore
 from typing import Any
 
 from .contracts import ModelGateway
@@ -113,14 +114,22 @@ class AnswerJudgeAgent:
         *,
         pass_threshold: float = 0.7,
         max_evidence_chars: int = 12_000,
+        max_output_tokens: int = 300,
+        max_concurrency: int = 2,
     ):
         if not 0 <= pass_threshold <= 1:
             raise ValueError("Judge pass_threshold 必须在 0 到 1 之间")
         if max_evidence_chars < 0:
             raise ValueError("Judge max_evidence_chars 不能小于 0")
+        if max_output_tokens <= 0:
+            raise ValueError("Judge 输出 Token 上限必须大于 0")
+        if max_concurrency <= 0:
+            raise ValueError("Judge 并发数必须大于 0")
         self.models = models
         self.pass_threshold = pass_threshold
         self.max_evidence_chars = max_evidence_chars
+        self.max_output_tokens = max_output_tokens
+        self._slots = BoundedSemaphore(max_concurrency)
 
     @property
     def model_name(self) -> str:
@@ -138,7 +147,7 @@ class AnswerJudgeAgent:
             "refusal_reason": str(sample.get("refusal_reason") or ""),
             "generated_answer": str(answer or ""),
         }
-        with model_usage_stage("answer_judging"):
+        with self._slots, model_usage_stage("answer_judging"):
             output = self.models.complete(
                 [
                     {"role": "system", "content": JUDGE_PROMPT},
@@ -148,7 +157,7 @@ class AnswerJudgeAgent:
                     },
                 ],
                 temperature=0,
-                max_tokens=800,
+                max_tokens=self.max_output_tokens,
                 reasoning=False,
                 response_schema=JUDGE_RESPONSE_SCHEMA,
             )

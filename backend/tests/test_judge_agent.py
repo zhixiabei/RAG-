@@ -58,7 +58,7 @@ class AnswerJudgeAgentTest(unittest.TestCase):
         self.assertEqual(judgment.model, "judge-model")
         call = models.calls[0]
         self.assertEqual(call["temperature"], 0)
-        self.assertEqual(call["max_tokens"], 800)
+        self.assertEqual(call["max_tokens"], 300)
         self.assertFalse(call["reasoning"])
         self.assertEqual(
             set(call["response_schema"]["required"]),

@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 import tempfile
+from threading import Barrier
 import unittest
 from unittest.mock import patch
 
@@ -322,19 +323,21 @@ class EvaluationTest(unittest.TestCase):
 
     @patch("rag_app.evaluation.evaluate_sample")
     @patch("rag_app.evaluation.httpx.Client")
-    def test_stops_remaining_samples_after_request_timeout(self, client_class, evaluate_sample):
+    def test_keeps_running_other_samples_after_request_timeout(self, client_class, evaluate_sample):
         client = client_class.return_value.__enter__.return_value
         client.get.return_value = httpx.Response(200)
-        evaluate_sample.side_effect = [
-            {
-                "question_id": "q1",
-                "question": "first",
+
+        def fake_evaluate_sample(_client, _base_url, _kb_id, sample, *_args):
+            if sample["question_id"] == "q2":
+                raise httpx.ReadTimeout("timed out")
+            return {
+                "question_id": sample["question_id"],
+                "question": sample["question"],
                 "document_hit": True,
                 "chunk_hit": True,
-            },
-            httpx.ReadTimeout("timed out"),
-        ]
+            }
 
+        evaluate_sample.side_effect = fake_evaluate_sample
         with tempfile.TemporaryDirectory() as directory:
             dataset = Path(directory) / "evaluation.jsonl"
             dataset.write_text(
@@ -353,18 +356,68 @@ class EvaluationTest(unittest.TestCase):
                 "kb-1",
                 "http://backend.local",
                 None,
-                180.0,
+                90.0,
                 True,
                 False,
+                max_concurrency=2,
             )
 
-        self.assertEqual(evaluate_sample.call_count, 2)
-        self.assertTrue(report["summary"]["stopped_early"])
-        self.assertEqual(report["summary"]["requested_count"], 3)
-        self.assertEqual(report["summary"]["remaining_count"], 1)
-        self.assertIn("q2", report["stop_reason"])
-        self.assertIn("180 秒", report["results"][-1]["error"])
+        self.assertEqual(evaluate_sample.call_count, 3)
+        self.assertFalse(report["summary"]["stopped_early"])
+        self.assertEqual(report["summary"]["sample_count"], 3)
+        self.assertEqual(report["summary"]["error_count"], 1)
+        self.assertEqual(report["summary"]["remaining_count"], 0)
+        self.assertEqual(report["summary"]["concurrency"], 2)
+        self.assertEqual(
+            [result["question_id"] for result in report["results"]],
+            ["q1", "q2", "q3"],
+        )
+        self.assertIn("90 秒", report["results"][1]["error"])
 
+    @patch("rag_app.evaluation.evaluate_sample")
+    @patch("rag_app.evaluation.httpx.Client")
+    def test_evaluates_samples_concurrently(self, client_class, evaluate_sample):
+        client = client_class.return_value.__enter__.return_value
+        client.get.return_value = httpx.Response(200)
+        barrier = Barrier(2)
+
+        def fake_evaluate_sample(_client, _base_url, _kb_id, sample, *_args):
+            barrier.wait(timeout=1)
+            return {
+                "question_id": sample["question_id"],
+                "question": sample["question"],
+                "document_hit": True,
+                "chunk_hit": True,
+            }
+
+        evaluate_sample.side_effect = fake_evaluate_sample
+        with tempfile.TemporaryDirectory() as directory:
+            dataset = Path(directory) / "evaluation.jsonl"
+            dataset.write_text(
+                "\n".join(
+                    json.dumps({
+                        "question_id": f"q{index}",
+                        "question": f"question {index}",
+                        "status": "approved",
+                    })
+                    for index in range(1, 3)
+                ),
+                encoding="utf-8",
+            )
+            report = run_evaluation(
+                dataset,
+                "kb-1",
+                "http://backend.local",
+                None,
+                90.0,
+                True,
+                False,
+                max_concurrency=2,
+            )
+
+        self.assertEqual(report["summary"]["completed_count"], 2)
+        self.assertEqual(report["summary"]["error_count"], 0)
+        self.assertGreater(report["summary"]["throughput_per_minute"], 0)
 
 if __name__ == "__main__":
     unittest.main()

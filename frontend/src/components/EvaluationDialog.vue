@@ -209,8 +209,12 @@ onMounted(async () => {
             <span>MRR <strong>{{ percentage(result.summary.mrr) }}</strong></span>
             <span>Retrieval Recall@{{ result.summary.retrieval_k ?? 'K' }} <strong>{{ percentage(result.summary.retrieval_recall_at_k) }}</strong></span>
           </template>
+          <span>总耗时 <strong>{{ duration(result.summary.evaluation_time_ms) }}</strong></span>
+          <span>并发 <strong>{{ result.summary.concurrency }}</strong></span>
+          <span>吞吐 <strong>{{ result.summary.throughput_per_minute ?? '—' }} 题/分钟</strong></span>
           <span>平均响应 <strong>{{ duration(result.summary.average_response_time_ms) }}</strong></span>
           <span>P95 响应 <strong>{{ duration(result.summary.p95_response_time_ms) }}</strong></span>
+          <span v-if="result.summary.average_judge_time_ms != null">Judge 平均 <strong>{{ duration(result.summary.average_judge_time_ms) }}</strong></span>
           <span>Token 总量 <strong>{{ result.summary.token_usage_sample_count ? integer(result.summary.total_tokens) : '—' }}</strong></span>
           <span v-if="result.summary.judge_sample_count || result.summary.judge_error_count">Judge Token <strong>{{ result.summary.judge_token_usage_sample_count ? integer(result.summary.judge_total_tokens) : '—' }}</strong></span>
         </div>

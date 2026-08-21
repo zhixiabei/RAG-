@@ -69,10 +69,14 @@ class Settings(BaseSettings):
     rag_judge_model: str = ""
     rag_judge_pass_threshold: float = 0.7
     rag_judge_max_evidence_chars: int = 12_000
-    rag_judge_timeout_seconds: float = 180.0
-    rag_judge_max_retries: int = 3
+    rag_judge_max_output_tokens: int = 300
+    rag_judge_max_concurrency: int = 2
+    rag_judge_timeout_seconds: float = 30.0
+    rag_judge_max_retries: int = 1
     rag_judge_retry_base_delay_seconds: float = 1.0
-    rag_judge_retry_max_delay_seconds: float = 30.0
+    rag_judge_retry_max_delay_seconds: float = 5.0
+    evaluation_request_timeout_seconds: float = 90.0
+    evaluation_max_concurrency: int = 4
     evaluation_dataset_dir: str = "testsets"
     testset_tool_base_url: str = ""
     testset_tool_sync_timeout_seconds: float = 60.0
