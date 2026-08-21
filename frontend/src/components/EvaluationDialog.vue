@@ -111,7 +111,8 @@ onMounted(async () => {
 
       <p class="evaluation-dialog-message">选择要运行的测试集范围，测试结果不会写入对话历史。</p>
 
-      <div class="evaluation-scope">
+      <div class="evaluation-dialog-body">
+        <div class="evaluation-scope">
         <label class="evaluation-option">
           <input type="radio" name="evaluation-source" :checked="source === 'workshop'" @change="changeSource('workshop')" />
           <span><strong>测试集工坊</strong><small>默认优先读取已配置的工坊数据</small></span>
@@ -135,7 +136,7 @@ onMounted(async () => {
           :value="dataset.id"
           :disabled="dataset.sample_count === 0 || dataset.error"
         >
-          {{ dataset.name }}?{{ dataset.sample_count }} 道 Approved?
+          {{ dataset.name }} · {{ dataset.sample_count }} 道 Approved
         </option>
       </select>
 
@@ -222,6 +223,23 @@ onMounted(async () => {
               <small v-else>
                 {{ item.retrieval_basis === 'evidence' ? 'Evidence' : 'Retrieval' }} MRR {{ percentage(item.mrr) }} · {{ item.retrieval_basis === 'evidence' ? 'Evidence' : 'Retrieval' }} Recall@{{ item.retrieval_k ?? 'K' }} {{ percentage(item.retrieval_recall_at_k) }} · {{ duration(item.response_time_ms) }} · {{ item.token_usage?.available ? `${integer(item.token_usage.total_tokens)} Token` : 'Token 未上报' }}
               </small>
+              <small v-if="!item.error && item.retrieval_basis === 'evidence'" class="evaluation-evidence-summary">
+                命中 {{ item.evidence_covered_count }}/{{ item.evidence_count }} · 平均语义相似度 {{ percentage(item.evidence_coverage_at_k) }}
+              </small>
+              <details v-if="!item.error && item.evidence_details?.length" class="evaluation-evidence-details">
+                <summary>Evidence 事实明细</summary>
+                <div v-for="detail in item.evidence_details" :key="detail.index" class="evaluation-evidence-fact">
+                  <div>
+                    <strong>F{{ detail.index }}</strong>
+                    <span>相似度 {{ percentage(detail.best_similarity) }} / 阈值 {{ percentage(detail.similarity_threshold) }}</span>
+                    <span>{{ detail.first_cover_rank ? `Rank ${detail.first_cover_rank}` : '未命中' }}</span>
+                  </div>
+                  <p>{{ detail.fact }}</p>
+                  <small v-if="detail.supporting_chunk_ids?.length">
+                    {{ detail.supporting_chunk_ids.join(' + ') }}
+                  </small>
+                </div>
+              </details>
               <small v-if="!item.error && item.judge" class="evaluation-judge-detail">
                 答案评分 {{ percentage(item.judge.score) }} · 正确性 {{ percentage(item.judge.correctness_score) }} · 完整性 {{ percentage(item.judge.completeness_score) }} · 忠实性 {{ percentage(item.judge.faithfulness_score) }}
               </small>
@@ -245,6 +263,7 @@ onMounted(async () => {
       </div>
 
       <p v-if="error" class="error-text">{{ error }}</p>
+      </div>
       <div class="modal-actions">
         <button class="button secondary" :disabled="busy" @click="emit('close')">关闭</button>
         <button class="button primary" :disabled="!canRun || loading || !samples.length" @click="submit">

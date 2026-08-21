@@ -60,6 +60,10 @@ def build_judge_gateway(
             "",
             "",
             "",
+            request_timeout_seconds=settings.rag_judge_timeout_seconds,
+            max_transient_retries=settings.rag_judge_max_retries,
+            retry_base_delay_seconds=settings.rag_judge_retry_base_delay_seconds,
+            retry_max_delay_seconds=settings.rag_judge_retry_max_delay_seconds,
         )
 
     if not judge_model or judge_model == default_gateway.chat_model:
@@ -89,4 +93,8 @@ def build_judge_gateway(
         settings.remote_embedding_base_url,
         settings.remote_embedding_api_key,
         settings.remote_embedding_model,
+        request_timeout_seconds=settings.rag_judge_timeout_seconds,
+        max_transient_retries=settings.rag_judge_max_retries,
+        retry_base_delay_seconds=settings.rag_judge_retry_base_delay_seconds,
+        retry_max_delay_seconds=settings.rag_judge_retry_max_delay_seconds,
     )

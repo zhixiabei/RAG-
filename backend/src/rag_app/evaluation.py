@@ -3,7 +3,9 @@ from __future__ import annotations
 import argparse
 from datetime import datetime, timezone
 import json
+import math
 from pathlib import Path
+import re
 import sys
 from time import perf_counter
 import unicodedata
@@ -15,8 +17,8 @@ from agent import AnswerJudgeAgent
 from agent.telemetry import collect_model_usage
 
 DEFAULT_DATASET = "heishanliang_rag_eval_v1.0.0.jsonl"
-EVIDENCE_COVERAGE_THRESHOLD = 0.8
-EVIDENCE_SHINGLE_SIZE = 5
+DEFAULT_EVIDENCE_SIMILARITY_THRESHOLD = 0.72
+EVIDENCE_WINDOW_MAX_CHARS = 4_000
 
 
 class EvaluationError(RuntimeError):
@@ -61,18 +63,6 @@ def _retrieval_k(response: dict, ranked_ids: list[str]) -> int:
     return len(ranked_ids)
 
 
-def _normalize_match_text(value: object) -> str:
-    text = unicodedata.normalize("NFKC", str(value or "")).casefold()
-    return "".join(character for character in text if character.isalnum())
-
-
-def _text_shingles(value: object) -> set[str]:
-    text = _normalize_match_text(value)
-    if not text:
-        return set()
-    size = min(EVIDENCE_SHINGLE_SIZE, len(text))
-    return {text[index:index + size] for index in range(len(text) - size + 1)}
-
 
 def _document_key(value: object) -> str:
     normalized = unicodedata.normalize("NFKC", str(value or "")).strip().replace("\\", "/")
@@ -95,24 +85,68 @@ def normalize_dataset_sample(sample: dict) -> dict:
 
     evidence = normalized.get("evidence")
     if isinstance(evidence, list):
+        gold_answer_items = (
+            [str(item).strip() for item in normalized.get("gold_answer") or [] if str(item).strip()]
+            if isinstance(normalized.get("gold_answer"), (list, tuple))
+            else []
+        )
         evidence_items = []
         evidence_texts = []
-        for item in evidence:
+        evidence_facts = []
+        for index, item in enumerate(evidence):
             if not isinstance(item, dict):
                 continue
             text_span = str(item.get("text_span") or "").strip()
             if not text_span:
                 continue
+            fact = str(item.get("fact") or item.get("answer_fact") or "").strip()
+            if not fact and len(gold_answer_items) == len(evidence):
+                fact = gold_answer_items[index]
+            threshold = item.get("similarity_threshold")
+            if threshold is not None:
+                try:
+                    threshold = float(threshold)
+                except (TypeError, ValueError):
+                    threshold = None
             evidence_items.append({
                 "document": str(item.get("document") or "").strip() or None,
                 "page": item.get("page"),
                 "section": str(item.get("section") or "").strip() or None,
                 "text_span": text_span,
+                "fact": fact or None,
+                "similarity_threshold": threshold,
             })
             evidence_texts.append(text_span)
+            if fact:
+                evidence_facts.append(fact)
         normalized["evidence"] = evidence_items
         normalized["evidence_texts"] = evidence_texts
+        normalized["evidence_facts"] = evidence_facts
     return normalized
+
+def _validate_evidence_schema(sample: dict, label: str) -> None:
+    evidence = [
+        item for item in sample.get("evidence") or []
+        if isinstance(item, dict) and str(item.get("text_span") or "").strip()
+    ]
+    if not evidence:
+        return
+    missing_facts = [
+        str(index)
+        for index, item in enumerate(evidence, start=1)
+        if not str(item.get("fact") or "").strip()
+    ]
+    if missing_facts:
+        raise EvaluationError(
+            f"{label}: evidence items {', '.join(missing_facts)} are missing fact; "
+            "text_span is provenance only and cannot be used as the scoring text"
+        )
+    for index, item in enumerate(evidence, start=1):
+        threshold = item.get("similarity_threshold")
+        if threshold is not None and not 0 <= float(threshold) <= 1:
+            raise EvaluationError(
+                f"{label}: evidence item {index} similarity_threshold must be between 0 and 1"
+            )
 
 
 def _ranked_retrieved_chunks(response: dict, citations: list[dict]) -> list[dict]:
@@ -131,36 +165,158 @@ def _ranked_retrieved_chunks(response: dict, citations: list[dict]) -> list[dict
     ]
 
 
-def _measure_evidence_retrieval(evidence: list[dict], ranked_chunks: list[dict], retrieval_k: int) -> dict:
-    ranked_at_k = ranked_chunks[:retrieval_k]
-    chunk_shingles = [_text_shingles(chunk.get("text")) for chunk in ranked_at_k]
-    coverages = []
-    reciprocal_ranks = []
-    details = []
+_CHUNK_INDEX_PATTERN = re.compile(r":(\d+)$")
 
-    for index, item in enumerate(evidence, start=1):
-        expected_shingles = _text_shingles(item.get("text_span"))
-        cumulative_shingles: set[str] = set()
-        first_cover_rank = None
-        coverage = 0.0
-        for rank, retrieved_shingles in enumerate(chunk_shingles, start=1):
-            cumulative_shingles.update(retrieved_shingles)
-            coverage = (
-                len(expected_shingles & cumulative_shingles) / len(expected_shingles)
-                if expected_shingles
-                else 0.0
-            )
-            if first_cover_rank is None and coverage >= EVIDENCE_COVERAGE_THRESHOLD:
-                first_cover_rank = rank
-        coverages.append(coverage)
-        reciprocal_ranks.append(1 / first_cover_rank if first_cover_rank else 0.0)
+
+def _chunk_index(chunk_id: object) -> int | None:
+    match = _CHUNK_INDEX_PATTERN.search(str(chunk_id or ""))
+    return int(match.group(1)) if match else None
+
+
+def _build_evidence_windows(ranked_chunks: list[dict], retrieval_k: int) -> list[dict]:
+    chunks = []
+    for rank, chunk in enumerate(ranked_chunks[:retrieval_k], start=1):
+        text = str(chunk.get("text") or "").strip()
+        if not text:
+            continue
+        document_name = (
+            chunk.get("title")
+            or chunk.get("file_name")
+            or chunk.get("relative_path")
+        )
+        chunks.append({
+            "rank": rank,
+            "chunk_id": str(chunk.get("chunk_id") or rank),
+            "chunk_index": _chunk_index(chunk.get("chunk_id")),
+            "document_group": str(chunk.get("document_id") or _document_key(document_name)),
+            "document_key": _document_key(document_name),
+            "text": text,
+        })
+
+    windows = []
+    seen = set()
+
+    def add_window(parts: list[dict]) -> None:
+        chunk_ids = tuple(part["chunk_id"] for part in parts)
+        if chunk_ids in seen:
+            return
+        seen.add(chunk_ids)
+        windows.append({
+            "rank": max(part["rank"] for part in parts),
+            "retrieval_ranks": sorted(part["rank"] for part in parts),
+            "chunk_ids": list(chunk_ids),
+            "document_key": parts[0]["document_key"],
+            "text": "\n".join(part["text"] for part in parts)[:EVIDENCE_WINDOW_MAX_CHARS],
+        })
+
+    for chunk in chunks:
+        add_window([chunk])
+
+    grouped = {}
+    for chunk in chunks:
+        grouped.setdefault(chunk["document_group"], []).append(chunk)
+    for group in grouped.values():
+        indexed = [chunk for chunk in group if chunk["chunk_index"] is not None]
+        indexed.sort(key=lambda chunk: chunk["chunk_index"])
+        for size in (2, 3):
+            for start in range(len(indexed) - size + 1):
+                parts = indexed[start:start + size]
+                indices = [part["chunk_index"] for part in parts]
+                if indices == list(range(indices[0], indices[0] + size)):
+                    add_window(parts)
+
+    windows.sort(key=lambda window: (window["rank"], len(window["chunk_ids"])))
+    return windows
+
+
+def _cosine_similarity(left: list[float], right: list[float]) -> float:
+    if not left or len(left) != len(right):
+        return 0.0
+    left_norm = math.sqrt(sum(value * value for value in left))
+    right_norm = math.sqrt(sum(value * value for value in right))
+    if not left_norm or not right_norm:
+        return 0.0
+    similarity = sum(a * b for a, b in zip(left, right)) / (left_norm * right_norm)
+    return round(max(0.0, min(1.0, similarity)), 4)
+
+
+def _evidence_threshold(item: dict, default_threshold: float) -> float:
+    value = item.get("similarity_threshold")
+    try:
+        threshold = float(value) if value is not None else default_threshold
+    except (TypeError, ValueError):
+        threshold = default_threshold
+    return max(0.0, min(1.0, threshold))
+
+
+def _measure_evidence_retrieval(
+    evidence: list[dict],
+    ranked_chunks: list[dict],
+    retrieval_k: int,
+    embedding_models,
+    default_threshold: float,
+) -> dict:
+    if embedding_models is None:
+        raise EvaluationError("Evidence Embedding evaluator is not configured")
+    facts = [str(item.get("fact") or "").strip() for item in evidence]
+    if any(not fact for fact in facts):
+        raise EvaluationError(
+            "Evidence evaluation requires a fact for every evidence item; "
+            "text_span is provenance only"
+        )
+
+    windows = _build_evidence_windows(ranked_chunks, retrieval_k)
+    texts = [*facts, *[window["text"] for window in windows]]
+    vectors = embedding_models.embed(texts)
+    if len(vectors) != len(texts):
+        raise EvaluationError(
+            f"Embedding service returned {len(vectors)} vectors for {len(texts)} texts"
+        )
+    fact_vectors = vectors[:len(facts)]
+    window_vectors = vectors[len(facts):]
+
+    details = []
+    for index, (item, fact_vector) in enumerate(zip(evidence, fact_vectors), start=1):
+        expected_document = _document_key(item.get("document"))
+        candidates = []
+        for window, window_vector in zip(windows, window_vectors):
+            if expected_document and window["document_key"] != expected_document:
+                continue
+            candidates.append({
+                **window,
+                "similarity": _cosine_similarity(fact_vector, window_vector),
+            })
+
+        threshold = _evidence_threshold(item, default_threshold)
+        best = max(
+            candidates,
+            key=lambda candidate: (candidate["similarity"], -candidate["rank"]),
+            default=None,
+        )
+        matched = [
+            candidate for candidate in candidates
+            if candidate["similarity"] >= threshold
+        ]
+        first = min(
+            matched,
+            key=lambda candidate: (candidate["rank"], -candidate["similarity"]),
+            default=None,
+        )
+        best_similarity = best["similarity"] if best else 0.0
         details.append({
             "index": index,
+            "fact": facts[index - 1],
             "document": item.get("document"),
             "page": item.get("page"),
             "section": item.get("section"),
-            "coverage_at_k": round(coverage, 4),
-            "first_cover_rank": first_cover_rank,
+            "similarity_threshold": threshold,
+            "best_similarity": best_similarity,
+            "coverage_at_k": best_similarity,
+            "best_match_rank": best["rank"] if best else None,
+            "best_match_chunk_ids": best["chunk_ids"] if best else [],
+            "first_cover_rank": first["rank"] if first else None,
+            "supporting_chunk_ids": first["chunk_ids"] if first else [],
+            "supporting_retrieval_ranks": first["retrieval_ranks"] if first else [],
         })
 
     covered_count = sum(detail["first_cover_rank"] is not None for detail in details)
@@ -168,14 +324,21 @@ def _measure_evidence_retrieval(evidence: list[dict], ranked_chunks: list[dict],
         (detail["first_cover_rank"] for detail in details if detail["first_cover_rank"] is not None),
         default=None,
     )
+    reciprocal_ranks = [
+        1 / detail["first_cover_rank"] if detail["first_cover_rank"] else 0.0
+        for detail in details
+    ]
     return {
         "evidence_hit": covered_count > 0 if evidence else None,
         "evidence_recall_at_k": round(covered_count / len(evidence), 4) if evidence else None,
-        "evidence_coverage_at_k": _average(coverages),
+        "evidence_coverage_at_k": _average([
+            detail["best_similarity"] for detail in details
+        ]),
         "evidence_mrr": round(1 / first_relevant_rank, 4) if first_relevant_rank else 0.0,
         "evidence_macro_mrr": _average(reciprocal_ranks),
         "evidence_count": len(evidence),
         "evidence_covered_count": covered_count,
+        "evidence_window_count": len(windows),
         "evidence_details": details,
     }
 
@@ -183,6 +346,8 @@ def _measure_evidence_retrieval(evidence: list[dict], ranked_chunks: list[dict],
 def measure_retrieval_hits(
     sample: dict,
     response: dict,
+    evidence_embedding_models=None,
+    evidence_similarity_threshold: float = DEFAULT_EVIDENCE_SIMILARITY_THRESHOLD,
 ) -> dict:
     citations = response.get("citations") or []
     ranked_chunks = _ranked_retrieved_chunks(response, citations)
@@ -229,7 +394,13 @@ def measure_retrieval_hits(
             response,
             [str(chunk.get("chunk_id") or index) for index, chunk in enumerate(ranked_chunks, start=1)],
         )
-        evidence_metrics = _measure_evidence_retrieval(evidence, ranked_chunks, retrieval_k)
+        evidence_metrics = _measure_evidence_retrieval(
+            evidence,
+            ranked_chunks,
+            retrieval_k,
+            evidence_embedding_models,
+            evidence_similarity_threshold,
+        )
         chunk_hit = None
         chunk_metrics = {"precision": None, "recall": None}
         chunk_reciprocal_rank = None
@@ -470,6 +641,7 @@ def load_dataset(
                 raise EvaluationError(
                     f"数据集第 {line_number} 行缺少 question_id 或 question"
                 )
+            _validate_evidence_schema(sample, f"dataset line {line_number}")
             if include_non_approved or sample.get("status") in {None, "approved"}:
                 samples.append(sample)
     if not samples and not allow_empty:
@@ -548,6 +720,8 @@ def load_dataset_from_testset_tool(
             raise EvaluationError(
                 f"Test-set tool export sample {index} is missing question_id or question"
             )
+        _validate_evidence_schema(sample, f"Test-set tool export sample {index}")
+        normalized_samples.append(sample)
     samples = select_dataset_samples(normalized_samples, selected_ids)
     metadata = data.get("metadata")
     return samples, metadata if isinstance(metadata, dict) else {}
@@ -601,6 +775,7 @@ def evaluate_sample(
     model: str | None,
     cleanup: bool,
     judge_agent: AnswerJudgeAgent | None = None,
+    evidence_embedding_models=None,
 ) -> dict:
     kb_path = quote(knowledge_base_id, safe="")
     conversation_id = None
@@ -627,7 +802,11 @@ def evaluate_sample(
             },
         )
         response["client_response_time_ms"] = round((perf_counter() - started_at) * 1_000, 2)
-        result = measure_retrieval_hits(sample, response)
+        result = measure_retrieval_hits(
+            sample,
+            response,
+            evidence_embedding_models,
+        )
         if judge_agent is not None:
             with collect_model_usage() as judge_usage:
                 try:
@@ -660,6 +839,7 @@ def run_evaluation(
     testset_tool_url: str | None = None,
     question_ids: list[str] | None = None,
     judge_agent: AnswerJudgeAgent | None = None,
+    evidence_embedding_models=None,
 ) -> dict:
     dataset_metadata = {}
     if testset_tool_url:
@@ -735,13 +915,15 @@ def run_evaluation(
                     model,
                     cleanup,
                     judge_agent,
+                    evidence_embedding_models,
                 )
                 if result.get("retrieval_basis") == "evidence":
                     retrieval_metrics = (
                         f"evidence_hit={result.get('evidence_hit')} "
                         f"evidence_recall_at_k={result.get('evidence_recall_at_k')} "
                         f"evidence_mrr={result.get('evidence_mrr')} "
-                        f"evidence_coverage_at_k={result.get('evidence_coverage_at_k')}"
+                        f"evidence_coverage_at_k={result.get('evidence_coverage_at_k')} "
+                        f"evidence_facts={result.get('evidence_covered_count')}/{result.get('evidence_count')}"
                     )
                 else:
                     retrieval_metrics = (
@@ -756,6 +938,12 @@ def run_evaluation(
                     f"latency_ms={result.get('response_time_ms')}",
                     flush=True,
                 )
+                if result.get("judge_error"):
+                    print(
+                        f"  JUDGE_ERROR {result['judge_error']}",
+                        file=sys.stderr,
+                        flush=True,
+                    )
             except httpx.TimeoutException:
                 remaining_count = len(samples) - index
                 error = f"单题请求超时（{timeout:g} 秒）"
@@ -790,6 +978,7 @@ def run_evaluation(
         "dataset": dataset_source,
         "dataset_metadata": dataset_metadata,
         "question_ids": question_ids or [],
+        "evidence_embedding_model": getattr(evidence_embedding_models, "embedding_model", None),
         "knowledge_base_id": knowledge_base_id,
         "base_url": base_url,
         "model": model,
@@ -841,17 +1030,17 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         judge_agent = None
-        if not args.no_judge:
-            from .config import Settings
-            from .model_gateway_factory import build_judge_gateway, build_model_gateway
+        from .config import Settings
+        from .model_gateway_factory import build_judge_gateway, build_model_gateway
 
-            settings = Settings()
+        settings = Settings()
+        models = build_model_gateway(settings)
+        if not args.no_judge:
             if args.judge_model:
                 settings = settings.model_copy(update={
                     "rag_judge_enabled": True,
                     "rag_judge_model": args.judge_model,
                 })
-            models = build_model_gateway(settings)
             judge_models = build_judge_gateway(settings, models)
             if judge_models is not None:
                 judge_agent = AnswerJudgeAgent(
@@ -871,6 +1060,7 @@ def main(argv: list[str] | None = None) -> int:
             args.testset_tool_url,
             args.question_ids,
             judge_agent,
+            models,
         )
     except (EvaluationError, ValueError) as exc:
         print(f"评测无法启动: {exc}", file=sys.stderr)

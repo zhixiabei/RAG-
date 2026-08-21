@@ -223,6 +223,16 @@ async def lifespan(app: FastAPI):
             services.testset_sync.close()
         if services.reranker:
             services.reranker.close()
+        closed_gateways = set()
+        for gateway in (
+            services.models,
+            services.context_compression_models,
+            services.judge_models,
+        ):
+            close = getattr(gateway, "close", None)
+            if gateway is not None and id(gateway) not in closed_gateways and callable(close):
+                close()
+                closed_gateways.add(id(gateway))
         services.repository.close()
 
 

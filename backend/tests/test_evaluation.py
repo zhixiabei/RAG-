@@ -193,6 +193,7 @@ class EvaluationTest(unittest.TestCase):
                 "conversation_id": "conversation-1",
                 "question": "问题",
                 "model": None,
+                "include_retrieved_content": False,
             }],
         )
     def test_summarizes_judge_scores_and_usage(self):

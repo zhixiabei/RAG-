@@ -56,8 +56,9 @@ class ModelCompletionGatewayTest(unittest.TestCase):
 
         self.assertEqual(post.call_args.kwargs["json"]["format"], schema)
 
-    @patch("rag_app.infrastructure.openai_compatible.gateway.httpx.post")
-    def test_openai_compatible_maps_completion_options(self, post):
+    @patch("rag_app.infrastructure.openai_compatible.gateway.httpx.Client")
+    def test_openai_compatible_maps_completion_options(self, client_class):
+        post = client_class.return_value.post
         response = Mock()
         response.json.return_value = {
             "choices": [{"message": {"content": " answer "}}],
@@ -90,8 +91,30 @@ class ModelCompletionGatewayTest(unittest.TestCase):
         self.assertEqual(collector.summary()["total_tokens"], 100)
         response.raise_for_status.assert_called_once()
 
-    @patch("rag_app.infrastructure.openai_compatible.gateway.httpx.post")
-    def test_openai_compatible_requests_json_for_response_schema(self, post):
+    @patch("rag_app.infrastructure.openai_compatible.gateway.httpx.Client")
+    def test_openai_compatible_reuses_client_across_completions(self, client_class):
+        post = client_class.return_value.post
+        response = Mock(status_code=200)
+        response.json.return_value = {
+            "choices": [{"message": {"content": "answer"}}],
+        }
+        post.return_value = response
+        gateway = OpenAICompatibleGateway(
+            "Provider", "https://chat.example/v1", "chat-key", ["chat-model"], "chat-model",
+            "EmbeddingProvider", "https://embed.example/v1", "embed-key", "embed-model",
+        )
+
+        gateway.complete([])
+        gateway.complete([])
+        gateway.close()
+
+        client_class.assert_called_once()
+        self.assertEqual(post.call_count, 2)
+        client_class.return_value.close.assert_called_once()
+
+    @patch("rag_app.infrastructure.openai_compatible.gateway.httpx.Client")
+    def test_openai_compatible_requests_json_for_response_schema(self, client_class):
+        post = client_class.return_value.post
         response = Mock()
         response.json.return_value = {"choices": [{"message": {"content": '{"decision":"SKIP"}'}}]}
         post.return_value = response
@@ -107,8 +130,9 @@ class ModelCompletionGatewayTest(unittest.TestCase):
             {"type": "json_object"},
         )
 
-    @patch("rag_app.infrastructure.openai_compatible.gateway.httpx.post")
-    def test_openai_compatible_retries_when_json_mode_is_unsupported(self, post):
+    @patch("rag_app.infrastructure.openai_compatible.gateway.httpx.Client")
+    def test_openai_compatible_retries_when_json_mode_is_unsupported(self, client_class):
+        post = client_class.return_value.post
         unsupported = Mock(status_code=400)
         success = Mock(status_code=200)
         success.json.return_value = {"choices": [{"message": {"content": '{"decision":"SKIP"}'}}]}
@@ -126,8 +150,9 @@ class ModelCompletionGatewayTest(unittest.TestCase):
         success.raise_for_status.assert_called_once()
 
     @patch("rag_app.infrastructure.openai_compatible.gateway.time.sleep")
-    @patch("rag_app.infrastructure.openai_compatible.gateway.httpx.post")
-    def test_openai_compatible_retries_transient_http_failures(self, post, sleep):
+    @patch("rag_app.infrastructure.openai_compatible.gateway.httpx.Client")
+    def test_openai_compatible_retries_transient_http_failures(self, client_class, sleep):
+        post = client_class.return_value.post
         unavailable = Mock(status_code=503, headers={})
         success = Mock(status_code=200)
         success.json.return_value = {"choices": [{"message": {"content": "answer"}}]}
@@ -144,26 +169,49 @@ class ModelCompletionGatewayTest(unittest.TestCase):
         sleep.assert_called_once_with(0.5)
         success.raise_for_status.assert_called_once()
 
-    @patch("rag_app.infrastructure.openai_compatible.gateway.httpx.post")
-    def test_openai_compatible_identifies_chat_timeout(self, post):
+    @patch("rag_app.infrastructure.openai_compatible.gateway.time.sleep")
+    @patch("rag_app.infrastructure.openai_compatible.gateway.httpx.Client")
+    def test_openai_compatible_retries_connection_failure(self, client_class, sleep):
+        post = client_class.return_value.post
+        success = Mock(status_code=200)
+        success.json.return_value = {
+            "choices": [{"message": {"content": "answer"}}],
+        }
+        post.side_effect = [httpx.ConnectError("connection reset"), success]
+        gateway = OpenAICompatibleGateway(
+            "Provider", "https://chat.example/v1", "chat-key", ["chat-model"], "chat-model",
+            "EmbeddingProvider", "https://embed.example/v1", "embed-key", "embed-model",
+            max_transient_retries=1,
+        )
+
+        self.assertEqual(gateway.complete([]), "answer")
+        self.assertEqual(post.call_count, 2)
+        sleep.assert_called_once_with(0.5)
+
+    @patch("rag_app.infrastructure.openai_compatible.gateway.httpx.Client")
+    def test_openai_compatible_identifies_chat_timeout(self, client_class):
+        post = client_class.return_value.post
         post.side_effect = httpx.ReadTimeout("timed out")
         gateway = OpenAICompatibleGateway(
             "DeepSeek", "https://chat.example/v1", "chat-key", ["chat-model"], "chat-model",
             "EmbeddingProvider", "https://embed.example/v1", "embed-key", "embed-model",
+            max_transient_retries=0,
         )
 
-        with self.assertRaisesRegex(RuntimeError, "DeepSeek 聊天接口超时"):
+        with self.assertRaisesRegex(RuntimeError, "DeepSeek 聊天接口连续 1 次超时"):
             gateway.complete([{"role": "user", "content": "question"}])
 
-    @patch("rag_app.infrastructure.openai_compatible.gateway.httpx.post")
-    def test_openai_compatible_identifies_embedding_timeout(self, post):
+    @patch("rag_app.infrastructure.openai_compatible.gateway.httpx.Client")
+    def test_openai_compatible_identifies_embedding_timeout(self, client_class):
+        post = client_class.return_value.post
         post.side_effect = httpx.ReadTimeout("timed out")
         gateway = OpenAICompatibleGateway(
             "DeepSeek", "https://chat.example/v1", "chat-key", ["chat-model"], "chat-model",
             "EmbeddingProvider", "https://embed.example/v1", "embed-key", "embed-model",
+            max_transient_retries=0,
         )
 
-        with self.assertRaisesRegex(RuntimeError, "EmbeddingProvider 接口超时"):
+        with self.assertRaisesRegex(RuntimeError, "EmbeddingProvider 接口连续 1 次超时"):
             gateway.embed(["question"])
 
 

@@ -212,7 +212,10 @@ h1, h2, h3, p { margin: 0; }
 
 .empty-workspace { display: grid; flex: 1; justify-items: center; align-content: center; min-height: 0; overflow-y: auto; padding: 32px; text-align: center; }.empty-mark { display: grid; place-items: center; width: 56px; height: 56px; border-radius: 14px; color: #2d6f73; background: #e3f0ee; }.empty-workspace h1 { margin-top: 18px; color: #37434a; font-size: 22px; }.empty-workspace > p { margin-top: 8px; color: #8a959b; font-size: 13px; }.empty-workspace .button { margin-top: 20px; }
 .modal-backdrop { position: fixed; z-index: 20; inset: 0; display: grid; place-items: center; padding: 20px; background: rgba(26, 35, 40, .35); }.modal-panel { width: min(420px, 100%); padding: 22px; border: 1px solid #dbe1e2; border-radius: 9px; background: #fff; box-shadow: 0 18px 50px rgba(32, 42, 50, .18); }.modal-heading { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 22px; }.modal-heading h2 { margin-top: 6px; color: #323d44; font-size: 19px; }.field-label { display: block; margin: 14px 0 7px; color: #5b6870; font-size: 12px; font-weight: 600; }.field-label span { color: #a4adb1; font-weight: 400; }.text-input { display: block; width: 100%; padding: 10px 11px; border: 1px solid #dbe1e3; border-radius: 6px; outline: 0; color: #344149; background: #fff; font-size: 13px; }.text-input:focus { border-color: #6a9b9b; box-shadow: 0 0 0 3px #e6f0ef; }.textarea { min-height: 82px; resize: vertical; }.modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 24px; }
-.evaluation-dialog { width: min(650px, 100%); }
+.evaluation-dialog { display: flex; width: min(650px, 100%); max-height: calc(100vh - 40px); max-height: calc(100dvh - 40px); flex-direction: column; overflow: hidden; }
+.evaluation-dialog > .modal-heading, .evaluation-dialog > .evaluation-dialog-message { flex: 0 0 auto; }
+.evaluation-dialog-body { min-height: 0; margin-right: -6px; padding-right: 6px; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
+.evaluation-dialog > .modal-actions { flex: 0 0 auto; margin-top: 16px; padding-top: 16px; border-top: 1px solid #e4e9ea; }
 .evaluation-dialog-heading { display: flex; align-items: flex-start; gap: 10px; }
 .evaluation-mark { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 7px; color: #285f63; background: #e3f0ee; }
 .evaluation-dialog-message { color: #657178; font-size: 13px; line-height: 1.65; }
@@ -249,6 +252,14 @@ h1, h2, h3, p { margin: 0; }
   .evaluation-result-info small.evaluation-error-detail { overflow: visible; color: #934848; text-overflow: clip; white-space: normal; }
   .evaluation-result-info small.evaluation-judge-detail { color: #3f6c55; }
   .evaluation-result-info small.evaluation-judge-reason { overflow: visible; color: #66756d; text-overflow: clip; white-space: normal; }
+.evaluation-result-info small.evaluation-evidence-summary { color: #365d4a; }
+.evaluation-evidence-details { margin-top: 3px; color: #5a6861; }
+.evaluation-evidence-details summary { width: fit-content; cursor: pointer; color: #49685a; font-size: 10px; }
+.evaluation-evidence-fact { display: grid; gap: 3px; margin-top: 6px; padding: 6px 7px; border-left: 2px solid #cbdcd1; background: #f9fcfa; }
+.evaluation-evidence-fact > div { display: flex; flex-wrap: wrap; gap: 8px; color: #5f6d66; font-size: 10px; }
+.evaluation-evidence-fact > div strong { color: #315942; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
+.evaluation-evidence-fact p { margin: 0; color: #465650; font-size: 10px; line-height: 1.45; }
+.evaluation-result-info .evaluation-evidence-fact small { overflow: visible; color: #78847e; text-overflow: clip; white-space: normal; }
   .evaluation-result-item > strong.passed { color: #34734b; }
   .evaluation-result-item > strong.failed { color: #a24e4e; }
   .evaluation-result-item > strong { flex: 0 0 auto; }

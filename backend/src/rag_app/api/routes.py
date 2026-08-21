@@ -42,6 +42,8 @@ def _local_dataset_path(settings, dataset_id: str | None) -> Path:
         raise EvaluationError("dataset_id is required for local evaluation")
     directory = _local_dataset_dir(settings).resolve()
     candidate = (directory / dataset_id).resolve()
+    if candidate.stem.casefold().endswith("_chunk_candidates"):
+        raise EvaluationError("chunk candidate files are not formal evaluation datasets")
     if candidate.parent != directory or candidate.suffix.casefold() != ".jsonl":
         raise EvaluationError("invalid local dataset_id")
     if not candidate.is_file():
@@ -55,6 +57,8 @@ def _list_local_datasets(settings) -> list[dict]:
         return []
     datasets = []
     for path in sorted(directory.glob("*.jsonl")):
+        if path.stem.casefold().endswith("_chunk_candidates"):
+            continue
         if not path.is_file():
             continue
         try:
@@ -260,6 +264,7 @@ def evaluate_knowledge_base(
             None if source == "local" else testset_url,
             payload.question_ids,
             judge_agent=getattr(service, "answer_judge", None),
+            evidence_embedding_models=service.models,
         )
     except EvaluationError as exc:
         raise HTTPException(422, f"评测无法启动: {exc}") from exc
