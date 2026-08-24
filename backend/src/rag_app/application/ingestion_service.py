@@ -408,6 +408,7 @@ class IngestionService:
                                 "relative_path": relative_path,
                                 "page_number": chunk.page_number,
                                 "section_path": chunk.section_path,
+                                "chunk_index": chunk.index,
                                 "text": chunk.text,
                             }
                             for chunk in chunk_batch

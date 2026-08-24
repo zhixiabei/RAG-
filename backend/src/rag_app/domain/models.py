@@ -23,6 +23,8 @@ class SearchHit:
     file_name: str = ""
     relative_path: str = ""
     relevance_score: float | None = None
+    section_path: str | None = None
+    chunk_index: int | None = None
 
 
 @dataclass(frozen=True)
@@ -34,6 +36,8 @@ class Citation:
     score: float
     relevance_score: float | None = None
     excerpt: str = ""
+    section_path: str | None = None
+    chunk_index: int | None = None
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -44,4 +48,6 @@ class Citation:
             "score": self.score,
             "relevance_score": self.relevance_score,
             "excerpt": self.excerpt,
+            "section_path": self.section_path,
+            "chunk_index": self.chunk_index,
         }

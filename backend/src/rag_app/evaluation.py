@@ -159,6 +159,8 @@ def _ranked_retrieved_chunks(response: dict, citations: list[dict]) -> list[dict
             "chunk_id": citation.get("chunk_id"),
             "document_id": citation.get("document_id"),
             "title": citation.get("title"),
+            "section_path": citation.get("section_path"),
+            "chunk_index": citation.get("chunk_index"),
             "text": citation.get("excerpt") or "",
         }
         for citation in citations
@@ -188,7 +190,11 @@ def _build_evidence_windows(ranked_chunks: list[dict], retrieval_k: int) -> list
         chunks.append({
             "rank": rank,
             "chunk_id": str(chunk.get("chunk_id") or rank),
-            "chunk_index": _chunk_index(chunk.get("chunk_id")),
+            "chunk_index": (
+                int(chunk["chunk_index"])
+                if chunk.get("chunk_index") is not None
+                else _chunk_index(chunk.get("chunk_id"))
+            ),
             "document_group": str(chunk.get("document_id") or _document_key(document_name)),
             "document_key": _document_key(document_name),
             "text": text,

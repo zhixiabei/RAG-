@@ -148,13 +148,15 @@ class RagService:
         citations = _deduplicate_citations([
             *[
                 Citation(
-                    hit.document_id,
-                    hit.chunk_id,
-                    hit.title,
-                    hit.page_number,
-                    hit.score,
-                    hit.relevance_score,
-                    hit.text[:500],
+                    document_id=hit.document_id,
+                    chunk_id=hit.chunk_id,
+                    title=hit.file_name or hit.title,
+                    page_number=hit.page_number,
+                    score=hit.score,
+                    relevance_score=hit.relevance_score,
+                    excerpt=hit.text[:500],
+                    section_path=hit.section_path,
+                    chunk_index=hit.chunk_index,
                 ).as_dict()
                 for hit in context_hits
             ],
@@ -218,6 +220,8 @@ class RagService:
                     "document_id": hit.document_id,
                     "title": hit.file_name or hit.title,
                     "page_number": hit.page_number,
+                    "section_path": hit.section_path,
+                    "chunk_index": hit.chunk_index,
                     "text": hit.text,
                 }
                 for hit in hits

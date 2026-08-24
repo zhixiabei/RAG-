@@ -244,6 +244,7 @@ class IngestionServiceTest(unittest.TestCase):
 
         self.assertIn("章节路径: 安装/Windows", service.models.embedded_texts[0])
         self.assertEqual(service.vectors.points[0]["section_path"], "安装/Windows")
+        self.assertEqual(service.vectors.points[0]["chunk_index"], 0)
 
     def test_batches_embeddings_and_vector_upserts(self):
         chunks = [ParsedChunk(index, f"知识内容 {index}", index + 1) for index in range(5)]

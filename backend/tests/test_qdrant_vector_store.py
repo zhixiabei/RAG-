@@ -58,6 +58,29 @@ class QdrantVectorStoreTest(unittest.TestCase):
         self.assertFalse(params.exact)
 
     @patch("rag_app.infrastructure.qdrant.vector_store.QdrantClient")
+    def test_search_hit_preserves_section_path_and_chunk_index(self, client_class):
+        client = client_class.return_value
+        client.query_points.return_value.points = [SimpleNamespace(
+            score=0.91,
+            payload={
+                "chunk_id": "doc-1:0",
+                "document_id": "doc-1",
+                "knowledge_base_id": "kb-1",
+                "title": "指南.docx",
+                "text": "安装步骤",
+                "page_number": None,
+                "section_path": "安装/Windows",
+                "chunk_index": 0,
+            },
+        )]
+        store = QdrantVectorStore("http://qdrant:6333", "chunks")
+
+        hit = store.search("kb-1", [0.1, 0.2], 1)[0]
+
+        self.assertEqual(hit.section_path, "安装/Windows")
+        self.assertEqual(hit.chunk_index, 0)
+
+    @patch("rag_app.infrastructure.qdrant.vector_store.QdrantClient")
     def test_keyword_search_prioritizes_exact_identifier_matches(self, client_class):
         client = client_class.return_value
 

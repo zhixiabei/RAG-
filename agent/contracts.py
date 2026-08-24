@@ -13,6 +13,8 @@ class SearchHit(Protocol):
     relative_path: str
     relevance_score: float | None
     page_number: int | None
+    section_path: str | None
+    chunk_index: int | None
 
 
 class ModelGateway(Protocol):

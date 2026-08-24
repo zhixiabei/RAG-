@@ -2,7 +2,12 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { marked } from 'marked'
 
-import { injectInlineCitations, normalizeMathDelimiters, referencedCitations } from './markdown.js'
+import {
+  citationSourceMeta,
+  injectInlineCitations,
+  normalizeMathDelimiters,
+  referencedCitations,
+} from './markdown.js'
 
 test('normalizes common LaTeX delimiters', () => {
   assert.equal(normalizeMathDelimiters('inline \\(x^2\\)'), 'inline $x^2$')
@@ -37,6 +42,26 @@ test('renders valid evidence markers as numbered inline citations', () => {
   assert.match(rendered, /class="inline-citation"[^>]*>\[1\]<\/sup>/)
   assert.match(rendered, />\[2\]<\/sup>/)
   assert.match(rendered, /构造演化\.pdf/)
+})
+
+test('formats citation location with a page or section and includes the chunk id', () => {
+  assert.equal(
+    citationSourceMeta({ chunk_id: 'doc-1:0', page_number: 3, section_path: '摘要' }),
+    '第 3 页 · Chunk ID doc-1:0',
+  )
+  assert.equal(
+    citationSourceMeta({ chunk_id: 'doc-2:0', section_path: '第一章/范围' }),
+    '章节 第一章/范围 · Chunk ID doc-2:0',
+  )
+})
+
+test('uses the section in inline citation tooltips when no page is available', () => {
+  const rendered = injectInlineCitations(
+    '结论。[证据:doc-1:0]',
+    [{ chunk_id: 'doc-1:0', title: '制度.pdf', section_path: '第一章/范围' }],
+  )
+
+  assert.match(rendered, /制度\.pdf · 章节 第一章\/范围/)
 })
 
 test('marks unknown evidence ids and leaves code examples unchanged', () => {

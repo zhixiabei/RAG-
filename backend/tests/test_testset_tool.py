@@ -73,8 +73,16 @@ class TestsetToolClientTest(unittest.TestCase):
 
         self.assertEqual(captured["path"], "/api/documents/import")
         self.assertEqual(captured["payload"]["documents"][0]["id"], "8f-document")
+        self.assertEqual(captured["payload"]["documents"][0]["sourcePath"], "reports/report.pdf")
         self.assertEqual(captured["payload"]["chunks"][0]["id"], "8f-document:0")
-        self.assertEqual(captured["payload"]["chunks"][0]["text"], "first chunk")
+        chunk = captured["payload"]["chunks"][0]
+        self.assertEqual(chunk["documentName"], "report.pdf")
+        self.assertEqual(chunk["page"], 2)
+        self.assertEqual(chunk["section"], "summary")
+        self.assertEqual(chunk["chunkIndex"], 0)
+        self.assertEqual(chunk["metadata"]["folderPath"], "reports")
+        self.assertEqual(chunk["metadata"]["relativePath"], "reports/report.pdf")
+        self.assertEqual(chunk["text"], "first chunk")
         self.assertEqual(result["chunk_count"], 1)
 
     def test_reports_testset_api_errors(self):

@@ -145,13 +145,19 @@ class RagServiceTest(unittest.TestCase):
             SearchHit("chunk-3", "doc-2", "kb-1", "流程.pdf", "第三段", 0.81, 1),
             SearchHit("chunk-4", "doc-3", "kb-1", "其他.pdf", "第四段", 0.70, 1),
         ]
-        hits[0] = replace(hits[0], relevance_score=0.97)
+        hits[0] = replace(
+            hits[0],
+            file_name="制度原文.pdf",
+            relevance_score=0.97,
+            section_path="第一章/报销标准",
+            chunk_index=0,
+        )
         repository = FakeRepository()
         vectors = FakeVectorStore(hits)
         models = FakeModelGateway(retrieval_needed=True)
 
         result = self.build_service(repository, vectors, models, top_k=3).answer(
-            "kb-1", "conversation-1", "报销制度是什么？"
+            "kb-1", "conversation-1", "报销制度是什么？", include_retrieved_content=True
         )
 
         self.assertEqual(models.embed_calls, [["报销制度是什么？"]])
@@ -167,6 +173,12 @@ class RagServiceTest(unittest.TestCase):
         self.assertEqual(result["citations"][0]["score"], 0.92)
         self.assertEqual(result["citations"][0]["relevance_score"], 0.97)
         self.assertEqual(result["citations"][0]["excerpt"], "第一段")
+        self.assertEqual(result["citations"][0]["title"], "制度原文.pdf")
+        self.assertEqual(result["citations"][0]["section_path"], "第一章/报销标准")
+        self.assertEqual(result["citations"][0]["chunk_index"], 0)
+        self.assertEqual(result["retrieved_chunks"][0]["section_path"], "第一章/报销标准")
+        self.assertEqual(result["retrieved_chunks"][0]["chunk_index"], 0)
+        self.assertEqual(result["retrieved_chunks"][0]["title"], "制度原文.pdf")
         self.assertEqual(result["agent_trace"], [
             {"agent": "retrieval_decision", "status": "completed", "outcome": "retrieve"},
             {"agent": "knowledge_retrieval", "status": "completed", "retrieved_count": 3,

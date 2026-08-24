@@ -2,7 +2,7 @@
 import { computed, nextTick, ref, watch } from 'vue'
 import { Bot, BrainCircuit, Check, FileText, Hash, LoaderCircle, MessageSquareText, Paperclip, Pencil, Plus, RefreshCw, Send, TextQuote, Timer, Trash2, UserRound, X } from 'lucide-vue-next'
 import DeleteConfirmDialog from './DeleteConfirmDialog.vue'
-import { referencedCitations, renderMarkdown } from '../utils/markdown'
+import { citationSourceMeta, referencedCitations, renderMarkdown } from '../utils/markdown'
 import { canRecoverAnswerFailure, recoverCompletedAnswer } from '../utils/chatRecovery'
 import { SUPPORTED_DOCUMENT_ACCEPT, isSupportedDocument } from '../utils/supportedDocuments'
 import {
@@ -75,16 +75,6 @@ function tokenUsageTitle(usage, serverResponseTimeMs) {
 
 function citedSources(message) {
   return referencedCitations(message.content, message.citations)
-}
-
-function citationSourceMeta(citation) {
-  const parts = []
-  if (citation.page_number) parts.push(`第 ${citation.page_number} 页`)
-  if (citation.relevance_score != null) {
-    parts.push(`相关度 ${Math.round(citation.relevance_score * 100)}%`)
-  }
-  parts.push(`片段 ${citation.chunk_id}`)
-  return parts.join(' · ')
 }
 
 async function parseAttachment(entry, knowledgeBaseId) {

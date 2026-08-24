@@ -24,9 +24,28 @@ function escapeAttribute(value) {
   })[character])
 }
 
+export function citationLocation(citation) {
+  if (citation?.page_number != null) return `第 ${citation.page_number} 页`
+  const section = String(citation?.section_path || '').trim()
+  return section ? `章节 ${section}` : ''
+}
+
+export function citationSourceMeta(citation) {
+  const parts = []
+  const location = citationLocation(citation)
+  if (location) parts.push(location)
+  if (citation?.relevance_score != null) {
+    parts.push(`相关度 ${Math.round(citation.relevance_score * 100)}%`)
+  }
+  const chunkId = String(citation?.chunk_id || '').trim()
+  if (chunkId) parts.push(`Chunk ID ${chunkId}`)
+  return parts.join(' · ')
+}
+
 function citationTitle(citation) {
-  const location = citation.page_number ? ` · 第 ${citation.page_number} 页` : ''
-  return `${citation.title || '未命名来源'}${location}`
+  const location = citationLocation(citation)
+  const locationSuffix = location ? ` · ${location}` : ''
+  return `${citation.title || '未命名来源'}${locationSuffix}`
 }
 
 function citationIds(rawIds, lookup) {

@@ -225,6 +225,8 @@ class QdrantVectorStore:
                     if part.strip("/\\")
                 )
             ),
+            section_path=payload.get("section_path"),
+            chunk_index=payload.get("chunk_index"),
         )
 
     def delete_document(self, document_id: str) -> None:
