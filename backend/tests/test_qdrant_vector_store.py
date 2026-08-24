@@ -107,6 +107,22 @@ class QdrantVectorStoreTest(unittest.TestCase):
         self.assertEqual(search_filter.min_should.min_count, 1)
 
     @patch("rag_app.infrastructure.qdrant.vector_store.QdrantClient")
+    def test_keyword_search_discards_qdrant_matches_without_exact_terms(self, client_class):
+        client = client_class.return_value
+        client.scroll.return_value = ([SimpleNamespace(payload={
+            "chunk_id": "unrelated:1",
+            "document_id": "unrelated",
+            "knowledge_base_id": "kb-1",
+            "title": "无关文档",
+            "text": "产液量和含水率统计",
+        })], None)
+        store = QdrantVectorStore("http://qdrant:6333", "chunks")
+
+        hits = store.search_keywords("kb-1", ["化164-3"], 10)
+
+        self.assertEqual(hits, [])
+
+    @patch("rag_app.infrastructure.qdrant.vector_store.QdrantClient")
     def test_existing_collection_updates_changed_hnsw_and_only_missing_payload_indexes(self, client_class):
         client = client_class.return_value
         client.collection_exists.return_value = True

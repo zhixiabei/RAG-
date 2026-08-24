@@ -23,7 +23,7 @@ JUDGE_RESPONSE_SCHEMA = {
         "correctness_score": {"type": "integer", "minimum": 0, "maximum": 100},
         "completeness_score": {"type": "integer", "minimum": 0, "maximum": 100},
         "faithfulness_score": {"type": "integer", "minimum": 0, "maximum": 100},
-        "reason": {"type": "string"},
+        "reason": {"type": "string", "minLength": 1},
     },
     "required": [
         "correctness_score",
@@ -171,7 +171,11 @@ class AnswerJudgeAgent:
         )
         reason = str(payload.get("reason") or "").strip()
         if not reason:
-            raise JudgeOutputError("Judge 模型未返回评分理由")
+            reason = (
+                "Judge 未返回文字理由；已保留其有效分项评分："
+                f"正确性 {correctness * 100:g}，完整性 {completeness * 100:g}，"
+                f"忠实性 {faithfulness * 100:g}。"
+            )
         return AnswerJudgment(
             score=overall,
             correctness_score=correctness,

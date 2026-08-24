@@ -183,18 +183,28 @@ class QdrantVectorStore:
                 if keyword and keyword in text
             )
 
+        scored_points = [
+            (point, keyword_score(point))
+            for point in points
+        ]
         ranked = sorted(
-            points,
-            key=lambda point: (
-                keyword_score(point),
-                str(point.payload.get("chunk_id") or ""),
+            (
+                (point, score)
+                for point, score in scored_points
+                if score > 0
+            ),
+            key=lambda item: (
+                item[1],
+                str(item[0].payload.get("chunk_id") or ""),
             ),
             reverse=True,
         )[:limit]
-        max_score = max((keyword_score(point) for point in ranked), default=1)
+        if not ranked:
+            return []
+        max_score = ranked[0][1]
         return [
-            self._to_search_hit(point, keyword_score(point) / max_score)
-            for point in ranked
+            self._to_search_hit(point, score / max_score)
+            for point, score in ranked
         ]
 
     @staticmethod

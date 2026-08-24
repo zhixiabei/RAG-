@@ -23,6 +23,7 @@ SUPPORTED_SUFFIXES = frozenset(
         ".jsonl",
         ".json",
         ".pdf",
+        ".doc",
         ".docx",
         ".pptx",
         ".xlsx",

@@ -121,6 +121,20 @@ class AnswerJudgeAgentTest(unittest.TestCase):
 
         self.assertEqual(judgment.score, 0.8)
 
+    def test_preserves_valid_scores_when_reason_is_empty(self):
+        models = FakeModels(json.dumps({
+            "correctness_score": 90,
+            "completeness_score": 80,
+            "faithfulness_score": 70,
+            "reason": "",
+        }))
+
+        judgment = AnswerJudgeAgent(models).run({"question": "问题"}, "答案")
+
+        self.assertEqual(judgment.score, 0.81)
+        self.assertIn("未返回文字理由", judgment.reason)
+        self.assertIn("正确性 90", judgment.reason)
+
 
 if __name__ == "__main__":
     unittest.main()

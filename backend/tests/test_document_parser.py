@@ -306,6 +306,7 @@ class DocumentParserSpecialExtensionTest(unittest.TestCase):
             "records.jsonl",
             "data.JSON",
             "report.pdf",
+            "legacy.doc",
             "report.docx",
             "table.xlsx",
             "slides.pptx",
@@ -313,7 +314,7 @@ class DocumentParserSpecialExtensionTest(unittest.TestCase):
             "readme.md",
             "readme.markdown",
         ]
-        rejected = ["legacy.doc", "table.xls", "data.csv", "map.gdb", "README"]
+        rejected = ["table.xls", "data.csv", "map.gdb", "README"]
 
         self.assertTrue(all(self.parser.supports(name) for name in allowed))
         self.assertTrue(all(not self.parser.supports(name) for name in rejected))

@@ -74,9 +74,9 @@ class Settings(BaseSettings):
     rag_judge_pass_threshold: float = 0.7
     rag_judge_max_evidence_chars: int = 12_000
     rag_judge_max_output_tokens: int = 300
-    rag_judge_max_concurrency: int = 2
+    rag_judge_max_concurrency: int = 1
     rag_judge_timeout_seconds: float = 60.0
-    rag_judge_max_retries: int = 1
+    rag_judge_max_retries: int = 0
     rag_judge_retry_base_delay_seconds: float = 1.0
     rag_judge_retry_max_delay_seconds: float = 5.0
     evaluation_request_timeout_seconds: float = 90.0
