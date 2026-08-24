@@ -2,7 +2,12 @@ import logging
 from time import perf_counter
 from typing import Callable, TypeVar
 
-from agent import AnswerAgent, KnowledgeRetrievalAgent, RetrievalDecisionAgent
+from agent import (
+    AnswerAgent,
+    KnowledgeRetrievalAgent,
+    RetrievalDecision,
+    RetrievalDecisionAgent,
+)
 from agent.context import format_knowledge_catalog, format_knowledge_catalog_answer
 from agent.telemetry import capture_request_metrics
 from agent.query_intent import (
@@ -81,6 +86,7 @@ class RagService:
         attachment_context: str = "",
         attachment_citations: list[dict] | None = None,
         include_retrieved_content: bool = False,
+        force_retrieval: bool = False,
     ) -> dict:
         knowledge_base = _run_stage(
             "读取知识库",
@@ -108,9 +114,13 @@ class RagService:
                     file_lookup=file_lookup_question,
                 )
 
-        decision = _run_stage(
-            "检索判断",
-            lambda: self.decision_agent.run(question, history),
+        decision = (
+            RetrievalDecision(True)
+            if force_retrieval
+            else _run_stage(
+                "检索判断",
+                lambda: self.decision_agent.run(question, history),
+            )
         )
         retrieval_used = decision.should_retrieve
         hits = []
@@ -184,7 +194,7 @@ class RagService:
             "agent_trace": [
                 {
                     "agent": self.decision_agent.name,
-                    "status": "completed",
+                    "status": "forced" if force_retrieval else "completed",
                     "outcome": decision.outcome,
                 },
                 {

@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 from rag_app.infrastructure.ollama.gateway import OllamaGateway
 from rag_app.infrastructure.openai_compatible.gateway import OpenAICompatibleGateway
-from rag_app.model_gateway_factory import build_judge_gateway
+from rag_app.model_gateway_factory import build_judge_gateway, build_model_gateway
 
 
 def settings(**overrides):
@@ -13,7 +13,7 @@ def settings(**overrides):
         "rag_judge_base_url": "",
         "rag_judge_api_key": "",
         "rag_judge_model": "",
-        "rag_judge_timeout_seconds": 30.0,
+        "rag_judge_timeout_seconds": 60.0,
         "rag_judge_max_retries": 1,
         "rag_judge_retry_base_delay_seconds": 1.0,
         "rag_judge_retry_max_delay_seconds": 5.0,
@@ -28,12 +28,29 @@ def settings(**overrides):
         "remote_embedding_base_url": "https://embed.example/v1",
         "remote_embedding_api_key": "embed-key",
         "remote_embedding_model": "embed-model",
+        "remote_llm_timeout_seconds": 60.0,
+        "remote_llm_max_retries": 0,
+        "remote_llm_retry_base_delay_seconds": 0.5,
+        "remote_llm_retry_max_delay_seconds": 5.0,
     }
     values.update(overrides)
     return SimpleNamespace(**values)
 
 
 class JudgeGatewayFactoryTest(unittest.TestCase):
+    def test_builds_remote_answer_gateway_with_bounded_timeout(self):
+        result = build_model_gateway(settings(
+            model_mode="remote",
+            remote_default_chat_model="answer-model",
+        ))
+
+        self.assertIsInstance(result, OpenAICompatibleGateway)
+        self.assertEqual(result.request_timeout_seconds, 60.0)
+        self.assertEqual(result.max_transient_retries, 0)
+        self.assertEqual(result.retry_base_delay_seconds, 0.5)
+        self.assertEqual(result.retry_max_delay_seconds, 5.0)
+        result.close()
+
     def test_reuses_default_gateway_when_model_is_empty(self):
         default = SimpleNamespace(chat_model="answer-model")
 
@@ -81,7 +98,7 @@ class JudgeGatewayFactoryTest(unittest.TestCase):
         self.assertEqual(result.base_url, "https://judge.example/v1")
         self.assertEqual(result.chat_model, "judge-model")
         self.assertEqual(result.models, ["judge-model"])
-        self.assertEqual(result.request_timeout_seconds, 30.0)
+        self.assertEqual(result.request_timeout_seconds, 60.0)
         self.assertEqual(result.max_transient_retries, 1)
         self.assertEqual(result.retry_base_delay_seconds, 1.0)
         self.assertEqual(result.retry_max_delay_seconds, 5.0)

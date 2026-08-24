@@ -145,7 +145,7 @@ flowchart TD
 3. 将原文件流写入 MinIO：`{kb_id}/{document_id}/source/{file_name}`。
 4. 在 PostgreSQL 创建 `processing` 文档记录。
 5. 根据文件类型解析文本。
-6. `_chunk_sources()` 清理空白，按 1800 字符切块，相邻块重叠 240 字符（`document_parser.py:801`）。这里按字符而不是 token，也不优先寻找句子边界。
+6. `_chunk_sources()` 以页、幻灯片、工作表和解析器章节为硬边界，并识别 Markdown、中文编号标题及 DOCX Heading 层级；章节内优先在段落、行、句子或空白边界切分，只有无自然边界的长文本才退回固定字符窗口。
 7. 每个 chunk 的 embedding 输入不是纯正文，而是：完整路径、文件名、后缀、正文。这提高按文件名/路径检索的机会。
 8. embedding 默认每批 32 个；服务端 semaphore 默认允许两个入库、embedding 单并发。
 9. Qdrant 使用 cosine collection，point payload 保存 chunk ID、知识库 ID、文档 ID、路径、页码、正文等。

@@ -55,6 +55,18 @@ PARSABLE_SUFFIXES = SUPPORTED_SUFFIXES | frozenset(
 
 CHUNK_SIZE = 400
 CHUNK_OVERLAP = 50
+MIN_NATURAL_CHUNK_SIZE = CHUNK_SIZE // 2
+
+MARKDOWN_HEADING_PATTERN = re.compile(r"^(#{1,6})\s+(.+?)(?:\s+#+)?$")
+NUMBERED_HEADING_PATTERNS = (
+    (re.compile(r"^第[一二三四五六七八九十百千万零〇两\d]+[篇章部]\s*[:：]?\s*(.*)$"), 1),
+    (re.compile(r"^第[一二三四五六七八九十百千万零〇两\d]+节\s*[:：]?\s*(.*)$"), 2),
+    (re.compile(r"^第[一二三四五六七八九十百千万零〇两\d]+条\s*[:：]?\s*(.*)$"), 3),
+    (re.compile(r"^[一二三四五六七八九十百千万零〇两]+、\s*(.+)$"), 1),
+    (re.compile(r"^[（(][一二三四五六七八九十百千万零〇两]+[）)]\s*(.+)$"), 2),
+    (re.compile(r"^(\d+(?:\.\d+)+)[.、]?\s+(.+)$"), None),
+    (re.compile(r"^\d+[.、]\s*(.+)$"), 1),
+)
 
 GEOMAP_MAP_MAGIC = b"Geomap v3.60 Map\x00"
 GEOMAP_LAYER_MAGIC = b"Geomap v3.60 Layer\x00\x00"
@@ -255,13 +267,52 @@ class DocumentParser:
             if repaired_content is content:
                 raise
             document = Document(BytesIO(repaired_content))
-        parts = [paragraph.text for paragraph in document.paragraphs if paragraph.text.strip()]
-        for table in document.tables:
-            for row in table.rows:
-                values = [cell.text.strip() for cell in row.cells]
-                if any(values):
-                    parts.append("\t".join(values))
-        return [(None, None, "\n".join(parts))]
+        sources: list[tuple[int | None, str | None, str]] = []
+        heading_stack: dict[int, str] = {}
+        section_path: str | None = None
+        parts: list[str] = []
+
+        def flush() -> None:
+            text = "\n".join(parts).strip()
+            if text:
+                sources.append((None, section_path, text))
+            parts.clear()
+
+        for block in document.iter_inner_content():
+            if hasattr(block, "rows"):
+                for row in block.rows:
+                    values = [cell.text.strip() for cell in row.cells]
+                    if any(values):
+                        parts.append("\t".join(values))
+                continue
+
+            text = block.text.strip()
+            if not text:
+                continue
+            heading_level = self._docx_heading_level(block)
+            if heading_level:
+                flush()
+                heading_stack = {
+                    level: heading
+                    for level, heading in heading_stack.items()
+                    if level < heading_level
+                }
+                heading_stack[heading_level] = text
+                section_path = self._join_section_path(
+                    *(heading_stack[level] for level in sorted(heading_stack))
+                )
+            parts.append(text)
+        flush()
+        return sources
+
+    @staticmethod
+    def _docx_heading_level(paragraph: Any) -> int | None:
+        style = getattr(paragraph, "style", None)
+        for value in (getattr(style, "style_id", ""), getattr(style, "name", "")):
+            match = re.search(r"(?:heading|标题)\s*([1-6])$", str(value), re.IGNORECASE)
+            if match:
+                return int(match.group(1))
+        return None
 
     def _parse_doc(self, content: bytes) -> list[tuple[int | None, str | None, str]]:
         if sys.platform != "win32":
@@ -1110,28 +1161,147 @@ class DocumentParser:
         self,
         sources: Iterable[tuple[int | None, str | None, str]],
     ) -> list[ParsedChunk]:
-        text_parts = []
-        for _page_number, _section_path, raw_text in sources:
-            text = re.sub(
-                r"\n{3,}",
-                "\n\n",
-                re.sub(r"[ \t]+", " ", raw_text.replace("\x00", "")),
-            ).strip()
-            if text:
-                text_parts.append(text)
-
-        text = "\n\n".join(text_parts)
         chunks: list[ParsedChunk] = []
+        for page_number, source_section_path, raw_text in sources:
+            text = self._normalize_chunk_text(raw_text)
+            if not text:
+                continue
+
+            for section_path, section_text in self._split_source_sections(source_section_path, text):
+                for chunk_text in self._split_section_text(section_text):
+                    chunks.append(
+                        ParsedChunk(
+                            index=len(chunks),
+                            text=chunk_text,
+                            page_number=page_number,
+                            section_path=section_path,
+                        )
+                    )
+        return chunks
+
+    @staticmethod
+    def _normalize_chunk_text(raw_text: str) -> str:
+        text = raw_text.replace("\x00", "").replace("\r\n", "\n").replace("\r", "\n")
+        text = re.sub(r"[ \t]+", " ", text)
+        text = re.sub(r" *\n *", "\n", text)
+        return re.sub(r"\n{3,}", "\n\n", text).strip()
+
+    def _split_source_sections(
+        self,
+        source_section_path: str | None,
+        text: str,
+    ) -> list[tuple[str | None, str]]:
+        sections: list[tuple[str | None, str]] = []
+        heading_stack: dict[int, str] = {}
+        current_path = source_section_path
+        current_lines: list[str] = []
+        fence_marker: str | None = None
+
+        def flush() -> None:
+            section_text = "\n".join(current_lines).strip()
+            if section_text:
+                sections.append((current_path, section_text))
+            current_lines.clear()
+
+        for line in text.splitlines():
+            stripped = line.strip()
+            marker_match = re.match(r"^(?:\x60{3,}|~{3,})", stripped)
+            if marker_match:
+                marker = marker_match.group(0)[0]
+                if fence_marker == marker:
+                    fence_marker = None
+                elif fence_marker is None:
+                    fence_marker = marker
+
+            heading = None if fence_marker else self._heading_details(stripped)
+            if heading:
+                flush()
+                level, title = heading
+                heading_stack = {
+                    existing_level: existing_title
+                    for existing_level, existing_title in heading_stack.items()
+                    if existing_level < level
+                }
+                heading_stack[level] = title
+                current_path = self._join_section_path(
+                    source_section_path,
+                    *(heading_stack[key] for key in sorted(heading_stack)),
+                )
+            current_lines.append(line)
+
+        flush()
+        return sections
+
+    @staticmethod
+    def _heading_details(line: str) -> tuple[int, str] | None:
+        if not line or len(line) > 120 or line.endswith(("。", "！", "？", "!", "?", "；", ";")):
+            return None
+
+        markdown_match = MARKDOWN_HEADING_PATTERN.match(line)
+        if markdown_match:
+            return len(markdown_match.group(1)), markdown_match.group(2).strip()
+
+        for pattern, fixed_level in NUMBERED_HEADING_PATTERNS:
+            match = pattern.match(line)
+            if not match:
+                continue
+            if fixed_level is None:
+                number = match.group(1)
+                title = match.group(2).strip()
+                return min(number.count(".") + 1, 6), f"{number} {title}"
+            title = match.group(1).strip()
+            return fixed_level, line if line.startswith("第") else title
+        return None
+
+    @staticmethod
+    def _join_section_path(*parts: str | None) -> str | None:
+        cleaned: list[str] = []
+        for part in parts:
+            for segment in part.split("/") if part else ():
+                value = segment.strip(" \t")
+                if value and (not cleaned or cleaned[-1] != value):
+                    cleaned.append(value)
+        return "/".join(cleaned) or None
+
+    def _split_section_text(self, text: str) -> list[str]:
+        chunks: list[str] = []
         start = 0
         while start < len(text):
-            end = min(start + CHUNK_SIZE, len(text))
-            chunks.append(
-                ParsedChunk(
-                    index=len(chunks),
-                    text=text[start:end],
-                )
-            )
+            hard_end = min(start + CHUNK_SIZE, len(text))
+            end = self._natural_chunk_end(text, start, hard_end)
+            chunk_text = text[start:end].strip()
+            if chunk_text:
+                chunks.append(chunk_text)
             if end >= len(text):
                 break
-            start = max(start + 1, end - CHUNK_OVERLAP)
+            next_start = self._natural_overlap_start(text, start, end)
+            start = next_start if next_start > start else end
         return chunks
+
+    @staticmethod
+    def _natural_chunk_end(text: str, start: int, hard_end: int) -> int:
+        if hard_end >= len(text):
+            return len(text)
+
+        search_start = min(start + MIN_NATURAL_CHUNK_SIZE, hard_end)
+        window = text[search_start:hard_end]
+        boundary_patterns = (
+            re.compile(r"\n\n"),
+            re.compile(r"\n"),
+            re.compile(r"[。！？!?；;](?:[\"'”’）)])?"),
+            re.compile(r"\s+"),
+        )
+        for pattern in boundary_patterns:
+            matches = list(pattern.finditer(window))
+            if matches:
+                return search_start + matches[-1].end()
+        return hard_end
+
+    @staticmethod
+    def _natural_overlap_start(text: str, chunk_start: int, chunk_end: int) -> int:
+        target = max(chunk_start + 1, chunk_end - CHUNK_OVERLAP)
+        window = text[target:chunk_end]
+        boundary = re.search(r"(?:\n+|[。！？!?；;](?:[\"'”’）)])?\s*|\s+)", window)
+        if boundary:
+            return target + boundary.end()
+        return target

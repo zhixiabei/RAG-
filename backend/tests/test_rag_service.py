@@ -115,6 +115,29 @@ class RagServiceTest(unittest.TestCase):
         self.assertEqual(answer_history, history)
         self.assertEqual(repository.saved[0][2], "current question")
 
+    def test_force_retrieval_skips_decision_completion(self):
+        repository = FakeRepository()
+        vectors = FakeVectorStore([
+            SearchHit("chunk-1", "doc-1", "kb-1", "资料.pdf", "测试证据", 0.9, 1),
+        ])
+        models = FakeModelGateway(retrieval_needed=False)
+
+        result = self.build_service(repository, vectors, models).answer(
+            "kb-1",
+            "conversation-1",
+            "测试集问题",
+            force_retrieval=True,
+        )
+
+        self.assertTrue(result["retrieval_used"])
+        self.assertEqual(models.embed_calls, [["测试集问题"]])
+        self.assertEqual(len(models.completion_calls), 1)
+        self.assertEqual(result["agent_trace"][0], {
+            "agent": "retrieval_decision",
+            "status": "forced",
+            "outcome": "retrieve",
+        })
+
     def test_vectorizes_the_question_and_returns_qdrant_ordered_top_k_chunks(self):
         hits = [
             SearchHit("chunk-1", "doc-1", "kb-1", "制度.pdf", "第一段", 0.92, 3),

@@ -231,6 +231,20 @@ class IngestionServiceTest(unittest.TestCase):
         self.assertIn("长63渗透率.att", service.models.embedded_texts[0])
         self.assertIn("文件后缀: .att", service.models.embedded_texts[0])
 
+    def test_embeds_and_indexes_the_chunk_section_path(self):
+        chunks = [ParsedChunk(0, "安装步骤", 2, "安装/Windows")]
+        service = self.build_service(FakeParser(chunks=chunks))
+
+        service.ingest(
+            "kb-1",
+            "指南.docx",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            b"content",
+        )
+
+        self.assertIn("章节路径: 安装/Windows", service.models.embedded_texts[0])
+        self.assertEqual(service.vectors.points[0]["section_path"], "安装/Windows")
+
     def test_batches_embeddings_and_vector_upserts(self):
         chunks = [ParsedChunk(index, f"知识内容 {index}", index + 1) for index in range(5)]
         service = self.build_service(FakeParser(chunks=chunks), embedding_batch_size=2)

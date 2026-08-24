@@ -6,7 +6,7 @@ from xml.etree import ElementTree
 from zipfile import ZipFile
 
 from docx import Document
-from rag_app.infrastructure.parsing.document_parser import CHUNK_OVERLAP, CHUNK_SIZE, DocumentParser
+from rag_app.infrastructure.parsing.document_parser import CHUNK_SIZE, DocumentParser
 
 
 class DocumentParserSpecialExtensionTest(unittest.TestCase):
@@ -43,9 +43,10 @@ class DocumentParserSpecialExtensionTest(unittest.TestCase):
 
         chunks = self.parser.parse_stream("large-media.pptx", stream)
 
-        self.assertEqual(len(chunks), 1)
-        self.assertIsNone(chunks[0].page_number)
-        self.assertIn("first\n\nsecond", chunks[0].text)
+        self.assertEqual(len(chunks), 2)
+        self.assertEqual([chunk.page_number for chunk in chunks], [1, 2])
+        self.assertEqual([chunk.section_path for chunk in chunks], ["第 1 页", "第 2 页"])
+        self.assertEqual([chunk.text for chunk in chunks], ["first", "second"])
 
     def test_att_text_file_remains_parsable_but_is_not_uploadable(self):
         chunks = self.parser.parse("长63渗透率.att", "渗透率 12.5 mD".encode("utf-8"))
@@ -86,6 +87,31 @@ class DocumentParserSpecialExtensionTest(unittest.TestCase):
         chunks = self.parser.parse("化163-1井示踪剂施工设计.docx", damaged_content)
 
         self.assertIn("化163-1井示踪剂施工设计", "\n".join(chunk.text for chunk in chunks))
+
+    def test_docx_uses_heading_styles_as_section_paths(self):
+        stream = BytesIO()
+        document = Document()
+        document.add_heading("安装", level=1)
+        document.add_paragraph("安装说明。")
+        table = document.add_table(rows=1, cols=2)
+        table.rows[0].cells[0].text = "组件"
+        table.rows[0].cells[1].text = "版本"
+        document.add_heading("Windows", level=2)
+        document.add_paragraph("Windows 步骤。")
+        document.add_heading("使用", level=1)
+        document.add_paragraph("使用说明。")
+        document.save(stream)
+
+        chunks = self.parser.parse("guide.docx", stream.getvalue())
+
+        self.assertEqual(
+            [chunk.section_path for chunk in chunks],
+            ["安装", "安装/Windows", "使用"],
+        )
+        self.assertIn("组件 版本", chunks[0].text)
+        self.assertTrue(chunks[1].text.startswith("Windows"))
+        self.assertNotIn("组件 版本", chunks[1].text)
+        self.assertNotIn("使用说明", chunks[1].text)
 
     def test_geomap_v360_layer_style_is_parsed_as_structured_records(self):
         header = bytearray(516)
@@ -216,18 +242,63 @@ class DocumentParserSpecialExtensionTest(unittest.TestCase):
             chunks = self.parser.parse("2008.12.30.xls", b"legacy workbook")
 
         excel_fallback.assert_called_once_with(b"legacy workbook")
-        self.assertIsNone(chunks[0].section_path)
+        self.assertEqual(chunks[0].section_path, "年度数据")
         self.assertIn("井号 产量", chunks[0].text)
 
-    def test_uses_only_size_and_overlap_across_source_boundaries(self):
+    def test_preserves_source_boundaries_and_metadata(self):
         chunks = self.parser._chunk_sources([
             (1, "第一页", "A" * 250),
             (2, "第二页", "B" * 147 + " " + "B" * 152),
         ])
 
-        self.assertEqual([len(chunk.text) for chunk in chunks], [CHUNK_SIZE, 202])
-        self.assertEqual(chunks[0].text[-CHUNK_OVERLAP:], chunks[1].text[:CHUNK_OVERLAP])
-        self.assertTrue(all(chunk.page_number is None for chunk in chunks))
+        self.assertEqual(len(chunks), 2)
+        self.assertEqual([chunk.page_number for chunk in chunks], [1, 2])
+        self.assertEqual([chunk.section_path for chunk in chunks], ["第一页", "第二页"])
+        self.assertNotIn("B", chunks[0].text)
+        self.assertNotIn("A", chunks[1].text)
+
+    def test_splits_markdown_by_heading_hierarchy(self):
+        chunks = self.parser.parse(
+            "guide.md",
+            (
+                "# 安装\n安装说明。\n\n"
+                "## Windows\nWindows 步骤。\n\n"
+                "## Linux\nLinux 步骤。\n\n"
+                "# 使用\n使用说明。"
+            ).encode("utf-8"),
+        )
+
+        self.assertEqual(
+            [chunk.section_path for chunk in chunks],
+            ["安装", "安装/Windows", "安装/Linux", "使用"],
+        )
+        self.assertTrue(chunks[1].text.startswith("## Windows"))
+        self.assertNotIn("Linux 步骤", chunks[1].text)
+
+    def test_deduplicates_parser_and_detected_section_paths(self):
+        chunks = self.parser._chunk_sources([(None, "第一章", "第一章\n章节内容")])
+
+        self.assertEqual(len(chunks), 1)
+        self.assertEqual(chunks[0].section_path, "第一章")
+
+    def test_prefers_paragraph_boundaries(self):
+        first_paragraph = "甲" * 260
+        second_paragraph = "乙" * 260
+
+        chunks = self.parser._chunk_sources([
+            (None, "正文", f"{first_paragraph}\n\n{second_paragraph}")
+        ])
+
+        self.assertEqual(len(chunks), 2)
+        self.assertEqual(chunks[0].text, first_paragraph)
+        self.assertEqual(chunks[1].text, second_paragraph)
+        self.assertTrue(all(len(chunk.text) <= CHUNK_SIZE for chunk in chunks))
+
+    def test_falls_back_to_fixed_width_for_unbroken_content(self):
+        chunks = self.parser._chunk_sources([(3, None, "甲" * 750)])
+
+        self.assertEqual([len(chunk.text) for chunk in chunks], [CHUNK_SIZE, CHUNK_SIZE])
+        self.assertTrue(all(chunk.page_number == 3 for chunk in chunks))
         self.assertTrue(all(chunk.section_path is None for chunk in chunks))
 
     def test_uploadable_formats_are_restricted(self):

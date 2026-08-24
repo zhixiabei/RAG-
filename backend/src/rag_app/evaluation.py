@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import argparse
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from datetime import datetime, timezone
 import json
 import math
@@ -811,6 +811,7 @@ def evaluate_sample(
                 "question": sample["question"],
                 "model": model,
                 "include_retrieved_content": bool(sample.get("evidence")),
+                "force_retrieval": True,
             },
         )
         response["client_response_time_ms"] = round((perf_counter() - started_at) * 1_000, 2)
@@ -966,49 +967,79 @@ def run_evaluation(
                     "请将旧问题改为非 Approved，并基于同步后的 UUID Chunk 重新生成问题。"
                 )
 
+        active_concurrency = worker_count
+        concurrency_reduced = False
+        next_sample_index = 0
+
         with ThreadPoolExecutor(
             max_workers=worker_count,
             thread_name_prefix="rag-evaluation",
         ) as executor:
-            future_items = {
-                executor.submit(
-                    evaluate_sample,
-                    client,
-                    base_url,
-                    knowledge_base_id,
-                    sample,
-                    model,
-                    cleanup,
-                    judge_agent,
-                    evidence_embedding_models,
-                ): (index, sample)
-                for index, sample in enumerate(samples)
-            }
-            for completed_count, future in enumerate(as_completed(future_items), start=1):
-                index, sample = future_items[future]
-                question_id = str(sample["question_id"])
-                try:
-                    result = future.result()
-                except httpx.TimeoutException:
-                    result = {
-                        "question_id": question_id,
-                        "question": sample.get("question"),
-                        "error": f"单题请求超时（{timeout:g} 秒）",
-                    }
-                except (EvaluationError, httpx.HTTPError) as exc:
-                    result = {
-                        "question_id": question_id,
-                        "question": sample.get("question"),
-                        "error": str(exc),
-                    }
-                except Exception as exc:
-                    result = {
-                        "question_id": question_id,
-                        "question": sample.get("question"),
-                        "error": f"{type(exc).__name__}: {exc}",
-                    }
-                ordered_results[index] = result
-                _print_evaluation_result(completed_count, len(samples), result)
+            future_items = {}
+
+            def submit_available_samples() -> None:
+                nonlocal next_sample_index
+                while (
+                    next_sample_index < len(samples)
+                    and len(future_items) < active_concurrency
+                ):
+                    index = next_sample_index
+                    sample = samples[index]
+                    future = executor.submit(
+                        evaluate_sample,
+                        client,
+                        base_url,
+                        knowledge_base_id,
+                        sample,
+                        model,
+                        cleanup,
+                        judge_agent,
+                        evidence_embedding_models,
+                    )
+                    future_items[future] = (index, sample)
+                    next_sample_index += 1
+
+            submit_available_samples()
+            completed_count = 0
+            while future_items:
+                completed_futures, _ = wait(
+                    future_items,
+                    return_when=FIRST_COMPLETED,
+                )
+                for future in sorted(
+                    completed_futures,
+                    key=lambda item: future_items[item][0],
+                ):
+                    index, sample = future_items.pop(future)
+                    question_id = str(sample["question_id"])
+                    try:
+                        result = future.result()
+                    except httpx.TimeoutException:
+                        result = {
+                            "question_id": question_id,
+                            "question": sample.get("question"),
+                            "error": f"单题请求超时（{timeout:g} 秒）",
+                        }
+                        if active_concurrency > 1:
+                            active_concurrency = 1
+                            concurrency_reduced = True
+                    except (EvaluationError, httpx.HTTPError) as exc:
+                        result = {
+                            "question_id": question_id,
+                            "question": sample.get("question"),
+                            "error": str(exc),
+                        }
+                    except Exception as exc:
+                        result = {
+                            "question_id": question_id,
+                            "question": sample.get("question"),
+                            "error": f"{type(exc).__name__}: {exc}",
+                        }
+                    ordered_results[index] = result
+                    completed_count += 1
+                    _print_evaluation_result(completed_count, len(samples), result)
+
+                submit_available_samples()
 
     results = [result for result in ordered_results if result is not None]
     evaluation_time_ms = round((perf_counter() - evaluation_started_at) * 1_000, 2)
@@ -1018,6 +1049,9 @@ def run_evaluation(
         "remaining_count": len(samples) - len(results),
         "stopped_early": False,
         "concurrency": worker_count,
+        "requested_concurrency": worker_count,
+        "final_concurrency": active_concurrency,
+        "concurrency_reduced": concurrency_reduced,
         "evaluation_time_ms": evaluation_time_ms,
         "throughput_per_minute": (
             round(len(results) * 60_000 / evaluation_time_ms, 2)

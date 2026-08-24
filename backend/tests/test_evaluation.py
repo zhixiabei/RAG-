@@ -1,7 +1,8 @@
 import json
 from pathlib import Path
 import tempfile
-from threading import Barrier
+from threading import Barrier, Event
+from time import sleep
 import unittest
 from unittest.mock import patch
 
@@ -195,6 +196,7 @@ class EvaluationTest(unittest.TestCase):
                 "question": "问题",
                 "model": None,
                 "include_retrieved_content": False,
+                "force_retrieval": True,
             }],
         )
     def test_summarizes_judge_scores_and_usage(self):
@@ -327,11 +329,26 @@ class EvaluationTest(unittest.TestCase):
         client = client_class.return_value.__enter__.return_value
         client.get.return_value = httpx.Response(200)
 
+        first_started = Event()
+        timeout_seen = Event()
+        first_finished = Event()
+        third_started_too_early = Event()
+
         def fake_evaluate_sample(_client, _base_url, _kb_id, sample, *_args):
-            if sample["question_id"] == "q2":
+            question_id = sample["question_id"]
+            if question_id == "q1":
+                first_started.set()
+                timeout_seen.wait(timeout=1)
+                sleep(0.05)
+                first_finished.set()
+            elif question_id == "q2":
+                first_started.wait(timeout=1)
+                timeout_seen.set()
                 raise httpx.ReadTimeout("timed out")
+            elif not first_finished.is_set():
+                third_started_too_early.set()
             return {
-                "question_id": sample["question_id"],
+                "question_id": question_id,
                 "question": sample["question"],
                 "document_hit": True,
                 "chunk_hit": True,
@@ -368,6 +385,10 @@ class EvaluationTest(unittest.TestCase):
         self.assertEqual(report["summary"]["error_count"], 1)
         self.assertEqual(report["summary"]["remaining_count"], 0)
         self.assertEqual(report["summary"]["concurrency"], 2)
+        self.assertEqual(report["summary"]["requested_concurrency"], 2)
+        self.assertEqual(report["summary"]["final_concurrency"], 1)
+        self.assertTrue(report["summary"]["concurrency_reduced"])
+        self.assertFalse(third_started_too_early.is_set())
         self.assertEqual(
             [result["question_id"] for result in report["results"]],
             ["q1", "q2", "q3"],
@@ -417,6 +438,8 @@ class EvaluationTest(unittest.TestCase):
 
         self.assertEqual(report["summary"]["completed_count"], 2)
         self.assertEqual(report["summary"]["error_count"], 0)
+        self.assertEqual(report["summary"]["final_concurrency"], 2)
+        self.assertFalse(report["summary"]["concurrency_reduced"])
         self.assertGreater(report["summary"]["throughput_per_minute"], 0)
 
 if __name__ == "__main__":

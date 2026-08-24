@@ -382,7 +382,8 @@ class IngestionService:
                     try:
                         self._raise_if_cancelled(document_id)
                         embeddings = self.models.embed([
-                            f"完整路径: {relative_path}\n文件名: {safe_name}\n文件后缀: {suffix or '无后缀'}\n内容:\n{chunk.text}"
+                            f"完整路径: {relative_path}\n文件名: {safe_name}\n文件后缀: {suffix or '无后缀'}"
+                            f"\n章节路径: {chunk.section_path or '无'}\n内容:\n{chunk.text}"
                             for chunk in chunk_batch
                         ])
                         self._raise_if_cancelled(document_id)
@@ -406,6 +407,7 @@ class IngestionService:
                                 "folder_path": folder_path,
                                 "relative_path": relative_path,
                                 "page_number": chunk.page_number,
+                                "section_path": chunk.section_path,
                                 "text": chunk.text,
                             }
                             for chunk in chunk_batch

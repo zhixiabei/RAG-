@@ -44,6 +44,10 @@ class Settings(BaseSettings):
     remote_embedding_base_url: str = ""
     remote_embedding_api_key: str = ""
     remote_embedding_model: str = ""
+    remote_llm_timeout_seconds: float = 60.0
+    remote_llm_max_retries: int = 0
+    remote_llm_retry_base_delay_seconds: float = 0.5
+    remote_llm_retry_max_delay_seconds: float = 5.0
     rag_top_k: int = 10
     rag_retrieval_candidate_k: int = 30
     rag_rerank_enabled: bool = True
@@ -71,12 +75,12 @@ class Settings(BaseSettings):
     rag_judge_max_evidence_chars: int = 12_000
     rag_judge_max_output_tokens: int = 300
     rag_judge_max_concurrency: int = 2
-    rag_judge_timeout_seconds: float = 30.0
+    rag_judge_timeout_seconds: float = 60.0
     rag_judge_max_retries: int = 1
     rag_judge_retry_base_delay_seconds: float = 1.0
     rag_judge_retry_max_delay_seconds: float = 5.0
     evaluation_request_timeout_seconds: float = 90.0
-    evaluation_max_concurrency: int = 4
+    evaluation_max_concurrency: int = 2
     evaluation_dataset_dir: str = "testsets"
     testset_tool_base_url: str = ""
     testset_tool_sync_timeout_seconds: float = 60.0

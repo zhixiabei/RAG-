@@ -24,6 +24,10 @@ def build_model_gateway(settings: Settings) -> ModelGateway:
             settings.remote_embedding_base_url,
             settings.remote_embedding_api_key,
             settings.remote_embedding_model,
+            request_timeout_seconds=settings.remote_llm_timeout_seconds,
+            max_transient_retries=settings.remote_llm_max_retries,
+            retry_base_delay_seconds=settings.remote_llm_retry_base_delay_seconds,
+            retry_max_delay_seconds=settings.remote_llm_retry_max_delay_seconds,
         )
     raise ValueError("MODEL_MODE 只能是 local 或 remote")
 

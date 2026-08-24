@@ -33,7 +33,7 @@ def _evaluation_request_timeout(settings) -> float:
 
 
 def _evaluation_max_concurrency(settings) -> int:
-    return max(1, int(getattr(settings, "evaluation_max_concurrency", 4)))
+    return max(1, int(getattr(settings, "evaluation_max_concurrency", 2)))
 
 
 def _local_dataset_dir(settings) -> Path:
@@ -356,6 +356,7 @@ def chat(request: Request, knowledge_base_id: str, payload: ChatRequest):
             payload.question,
             payload.model,
             include_retrieved_content=payload.include_retrieved_content,
+            force_retrieval=payload.force_retrieval,
         )
     except Exception as exc:
         raise HTTPException(503, f"问答服务不可用: {exc}") from exc
