@@ -9,7 +9,7 @@ from agent import (
     RetrievalDecisionAgent,
 )
 from agent.context import format_knowledge_catalog, format_knowledge_catalog_answer
-from agent.telemetry import capture_request_metrics
+from agent.telemetry import collect_model_usage
 from agent.query_intent import (
     is_knowledge_catalog_file_lookup_question,
     is_knowledge_catalog_inventory_question,
@@ -76,8 +76,52 @@ class RagService:
         self.retrieval_agent = retrieval_agent
         self.answer_agent = answer_agent
 
-    @capture_request_metrics
     def answer(
+        self,
+        knowledge_base_id: str,
+        conversation_id: str,
+        question: str,
+        model: str | None = None,
+        attachment_context: str = "",
+        attachment_citations: list[dict] | None = None,
+        include_retrieved_content: bool = False,
+        force_retrieval: bool = False,
+    ) -> dict:
+        started_at = perf_counter()
+        with collect_model_usage() as collector:
+            response = self._build_answer(
+                knowledge_base_id,
+                conversation_id,
+                question,
+                model=model,
+                attachment_context=attachment_context,
+                attachment_citations=attachment_citations,
+                include_retrieved_content=include_retrieved_content,
+                force_retrieval=force_retrieval,
+            )
+        response_time_ms = round((perf_counter() - started_at) * 1_000, 2)
+        token_usage = collector.summary()
+        metrics = {
+            "responseTimeMs": response_time_ms,
+            "serverResponseTimeMs": response_time_ms,
+            "tokenUsage": token_usage,
+        }
+        _run_stage(
+            "保存回答",
+            lambda: self.repository.add_message(
+                conversation_id,
+                knowledge_base_id,
+                question,
+                response["answer"],
+                response["citations"],
+                metrics,
+            ),
+        )
+        response["response_time_ms"] = response_time_ms
+        response["token_usage"] = token_usage
+        return response
+
+    def _build_answer(
         self,
         knowledge_base_id: str,
         conversation_id: str,
@@ -162,16 +206,6 @@ class RagService:
             ],
             *list(attachment_citations or []),
         ])
-        _run_stage(
-            "保存回答",
-            lambda: self.repository.add_message(
-                conversation_id,
-                knowledge_base_id,
-                question,
-                answer,
-                citations,
-            ),
-        )
         response = {
             "conversation_id": conversation_id,
             "model": model or self.answer_agent.models.chat_model,

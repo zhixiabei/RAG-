@@ -70,10 +70,12 @@ SCHEMA_STATEMENTS = (
         question TEXT NOT NULL,
         answer TEXT NOT NULL,
         citations JSONB NOT NULL,
+        metrics JSONB NOT NULL DEFAULT '{}'::jsonb,
         created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     )
     """,
     "ALTER TABLE messages ADD COLUMN IF NOT EXISTS conversation_id TEXT REFERENCES conversations(id)",
+    "ALTER TABLE messages ADD COLUMN IF NOT EXISTS metrics JSONB NOT NULL DEFAULT '{}'::jsonb",
     """
     INSERT INTO conversations (id, knowledge_base_id, title, created_at, updated_at)
     SELECT

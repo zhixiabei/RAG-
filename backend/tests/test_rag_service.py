@@ -22,8 +22,8 @@ class FakeRepository:
     def list_documents(self, knowledge_base_id):
         return self.documents
 
-    def add_message(self, conversation_id, knowledge_base_id, question, answer, citations):
-        self.saved.append((conversation_id, knowledge_base_id, question, answer, citations))
+    def add_message(self, conversation_id, knowledge_base_id, question, answer, citations, metrics=None):
+        self.saved.append((conversation_id, knowledge_base_id, question, answer, citations, metrics))
 
 
 class FakeVectorStore:
@@ -88,6 +88,11 @@ class RagServiceTest(unittest.TestCase):
         self.assertEqual(models.embed_calls, [])
         self.assertEqual(vectors.search_calls, [])
         self.assertEqual(len(models.completion_calls), 2)
+        saved_metrics = repository.saved[0][5]
+        self.assertEqual(saved_metrics["responseTimeMs"], result["response_time_ms"])
+        self.assertEqual(saved_metrics["serverResponseTimeMs"], result["response_time_ms"])
+        self.assertEqual(saved_metrics["tokenUsage"], result["token_usage"])
+
 
     def test_short_history_is_token_budgeted_instead_of_fixed_to_twelve_messages(self):
         history = [

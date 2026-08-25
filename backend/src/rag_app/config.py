@@ -56,6 +56,7 @@ class Settings(BaseSettings):
     rag_rerank_api_key: str = ""
     rag_rerank_model: str = "BAAI/bge-reranker-v2-m3"
     rag_rerank_timeout_seconds: float = 60.0
+    rag_min_relevance_score: float = 0.1
     rag_context_max_input_tokens: int = 0
     rag_context_output_reserve_tokens: int = 4_096
     rag_context_history_max_tokens: int = 6_000

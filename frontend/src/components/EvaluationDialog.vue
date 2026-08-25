@@ -210,8 +210,6 @@ onMounted(async () => {
             <span>Retrieval Recall@{{ result.summary.retrieval_k ?? 'K' }} <strong>{{ percentage(result.summary.retrieval_recall_at_k) }}</strong></span>
           </template>
           <span>总耗时 <strong>{{ duration(result.summary.evaluation_time_ms) }}</strong></span>
-          <span>并发 <strong>{{ result.summary.concurrency_reduced ? `${result.summary.requested_concurrency} → ${result.summary.final_concurrency}` : result.summary.concurrency }}</strong></span>
-          <span>吞吐 <strong>{{ result.summary.throughput_per_minute ?? '—' }} 题/分钟</strong></span>
           <span>平均响应 <strong>{{ duration(result.summary.average_response_time_ms) }}</strong></span>
           <span>P95 响应 <strong>{{ duration(result.summary.p95_response_time_ms) }}</strong></span>
           <span v-if="result.summary.average_judge_time_ms != null">Judge 平均 <strong>{{ duration(result.summary.average_judge_time_ms) }}</strong></span>

@@ -81,11 +81,15 @@ class AnswerAgent:
         context_policy: ContextPolicy | None = None,
         history_summarizer: HistorySummarizer | None = None,
         max_output_tokens: int = 1_200,
+        min_relevance_score: float = 0.1,
     ):
+        if not 0 <= min_relevance_score <= 1:
+            raise ValueError("min_relevance_score must be between 0 and 1")
         self.models = models
         self.context_policy = context_policy or ContextPolicy()
         self.history_summarizer = history_summarizer
         self.max_output_tokens = max(128, max_output_tokens)
+        self.min_relevance_score = min_relevance_score
 
     def run(
         self,
@@ -132,6 +136,7 @@ class AnswerAgent:
             )
         if catalog_answer:
             return AnswerResult(catalog_answer, [], _skipped_context_trace("deterministic_catalog_answer"))
+        hits = _relevant_hits(hits, self.min_relevance_score)
         context_override = ""
         if not hits and knowledge_catalog:
             context_override = "本轮没有可用的正文检索片段；只能依据知识库目录元数据回答目录和文件路径问题。"
@@ -248,6 +253,17 @@ class AnswerAgent:
             retry_view.trace["compression"] = compression_trace
             context_view = retry_view
         return AnswerResult(_finalize_answer(question, answer), context_view.selected_hits, context_view.trace)
+
+
+def _relevant_hits(
+    hits: Sequence[SearchHit],
+    minimum_score: float,
+) -> list[SearchHit]:
+    return [
+        hit
+        for hit in hits
+        if hit.relevance_score is None or hit.relevance_score >= minimum_score
+    ]
 
 
 _BRIEF_ANSWER_PATTERN = re.compile(r"简要|简述|简明|概括|只(?:需|要|回答|概述|概括)|一句话|不(?:要|必)展开|精炼|精简")

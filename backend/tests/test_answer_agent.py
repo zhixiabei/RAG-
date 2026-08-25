@@ -22,6 +22,47 @@ class AnswerAgentTest(unittest.TestCase):
         self.assertEqual(answer, "知识库中无相关内容。")
         self.assertEqual(models.calls, [])
 
+    def test_rejects_when_all_reranker_scores_are_below_threshold(self):
+        models = FakeModels()
+        low_hit = SearchHit(
+            "chunk-low", "doc-1", "kb-1", "unrelated.pdf", "unrelated content",
+            0.9, relevance_score=0.05,
+        )
+
+        answer = AnswerAgent(models).run("out-of-scope question", [], [low_hit], retrieval_used=True)
+
+        self.assertEqual(answer, "知识库中无相关内容。")
+        self.assertEqual(models.calls, [])
+
+    def test_only_passes_hits_at_or_above_relevance_threshold(self):
+        models = FakeModels()
+        low_hit = SearchHit(
+            "chunk-low", "doc-1", "kb-1", "low.pdf", "irrelevant evidence",
+            0.9, relevance_score=0.05,
+        )
+        high_hit = SearchHit(
+            "chunk-high", "doc-2", "kb-1", "high.pdf", "relevant evidence",
+            0.8, relevance_score=0.75,
+        )
+
+        result = AnswerAgent(models).run_with_context(
+            "supported question", [], [low_hit, high_hit], retrieval_used=True
+        )
+
+        self.assertEqual([hit.chunk_id for hit in result.selected_hits], ["chunk-high"])
+        context_message = models.calls[0][0][-2]["content"]
+        self.assertIn("relevant evidence", context_message)
+        self.assertNotIn("irrelevant evidence", context_message)
+
+    def test_keeps_hits_without_reranker_relevance_scores(self):
+        models = FakeModels()
+        hit = SearchHit("chunk-1", "doc-1", "kb-1", "source.pdf", "source content", 0.01)
+
+        answer = AnswerAgent(models).run("supported question", [], [hit], retrieval_used=True)
+
+        self.assertEqual(answer, "最终回答")
+        self.assertEqual(len(models.calls), 1)
+
     def test_answers_folder_question_from_catalog_without_retrieved_chunks(self):
         models = FakeModels()
         catalog = "[文件夹]\n- 井资料/化163-1井\n[文件]\n- 井资料/化163-1井/施工设计.docx"

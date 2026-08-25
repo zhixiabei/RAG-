@@ -204,6 +204,7 @@ DeepSeek 官方 API 不提供 embedding，必须另配一个支持 `/embeddings`
 | `RAG_RERANK_ENABLED` | 是否启用 HTTP reranker | `true` |
 | `RAG_RERANK_PROVIDER_NAME` / `RAG_RERANK_BASE_URL` / `RAG_RERANK_API_KEY` | reranker 服务覆盖配置；留空复用 `REMOTE_EMBEDDING_*` | 空 |
 | `RAG_RERANK_MODEL` | reranker 模型 | `BAAI/bge-reranker-v2-m3` |
+| `RAG_MIN_RELEVANCE_SCORE` | reranker 相关性下限，低于该值的片段不进入回答上下文；无 reranker 分数时不应用 | `0.1` |
 | `RAG_JUDGE_ENABLED` | 是否在评测中启用答案质量 Judge | `true` |
 | `RAG_JUDGE_MODEL` | Judge 模型；留空复用回答模型 | 空 |
 | `RAG_JUDGE_PROVIDER_NAME` / `RAG_JUDGE_BASE_URL` / `RAG_JUDGE_API_KEY` | 独立 OpenAI-compatible Judge 服务；地址留空则复用聊天服务 | 空 |

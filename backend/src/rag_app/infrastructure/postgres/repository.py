@@ -230,12 +230,20 @@ class PostgresRepository:
             connection.execute(text("DELETE FROM messages WHERE conversation_id = :id"), {"id": conversation_id})
             connection.execute(text("DELETE FROM conversations WHERE id = :id"), {"id": conversation_id})
 
-    def add_message(self, conversation_id: str, knowledge_base_id: str, question: str, answer: str, citations: list[dict[str, Any]]) -> None:
+    def add_message(
+        self,
+        conversation_id: str,
+        knowledge_base_id: str,
+        question: str,
+        answer: str,
+        citations: list[dict[str, Any]],
+        metrics: dict[str, Any] | None = None,
+    ) -> None:
         with self.engine.begin() as connection:
             connection.execute(
                 text("""
-                    INSERT INTO messages (knowledge_base_id, conversation_id, question, answer, citations)
-                    VALUES (:kb, :conversation, :question, :answer, CAST(:citations AS JSONB))
+                    INSERT INTO messages (knowledge_base_id, conversation_id, question, answer, citations, metrics)
+                    VALUES (:kb, :conversation, :question, :answer, CAST(:citations AS JSONB), CAST(:metrics AS JSONB))
                 """),
                 {
                     "kb": knowledge_base_id,
@@ -243,6 +251,7 @@ class PostgresRepository:
                     "question": question,
                     "answer": answer,
                     "citations": json.dumps(citations, ensure_ascii=False),
+                    "metrics": json.dumps(metrics or {}, ensure_ascii=False),
                 },
             )
             connection.execute(
@@ -253,7 +262,7 @@ class PostgresRepository:
     def list_messages(self, conversation_id: str) -> list[dict[str, Any]]:
         with self.engine.begin() as connection:
             rows = connection.execute(
-                text("SELECT id, question, answer, citations, created_at FROM messages WHERE conversation_id = :conversation ORDER BY id"),
+                text("SELECT id, question, answer, citations, metrics, created_at FROM messages WHERE conversation_id = :conversation ORDER BY id"),
                 {"conversation": conversation_id},
             ).mappings().all()
 
@@ -272,6 +281,7 @@ class PostgresRepository:
                         "role": "assistant",
                         "content": row["answer"],
                         "citations": row["citations"] or [],
+                        "metrics": row["metrics"] or None,
                         "created_at": row["created_at"],
                     },
                 )
