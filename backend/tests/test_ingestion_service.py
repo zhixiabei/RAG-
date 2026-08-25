@@ -12,7 +12,6 @@ class FakeRepository:
         self.document = None
         self.updates = []
         self.replaced_chunks = []
-        self._existing_files = set()
         self._existing_hashes = set()
         self._missing_hash_documents = []
 
@@ -21,7 +20,6 @@ class FakeRepository:
 
     def create_document(self, item):
         self.document = {**item, "progress": 0, "stage": "queued", "chunk_count": 0}
-        self._existing_files.add((item["knowledge_base_id"], item["file_name"], item.get("folder_path") or ""))
         self._existing_hashes.add((item["knowledge_base_id"], item["content_hash"]))
 
     def update_document(self, document_id, **fields):
@@ -45,9 +43,6 @@ class FakeRepository:
     def delete_document(self, document_id):
         if self.document and self.document["id"] == document_id:
             self.document = None
-
-    def document_exists_by_file(self, knowledge_base_id, file_name, folder_path):
-        return (knowledge_base_id, file_name, folder_path or "") in self._existing_files
 
     def document_exists_by_content_hash(self, knowledge_base_id, content_hash):
         return (knowledge_base_id, content_hash) in self._existing_hashes
@@ -282,27 +277,28 @@ class IngestionServiceTest(unittest.TestCase):
         self.assertEqual(result["chunk_count"], 1)
         self.assertEqual(len(service.vectors.points), 1)
 
-    def test_skips_same_path_without_storing_or_parsing_again(self):
+    def test_allows_same_name_and_path_when_content_is_different(self):
         service = self.build_service(FakeParser())
-        self.repository._existing_files.add(("kb-1", "制度.pdf", "项目/制度"))
 
-        with self.assertRaisesRegex(DuplicateDocumentError, "相同路径") as raised:
-            service.ingest("kb-1", "制度.pdf", "application/pdf", b"content", "项目/制度")
+        first = service.ingest("kb-1", "report.pdf", "application/pdf", b"old content", "project")
+        second = service.ingest("kb-1", "report.pdf", "application/pdf", b"new content", "project")
 
-        self.assertEqual(raised.exception.kind, "path")
-        self.assertEqual(service.objects.items, [])
-        self.assertIsNone(self.repository.document)
+        self.assertNotEqual(first["id"], second["id"])
+        self.assertEqual(second["status"], "ready")
+        self.assertEqual([item[1] for item in service.objects.items], [b"old content", b"new content"])
 
-    def test_continues_ingesting_after_skipping_a_duplicate(self):
+
+    def test_continues_ingesting_after_skipping_same_content(self):
         service = self.build_service(FakeParser())
-        self.repository._existing_files.add(("kb-1", "重复.pdf", "资料"))
+        service.ingest("kb-1", "original.pdf", "application/pdf", b"duplicate", "documents")
 
         with self.assertRaises(DuplicateDocumentError):
-            service.ingest("kb-1", "重复.pdf", "application/pdf", b"duplicate", "资料")
-        result = service.ingest("kb-1", "新文件.pdf", "application/pdf", b"new content", "资料")
+            service.ingest("kb-1", "renamed.pdf", "application/pdf", b"duplicate", "documents")
+        result = service.ingest("kb-1", "new.pdf", "application/pdf", b"new content", "documents")
 
         self.assertEqual(result["status"], "ready")
-        self.assertEqual(len(service.objects.items), 1)
+        self.assertEqual(len(service.objects.items), 2)
+
 
     def test_skips_same_content_at_a_different_path(self):
         service = self.build_service(FakeParser())

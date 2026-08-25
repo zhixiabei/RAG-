@@ -14,7 +14,6 @@ const error = ref('')
 const failed = ref([])
 const skippedCount = ref(0)
 const skippedTypes = ref([])
-const importedPaths = ref(new Set())
 const skippedDuplicateCount = ref(0)
 const recoveryMessage = ref('')
 const importGeneration = ref(0)
@@ -225,7 +224,6 @@ function resetState() {
   error.value = ''
   failed.value = []
   current.value = 0
-  importedPaths.value = new Set()
   skippedCount.value = 0
   skippedDuplicateCount.value = 0
   skippedTypes.value = []
@@ -263,15 +261,9 @@ function folderPathFor(file) {
   return parts.slice(0, -1).join('/')
 }
 
-function fileIdentity(file) {
-  const path = folderPathFor(file)
-  return path ? `${path}/${file.name}` : file.name
-}
-
 function chooseFiles(event) {
   const selected = Array.from(event.target.files || [])
   const typeCounts = new Map()
-  let duplicateCount = 0
   files.value = selected.filter((file) => {
     const extension = documentExtension(file.name)
     if (isSystemFile(file) || !isSupportedDocument(file.name)) {
@@ -279,14 +271,10 @@ function chooseFiles(event) {
       typeCounts.set(label, (typeCounts.get(label) || 0) + 1)
       return false
     }
-    if (importedPaths.value.has(fileIdentity(file))) {
-      duplicateCount++
-      return false
-    }
     return true
   })
   skippedCount.value = selected.length - files.value.length
-  skippedDuplicateCount.value = duplicateCount
+  skippedDuplicateCount.value = 0
   skippedTypes.value = Array.from(typeCounts.entries())
     .sort((left, right) => right[1] - left[1])
     .slice(0, 8)
@@ -297,7 +285,7 @@ function chooseFiles(event) {
   fileErrors.value = {}
   expandedFolders.value = new Set()
   files.value.forEach((_, idx) => { fileStatus.value[idx] = 'queued' })
-  error.value = files.value.length ? '' : (duplicateCount > 0 ? '所选文件均已导入，无需重复导入' : '所选文件夹中没有可导入的文档')
+  error.value = files.value.length ? '' : '所选文件夹中没有可导入的文档'
   recoveryMessage.value = ''
   saveQueueSnapshot()
 }
@@ -357,7 +345,6 @@ async function uploadOne(knowledgeBaseId, file, index, generation) {
       fileErrors.value[index] = null
       skippedCount.value++
       skippedDuplicateCount.value++
-      importedPaths.value.add(fileIdentity(file))
       return
     }
     if (result?.status === 'processing' && result.id) {
@@ -367,14 +354,12 @@ async function uploadOne(knowledgeBaseId, file, index, generation) {
     if (importGeneration.value !== generation || props.kbId !== knowledgeBaseId) return
     fileStatus.value[index] = 'done'
     fileErrors.value[index] = null
-    importedPaths.value.add(fileIdentity(file))
   } catch (cause) {
     if (cause?.status === 409) {
       fileStatus.value[index] = 'skipped'
       fileErrors.value[index] = null
       skippedCount.value++
       skippedDuplicateCount.value++
-      importedPaths.value.add(fileIdentity(file))
       return
     }
     fileStatus.value[index] = 'failed'

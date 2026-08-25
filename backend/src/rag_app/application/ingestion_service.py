@@ -312,15 +312,9 @@ class IngestionService:
         suffix = Path(safe_name).suffix.lower()
         title = safe_name
         object_key = f"{knowledge_base_id}/{document_id}/source/{safe_name}"
-        with self._deduplication_lock:
-            if self.repository.document_exists_by_file(knowledge_base_id, safe_name, folder_path):
-                raise DuplicateDocumentError("path", "文件重复：该知识库中已存在相同路径的同名文件")
-
         content_hash = self._content_hash(stream)
         self._start_content_hash_backfill(knowledge_base_id)
         with self._deduplication_lock:
-            if self.repository.document_exists_by_file(knowledge_base_id, safe_name, folder_path):
-                raise DuplicateDocumentError("path", "文件重复：该知识库中已存在相同路径的同名文件")
             if self.repository.document_exists_by_content_hash(knowledge_base_id, content_hash):
                 raise DuplicateDocumentError("content", "文件重复：该知识库中已存在内容相同的文件")
             self.repository.create_document({
