@@ -231,6 +231,55 @@ class ModelCompletionGatewayTest(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "EmbeddingProvider 接口连续 1 次超时"):
             gateway.embed(["question"])
 
+    @patch("rag_app.infrastructure.openai_compatible.gateway.time.sleep")
+    @patch("rag_app.infrastructure.openai_compatible.gateway.httpx.Client")
+    def test_openai_compatible_retries_embedding_http_400(self, client_class, sleep):
+        post = client_class.return_value.post
+        bad_request = Mock(status_code=400, headers={}, text="")
+        bad_request.json.return_value = {"error": {"message": "temporary failure"}}
+        success = Mock(status_code=200)
+        success.json.return_value = {
+            "data": [{"index": 0, "embedding": [0.1, 0.2]}],
+        }
+        post.side_effect = [bad_request, success]
+        gateway = OpenAICompatibleGateway(
+            "DeepSeek", "https://chat.example/v1", "chat-key", ["chat-model"], "chat-model",
+            "SiliconFlow", "https://embed.example/v1", "embed-key", "embed-model",
+            max_transient_retries=0,
+            embedding_max_retries=2,
+        )
+
+        result = gateway.embed(["question"])
+
+        self.assertEqual(result, [[0.1, 0.2]])
+        self.assertEqual(post.call_count, 2)
+        sleep.assert_called_once_with(0.5)
+
+    @patch("rag_app.infrastructure.openai_compatible.gateway.time.sleep")
+    @patch("rag_app.infrastructure.openai_compatible.gateway.httpx.Client")
+    def test_openai_compatible_reports_embedding_http_error_detail(self, client_class, sleep):
+        post = client_class.return_value.post
+        bad_request = Mock(status_code=400, headers={}, text="")
+        bad_request.json.return_value = {
+            "error": {"message": "provider rejected the embedding request"},
+        }
+        post.return_value = bad_request
+        gateway = OpenAICompatibleGateway(
+            "DeepSeek", "https://chat.example/v1", "chat-key", ["chat-model"], "chat-model",
+            "SiliconFlow", "https://embed.example/v1", "embed-key", "embed-model",
+            max_transient_retries=0,
+            embedding_max_retries=1,
+        )
+
+        with self.assertRaisesRegex(
+            RuntimeError,
+            "SiliconFlow 接口连续 2 次返回 HTTP 400: provider rejected the embedding request",
+        ):
+            gateway.embed(["question"])
+
+        self.assertEqual(post.call_count, 2)
+        sleep.assert_called_once_with(0.5)
+
 
 if __name__ == "__main__":
     unittest.main()

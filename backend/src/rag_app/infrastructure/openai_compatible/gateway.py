@@ -6,6 +6,7 @@ from agent.telemetry import record_model_usage
 
 
 _TRANSIENT_STATUS_CODES = frozenset({429, 500, 502, 503, 504})
+_EMBEDDING_RETRY_STATUS_CODES = _TRANSIENT_STATUS_CODES | {400}
 _DEFAULT_MAX_TRANSIENT_RETRIES = 3
 _DEFAULT_RETRY_BASE_DELAY_SECONDS = 0.5
 _DEFAULT_RETRY_MAX_DELAY_SECONDS = 8.0
@@ -26,6 +27,7 @@ class OpenAICompatibleGateway:
         embedding_model: str,
         request_timeout_seconds: float = _DEFAULT_TIMEOUT_SECONDS,
         max_transient_retries: int = _DEFAULT_MAX_TRANSIENT_RETRIES,
+        embedding_max_retries: int | None = None,
         retry_base_delay_seconds: float = _DEFAULT_RETRY_BASE_DELAY_SECONDS,
         retry_max_delay_seconds: float = _DEFAULT_RETRY_MAX_DELAY_SECONDS,
     ):
@@ -33,6 +35,8 @@ class OpenAICompatibleGateway:
             raise ValueError("模型请求超时必须大于 0 秒")
         if max_transient_retries < 0:
             raise ValueError("模型请求重试次数不能小于 0")
+        if embedding_max_retries is not None and embedding_max_retries < 0:
+            raise ValueError("embedding 请求重试次数不能小于 0")
         if retry_base_delay_seconds < 0 or retry_max_delay_seconds < 0:
             raise ValueError("模型请求重试等待时间不能小于 0 秒")
         self.provider_name = provider_name
@@ -47,6 +51,11 @@ class OpenAICompatibleGateway:
         self.embedding_model = f"{embedding_provider_name}::{embedding_model}"
         self.request_timeout_seconds = request_timeout_seconds
         self.max_transient_retries = max_transient_retries
+        self.embedding_max_retries = (
+            max_transient_retries
+            if embedding_max_retries is None
+            else embedding_max_retries
+        )
         self.retry_base_delay_seconds = retry_base_delay_seconds
         self.retry_max_delay_seconds = retry_max_delay_seconds
         self._client = httpx.Client(
@@ -101,8 +110,42 @@ class OpenAICompatibleGateway:
             delay = self.retry_base_delay_seconds * (2 ** attempt)
         return min(max(delay, 0.0), self.retry_max_delay_seconds)
 
-    def _post_json(self, url: str, api_key: str, payload: dict, operation: str) -> httpx.Response:
-        for attempt in range(self.max_transient_retries + 1):
+    @staticmethod
+    def _response_error_detail(response: httpx.Response) -> str:
+        try:
+            payload = response.json()
+        except (ValueError, TypeError):
+            payload = None
+
+        candidates = []
+        if isinstance(payload, dict):
+            error = payload.get("error")
+            if isinstance(error, dict):
+                candidates.extend([error.get("message"), error.get("detail")])
+            elif isinstance(error, str):
+                candidates.append(error)
+            candidates.extend([payload.get("detail"), payload.get("message")])
+        candidates.append(response.text)
+
+        for candidate in candidates:
+            if isinstance(candidate, str) and candidate.strip():
+                return " ".join(candidate.split())[:1000]
+        return ""
+
+    def _post_json(
+        self,
+        url: str,
+        api_key: str,
+        payload: dict,
+        operation: str,
+        *,
+        max_retries: int | None = None,
+        retry_status_codes: frozenset[int] = _TRANSIENT_STATUS_CODES,
+    ) -> httpx.Response:
+        resolved_max_retries = (
+            self.max_transient_retries if max_retries is None else max_retries
+        )
+        for attempt in range(resolved_max_retries + 1):
             try:
                 response = self._client.post(
                     url,
@@ -110,7 +153,7 @@ class OpenAICompatibleGateway:
                     json=payload,
                 )
             except httpx.TimeoutException as exc:
-                if attempt >= self.max_transient_retries:
+                if attempt >= resolved_max_retries:
                     raise RuntimeError(
                         f"{operation}连续 {attempt + 1} 次超时"
                         f"（单次 {self.request_timeout_seconds:g} 秒）"
@@ -118,19 +161,22 @@ class OpenAICompatibleGateway:
                 time.sleep(self._retry_delay(attempt))
                 continue
             except httpx.RequestError as exc:
-                if attempt >= self.max_transient_retries:
+                if attempt >= resolved_max_retries:
                     raise RuntimeError(
                         f"{operation}连续 {attempt + 1} 次连接失败: {exc}"
                     ) from exc
                 time.sleep(self._retry_delay(attempt))
                 continue
 
-            if response.status_code not in _TRANSIENT_STATUS_CODES:
+            if response.status_code not in retry_status_codes:
                 return response
 
-            if attempt >= self.max_transient_retries:
+            if attempt >= resolved_max_retries:
+                detail = self._response_error_detail(response)
+                detail_suffix = f": {detail}" if detail else ""
                 raise RuntimeError(
                     f"{operation}连续 {attempt + 1} 次返回 HTTP {response.status_code}"
+                    f"{detail_suffix}"
                 )
             time.sleep(self._retry_delay(attempt, response))
 
@@ -202,6 +248,8 @@ class OpenAICompatibleGateway:
                 self.embedding_api_key,
                 {"model": self.remote_embedding_model, "input": batch},
                 f"{self.embedding_provider_name or '远程 embedding'} 接口",
+                max_retries=self.embedding_max_retries,
+                retry_status_codes=_EMBEDDING_RETRY_STATUS_CODES,
             )
             response.raise_for_status()
             response_payload = response.json()

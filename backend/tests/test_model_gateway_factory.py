@@ -30,6 +30,7 @@ def settings(**overrides):
         "remote_embedding_model": "embed-model",
         "remote_llm_timeout_seconds": 60.0,
         "remote_llm_max_retries": 0,
+        "remote_embedding_max_retries": 2,
         "remote_llm_retry_base_delay_seconds": 0.5,
         "remote_llm_retry_max_delay_seconds": 5.0,
     }
@@ -47,6 +48,7 @@ class JudgeGatewayFactoryTest(unittest.TestCase):
         self.assertIsInstance(result, OpenAICompatibleGateway)
         self.assertEqual(result.request_timeout_seconds, 60.0)
         self.assertEqual(result.max_transient_retries, 0)
+        self.assertEqual(result.embedding_max_retries, 2)
         self.assertEqual(result.retry_base_delay_seconds, 0.5)
         self.assertEqual(result.retry_max_delay_seconds, 5.0)
         result.close()

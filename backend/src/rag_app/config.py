@@ -46,6 +46,7 @@ class Settings(BaseSettings):
     remote_embedding_model: str = ""
     remote_llm_timeout_seconds: float = 60.0
     remote_llm_max_retries: int = 0
+    remote_embedding_max_retries: int = 2
     remote_llm_retry_base_delay_seconds: float = 0.5
     remote_llm_retry_max_delay_seconds: float = 5.0
     rag_top_k: int = 10

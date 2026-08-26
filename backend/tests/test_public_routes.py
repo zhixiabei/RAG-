@@ -1,4 +1,5 @@
 import unittest
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -105,6 +106,42 @@ class PublicRoutesTest(unittest.TestCase):
         self.assertEqual(run_evaluation.call_args.args[-1], ["q1"])
         self.assertEqual(run_evaluation.call_args.args[4], 45.0)
         self.assertEqual(run_evaluation.call_args.kwargs["max_concurrency"], 3)
+
+    @patch("rag_app.api.routes.load_dataset_from_testset_tool")
+    @patch("rag_app.api.routes._load_evaluation_samples")
+    @patch("rag_app.api.routes._local_dataset_path")
+    @patch("rag_app.api.routes.run_evaluation")
+    def test_local_evaluation_does_not_use_testset_tool(
+        self,
+        run_evaluation,
+        local_dataset_path,
+        load_samples,
+        load_from_testset_tool,
+    ):
+        dataset_path = Path("testsets/local.jsonl")
+        local_dataset_path.return_value = dataset_path
+        load_samples.return_value = ([{"question_id": "local-1", "question": "local"}], {})
+        run_evaluation.return_value = {"summary": {"sample_count": 1}}
+
+        response = self.client.post(
+            "/api/v1/knowledge-bases/kb-personal/evaluation",
+            json={
+                "question_ids": ["local-1"],
+                "dataset_source": "local",
+                "dataset_id": "local.jsonl",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(run_evaluation.call_args.args[0], dataset_path)
+        self.assertIsNone(run_evaluation.call_args.args[7])
+        load_samples.assert_called_once_with(
+            self.client.app.state.services.settings,
+            "local",
+            ["local-1"],
+            "local.jsonl",
+        )
+        load_from_testset_tool.assert_not_called()
 
 
 if __name__ == "__main__":

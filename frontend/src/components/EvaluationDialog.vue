@@ -20,19 +20,30 @@ const source = ref('workshop')
 const localDatasets = ref([])
 const localDatasetId = ref('')
 const selectedIds = ref(new Set())
+let sampleLoadVersion = 0
 
 const selectedCount = computed(() => selectedIds.value.size)
 const canRun = computed(() => !props.busy && (scope.value === 'all' || selectedCount.value > 0))
 
 async function loadSamples() {
+  const loadVersion = ++sampleLoadVersion
+  const requestedSource = source.value
+  const requestedDatasetId = localDatasetId.value
   loading.value = true
   loadError.value = ''
   try {
-    samples.value = await listEvaluationSamples(props.kbId, source.value, localDatasetId.value)
+    const loadedSamples = await listEvaluationSamples(props.kbId, requestedSource, requestedDatasetId)
+    if (loadVersion !== sampleLoadVersion) return
+    samples.value = loadedSamples
+    loadError.value = ''
   } catch (cause) {
+    if (loadVersion !== sampleLoadVersion) return
+    samples.value = []
     loadError.value = cause instanceof Error ? cause.message : '测试集加载失败'
   } finally {
-    loading.value = false
+    if (loadVersion === sampleLoadVersion) {
+      loading.value = false
+    }
   }
 }
 

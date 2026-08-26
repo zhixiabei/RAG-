@@ -26,6 +26,7 @@ def build_model_gateway(settings: Settings) -> ModelGateway:
             settings.remote_embedding_model,
             request_timeout_seconds=settings.remote_llm_timeout_seconds,
             max_transient_retries=settings.remote_llm_max_retries,
+            embedding_max_retries=settings.remote_embedding_max_retries,
             retry_base_delay_seconds=settings.remote_llm_retry_base_delay_seconds,
             retry_max_delay_seconds=settings.remote_llm_retry_max_delay_seconds,
         )
