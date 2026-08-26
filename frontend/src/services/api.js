@@ -76,6 +76,12 @@ export function listEvaluationDatasets(knowledgeBaseId) {
   return request(`/api/v1/knowledge-bases/${encodeURIComponent(knowledgeBaseId)}/evaluation-datasets`)
 }
 
+export function syncKnowledgeBaseToTestset(knowledgeBaseId) {
+  return request(`/api/v1/knowledge-bases/${encodeURIComponent(knowledgeBaseId)}/testset-sync`, {
+    method: 'POST',
+  })
+}
+
 export function listEvaluationSamples(knowledgeBaseId, source = 'workshop', datasetId = '') {
   const query = new URLSearchParams({ source })
   if (datasetId) query.set('dataset', datasetId)

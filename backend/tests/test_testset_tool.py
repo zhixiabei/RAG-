@@ -85,6 +85,38 @@ class TestsetToolClientTest(unittest.TestCase):
         self.assertEqual(chunk["text"], "first chunk")
         self.assertEqual(result["chunk_count"], 1)
 
+    def test_splits_large_documents_into_workshop_batches(self):
+        captured = []
+
+        def handle(request):
+            captured.append(json.loads(request.content))
+            return httpx.Response(200, json={"success": True})
+
+        client = TestsetToolClient(
+            "http://testset.local",
+            transport=httpx.MockTransport(handle),
+        )
+        chunks = [ParsedChunk(index, f"chunk {index}") for index in range(205)]
+        try:
+            result = client.sync_document(
+                {
+                    "document_id": "large-document",
+                    "knowledge_base_id": "kb-1",
+                    "file_name": "large.txt",
+                },
+                chunks,
+            )
+        finally:
+            client.close()
+
+        self.assertEqual(result["chunk_count"], 205)
+        self.assertEqual([len(payload["chunks"]) for payload in captured], [100, 100, 5])
+        self.assertTrue(all(payload["documents"][0]["id"] == "large-document" for payload in captured))
+        self.assertEqual(
+            [chunk["id"] for chunk in captured[-1]["chunks"]],
+            ["large-document:200", "large-document:201", "large-document:202", "large-document:203", "large-document:204"],
+        )
+
     def test_reports_testset_api_errors(self):
         client = TestsetToolClient(
             "http://testset.local",

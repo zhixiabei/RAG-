@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -11,6 +12,12 @@ from .domain.models import ParsedChunk
 
 class TestsetToolSyncError(RuntimeError):
     pass
+
+
+# The workshop rejects requests above either limit. Keep a little headroom for
+# JSON encoding and transport headers so large documents can always be split.
+MAX_IMPORT_CHUNKS = 100
+MAX_IMPORT_PAYLOAD_BYTES = 3_500_000
 
 
 def _iso_timestamp(value: Any) -> str:
@@ -92,27 +99,79 @@ class TestsetToolClient:
             }
             for chunk in chunks
         ]
-        payload = {
-            "documents": [
-                {
-                    "id": document_id,
-                    "name": file_name,
-                    "format": suffix or "unknown",
-                    "sourcePath": relative_path,
-                    "importedAt": _iso_timestamp(document.get("created_at")),
-                    "chunkCount": len(chunk_records),
-                    "metadata": {
-                        "source": "rag",
-                        "knowledgeBaseId": knowledge_base_id,
-                        "mimeType": str(document.get("mime_type") or ""),
-                        "contentHash": str(document.get("content_hash") or ""),
-                        "folderPath": folder_path,
-                    },
-                }
-            ],
-            "chunks": chunk_records,
+        document_record = {
+            "id": document_id,
+            "name": file_name,
+            "format": suffix or "unknown",
+            "sourcePath": relative_path,
+            "importedAt": _iso_timestamp(document.get("created_at")),
+            "chunkCount": len(chunk_records),
+            "metadata": {
+                "source": "rag",
+                "knowledgeBaseId": knowledge_base_id,
+                "mimeType": str(document.get("mime_type") or ""),
+                "contentHash": str(document.get("content_hash") or ""),
+                "folderPath": folder_path,
+            },
         }
 
+        for batch in self._chunk_batches(document_record, chunk_records):
+            self._import_payload({"documents": [document_record], "chunks": batch})
+
+        return {
+            "document_id": document_id,
+            "chunk_count": len(chunk_records),
+        }
+
+    @staticmethod
+    def _chunk_batches(
+        document: dict[str, Any],
+        chunks: list[dict[str, Any]],
+    ):
+        if not chunks:
+            yield []
+            return
+
+        batch: list[dict[str, Any]] = []
+        for chunk in chunks:
+            candidate = batch + [chunk]
+            payload = {"documents": [document], "chunks": candidate}
+            payload_size = len(
+                json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+            )
+            if batch and (
+                len(candidate) > MAX_IMPORT_CHUNKS
+                or payload_size > MAX_IMPORT_PAYLOAD_BYTES
+            ):
+                yield batch
+                batch = [chunk]
+                single_size = len(
+                    json.dumps(
+                        {"documents": [document], "chunks": batch},
+                        ensure_ascii=False,
+                        separators=(",", ":"),
+                    ).encode("utf-8")
+                )
+                if single_size > MAX_IMPORT_PAYLOAD_BYTES:
+                    raise TestsetToolSyncError(
+                        f"Chunk {chunk.get('id', 'unknown')} cannot fit within the "
+                        f"{MAX_IMPORT_PAYLOAD_BYTES} byte import limit"
+                    )
+            elif not batch and (
+                len(candidate) > MAX_IMPORT_CHUNKS
+                or payload_size > MAX_IMPORT_PAYLOAD_BYTES
+            ):
+                raise TestsetToolSyncError(
+                    f"Chunk {chunk.get('id', 'unknown')} cannot fit within the "
+                    f"{MAX_IMPORT_PAYLOAD_BYTES} byte import limit"
+                )
+            else:
+                batch = candidate
+
+        if batch:
+            yield batch
+
+    def _import_payload(self, payload: dict[str, Any]) -> None:
         try:
             response = self._client.post("/api/documents/import", json=payload)
         except httpx.HTTPError as exc:
@@ -133,10 +192,6 @@ class TestsetToolClient:
             raise TestsetToolSyncError(
                 f"Test-set tool import failed ({response.status_code}): {detail or response.text or 'invalid response'}"
             )
-        return {
-            "document_id": document_id,
-            "chunk_count": len(chunk_records),
-        }
 
 
 class TestsetSyncService:

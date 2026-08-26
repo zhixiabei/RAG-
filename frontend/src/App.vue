@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { FileStack, FlaskConical, LoaderCircle, MessageSquareText, Plus, Search, X } from 'lucide-vue-next'
+import { AlertTriangle, CheckCircle2, FileStack, FlaskConical, LoaderCircle, MessageSquareText, Plus, RefreshCw, Search, X } from 'lucide-vue-next'
 import KnowledgeSidebar from './components/KnowledgeSidebar.vue'
 import CreateKnowledgeBaseDialog from './components/CreateKnowledgeBaseDialog.vue'
 import DeleteConfirmDialog from './components/DeleteConfirmDialog.vue'
@@ -8,7 +8,7 @@ import DocumentList from './components/DocumentList.vue'
 import ImportPanel from './components/ImportPanel.vue'
 import ChatWorkspace from './components/ChatWorkspace.vue'
 import EvaluationDialog from './components/EvaluationDialog.vue'
-import { evaluateKnowledgeBase } from './services/api'
+import { evaluateKnowledgeBase, syncKnowledgeBaseToTestset } from './services/api'
 import { useKnowledgeBaseStore } from './stores/knowledgeBase'
 
 const store = useKnowledgeBaseStore()
@@ -26,7 +26,14 @@ const evaluationOpen = ref(false)
 const evaluationBusy = ref(false)
 const evaluationError = ref('')
 const evaluationResult = ref(null)
+const testsetSyncBusy = ref(false)
+const testsetSyncNotice = ref(null)
 let documentPollTimer = null
+
+const testsetSyncTitle = computed(() => {
+  if (store.hasProcessingDocuments) return '文档处理完成后可同步到测试集工坊'
+  return '将当前知识库的文档和 Chunk 同步到测试集工坊'
+})
 
 const deleteDialogTitle = computed(() => {
   if (deleteTarget.value?.type === 'knowledge-base') return '删除知识库'
@@ -110,6 +117,7 @@ onBeforeUnmount(() => {
 watch(() => store.selectedId, () => {
   documentQuery.value = ''
   evaluationOpen.value = false
+  testsetSyncNotice.value = null
 })
 
 watch(
@@ -163,6 +171,33 @@ async function runEvaluation(questionIds, source, datasetId) {
     evaluationError.value = cause instanceof Error ? cause.message : '评测失败'
   } finally {
     evaluationBusy.value = false
+  }
+}
+
+async function syncTestsetWorkshop() {
+  if (!store.selectedId || testsetSyncBusy.value || store.hasProcessingDocuments) return
+  testsetSyncBusy.value = true
+  testsetSyncNotice.value = null
+  try {
+    const result = await syncKnowledgeBaseToTestset(store.selectedId)
+    const syncedDocuments = Number(result.synced_document_count || 0)
+    const syncedChunks = Number(result.synced_chunk_count || 0)
+    const failedDocuments = Number(result.failed_document_count || 0)
+    const skippedDocuments = Number(result.skipped_document_count || 0)
+    const extras = []
+    if (failedDocuments) extras.push(`失败 ${failedDocuments} 个`)
+    if (skippedDocuments) extras.push(`跳过 ${skippedDocuments} 个`)
+    testsetSyncNotice.value = {
+      tone: failedDocuments ? 'warning' : 'success',
+      message: `${failedDocuments ? '部分同步完成' : '同步完成'}：${syncedDocuments} 个文档，${syncedChunks} 个 Chunk${extras.length ? `；${extras.join('，')}` : ''}`,
+    }
+  } catch (cause) {
+    testsetSyncNotice.value = {
+      tone: 'error',
+      message: cause instanceof Error ? cause.message : '同步测试集工坊失败',
+    }
+  } finally {
+    testsetSyncBusy.value = false
   }
 }
 
@@ -235,17 +270,44 @@ async function confirmDelete() {
           <button :class="{ active: activeTab === 'chat' }" @click="activeTab = 'chat'"><MessageSquareText :size="15" />对话</button>
           <button :class="{ active: activeTab === 'documents' }" @click="activeTab = 'documents'"><FileStack :size="15" />文档</button>
         </nav>
-        <button
-          v-if="store.selected"
-          class="topbar-test-button"
-          type="button"
-          title="选择测试集并运行评测"
-          @click="openEvaluation"
-        >
-          <FlaskConical :size="15" />
-          测试
-        </button>
+        <div v-if="store.selected" class="topbar-actions">
+          <button
+            class="topbar-action-button"
+            type="button"
+            :title="testsetSyncTitle"
+            :disabled="testsetSyncBusy || store.hasProcessingDocuments"
+            @click="syncTestsetWorkshop"
+          >
+            <LoaderCircle v-if="testsetSyncBusy" :size="15" class="spinning" />
+            <RefreshCw v-else :size="15" />
+            <span class="topbar-action-label">{{ testsetSyncBusy ? '同步中' : '同步工坊' }}</span>
+          </button>
+          <button
+            class="topbar-action-button"
+            type="button"
+            title="选择测试集并运行评测"
+            @click="openEvaluation"
+          >
+            <FlaskConical :size="15" />
+            <span class="topbar-action-label">测试</span>
+          </button>
+        </div>
       </header>
+
+      <div
+        v-if="testsetSyncNotice"
+        class="testset-sync-notice"
+        :class="`notice-${testsetSyncNotice.tone}`"
+        role="status"
+        aria-live="polite"
+      >
+        <CheckCircle2 v-if="testsetSyncNotice.tone === 'success'" :size="16" />
+        <AlertTriangle v-else :size="16" />
+        <span>{{ testsetSyncNotice.message }}</span>
+        <button type="button" title="关闭同步结果" aria-label="关闭同步结果" @click="testsetSyncNotice = null">
+          <X :size="14" />
+        </button>
+      </div>
 
       <template v-if="store.selected">
         <section v-show="activeTab === 'documents'" class="content-header">
