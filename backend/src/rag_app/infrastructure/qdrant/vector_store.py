@@ -1,17 +1,19 @@
 import time
-from typing import Any
 import unicodedata
+from typing import Any, Sequence
 
 from qdrant_client import QdrantClient, models
 from qdrant_client.http.exceptions import ResponseHandlingException
 
-from ...domain.ids import vector_point_id
+from ...domain.ids import document_vector_point_id, vector_point_id
 from ...domain.models import SearchHit
 
 
 class QdrantVectorStore:
     payload_index_fields = ("knowledge_base_id", "document_id", "node_id")
     text_index_field = "text"
+    document_payload_index_fields = ("knowledge_base_id", "document_id")
+    document_text_index_field = "routing_text"
 
     def __init__(
         self,
@@ -24,8 +26,10 @@ class QdrantVectorStore:
         hnsw_ef_construct: int = 128,
         hnsw_full_scan_threshold: int = 10_000,
         search_hnsw_ef: int = 64,
+        document_collection: str | None = None,
     ):
         self.collection = collection
+        self.document_collection = document_collection or f"{collection}_documents"
         self.client = QdrantClient(url=url, timeout=timeout_seconds)
         self.upsert_batch_size = max(1, upsert_batch_size)
         self.upsert_max_retries = max(0, upsert_max_retries)
@@ -34,29 +38,53 @@ class QdrantVectorStore:
         self.hnsw_full_scan_threshold = max(0, hnsw_full_scan_threshold)
         self.search_hnsw_ef = max(1, search_hnsw_ef)
         self._collection_configured = False
+        self._document_collection_configured = False
 
     def check_connection(self) -> None:
         self.client.get_collections()
         if self.client.collection_exists(self.collection):
-            self._configure_existing_collection(self.client.get_collection(self.collection))
+            collection = self.client.get_collection(self.collection)
+            self._configure_existing_collection(collection)
 
     def ensure_collection(self, vector_size: int) -> None:
         if not self.client.collection_exists(self.collection):
             self.client.create_collection(
                 collection_name=self.collection,
-                vectors_config=models.VectorParams(size=vector_size, distance=models.Distance.COSINE),
+                vectors_config=models.VectorParams(
+                    size=vector_size,
+                    distance=models.Distance.COSINE,
+                ),
                 hnsw_config=self._hnsw_config(),
             )
-            payload_schema = {}
-        else:
-            collection = self.client.get_collection(self.collection)
-            if collection.config.params.vectors.size != vector_size:
-                raise RuntimeError("Qdrant collection 向量维度与 embedding 模型不一致")
-            if not self._collection_configured:
-                self._configure_existing_collection(collection)
+            self._ensure_payload_indexes({})
+            self._collection_configured = True
             return
-        self._ensure_payload_indexes(payload_schema)
-        self._collection_configured = True
+
+        collection = self.client.get_collection(self.collection)
+        if collection.config.params.vectors.size != vector_size:
+            raise RuntimeError("Qdrant collection 向量维度与 embedding 模型不一致")
+        if not self._collection_configured:
+            self._configure_existing_collection(collection)
+
+    def _ensure_document_collection(self, vector_size: int) -> None:
+        if not self.client.collection_exists(self.document_collection):
+            self.client.create_collection(
+                collection_name=self.document_collection,
+                vectors_config=models.VectorParams(
+                    size=vector_size,
+                    distance=models.Distance.COSINE,
+                ),
+                hnsw_config=self._hnsw_config(),
+            )
+            self._ensure_document_payload_indexes({})
+            self._document_collection_configured = True
+            return
+
+        collection = self.client.get_collection(self.document_collection)
+        if collection.config.params.vectors.size != vector_size:
+            raise RuntimeError("Qdrant 文件索引向量维度与 embedding 模型不一致")
+        if not self._document_collection_configured:
+            self._configure_existing_document_collection(collection)
 
     def _configure_existing_collection(self, collection: Any) -> None:
         if not self._uses_configured_hnsw(collection):
@@ -66,6 +94,15 @@ class QdrantVectorStore:
             )
         self._ensure_payload_indexes(collection.payload_schema or {})
         self._collection_configured = True
+
+    def _configure_existing_document_collection(self, collection: Any) -> None:
+        if not self._uses_configured_hnsw(collection):
+            self.client.update_collection(
+                collection_name=self.document_collection,
+                hnsw_config=self._hnsw_config(),
+            )
+        self._ensure_document_payload_indexes(collection.payload_schema or {})
+        self._document_collection_configured = True
 
     def _hnsw_config(self) -> models.HnswConfigDiff:
         return models.HnswConfigDiff(
@@ -104,10 +141,35 @@ class QdrantVectorStore:
                 field_schema=models.TextIndexParams(
                     type=models.TextIndexType.TEXT,
                     tokenizer=models.TokenizerType.MULTILINGUAL,
-                min_token_len=1,
-                lowercase=True,
-                phrase_matching=True,
-            ),
+                    min_token_len=1,
+                    lowercase=True,
+                    phrase_matching=True,
+                ),
+                wait=True,
+            )
+
+    def _ensure_document_payload_indexes(self, payload_schema: Any) -> None:
+        indexed_fields = set(payload_schema) if isinstance(payload_schema, dict) else set()
+        for field in self.document_payload_index_fields:
+            if field in indexed_fields:
+                continue
+            self.client.create_payload_index(
+                collection_name=self.document_collection,
+                field_name=field,
+                field_schema=models.PayloadSchemaType.KEYWORD,
+                wait=False,
+            )
+        if self.document_text_index_field not in indexed_fields:
+            self.client.create_payload_index(
+                collection_name=self.document_collection,
+                field_name=self.document_text_index_field,
+                field_schema=models.TextIndexParams(
+                    type=models.TextIndexType.TEXT,
+                    tokenizer=models.TokenizerType.MULTILINGUAL,
+                    min_token_len=1,
+                    lowercase=True,
+                    phrase_matching=True,
+                ),
                 wait=True,
             )
 
@@ -134,11 +196,147 @@ class QdrantVectorStore:
                         raise
                     time.sleep(0.5 * (2 ** attempt))
 
-    def search(self, knowledge_base_id: str, vector: list[float], limit: int) -> list[SearchHit]:
+    def upsert_document(self, point: dict[str, Any], vector: list[float]) -> None:
+        self.upsert_documents([point], [vector])
+
+    def upsert_documents(
+        self,
+        points: list[dict[str, Any]],
+        vectors: list[list[float]],
+    ) -> None:
+        if not points:
+            return
+        if len(points) != len(vectors):
+            raise ValueError("文档路由点和向量数量不一致")
+        self._ensure_document_collection(len(vectors[0]))
+        for document_id in dict.fromkeys(str(point["document_id"]) for point in points):
+            self._delete_by_payload(self.document_collection, "document_id", document_id)
+        for start in range(0, len(points), self.upsert_batch_size):
+            point_batch = points[start:start + self.upsert_batch_size]
+            vector_batch = vectors[start:start + self.upsert_batch_size]
+            for attempt in range(self.upsert_max_retries + 1):
+                try:
+                    self.client.upsert(
+                        collection_name=self.document_collection,
+                        points=models.Batch(
+                            ids=[
+                                document_vector_point_id(
+                                    str(point["document_id"]),
+                                    str(point.get("route_kind") or "profile"),
+                                )
+                                for point in point_batch
+                            ],
+                            vectors=vector_batch,
+                            payloads=point_batch,
+                        ),
+                        wait=False,
+                    )
+                    break
+                except ResponseHandlingException:
+                    if attempt >= self.upsert_max_retries:
+                        raise
+                    time.sleep(0.5 * (2 ** attempt))
+
+    def search_documents(
+        self,
+        knowledge_base_id: str,
+        vector: list[float],
+        limit: int,
+    ) -> list[SearchHit]:
+        if limit <= 0 or not self.client.collection_exists(self.document_collection):
+            return []
+        result = self.client.query_points(
+            collection_name=self.document_collection,
+            query=vector,
+            query_filter=self._search_filter(knowledge_base_id),
+            search_params=models.SearchParams(hnsw_ef=self.search_hnsw_ef, exact=False),
+            # Each document currently has at most four route nodes.
+            limit=max(16, limit * 4),
+            with_payload=True,
+        )
+        return self._best_document_hits(
+            [self._to_document_hit(point) for point in result.points],
+            limit,
+        )
+
+    def search_keyword_documents(
+        self,
+        knowledge_base_id: str,
+        keywords: list[str],
+        limit: int,
+    ) -> list[SearchHit]:
+        if (
+            not keywords
+            or limit <= 0
+            or not self.client.collection_exists(self.document_collection)
+        ):
+            return []
+        conditions = [
+            models.FieldCondition(
+                key=self.document_text_index_field,
+                match=models.MatchText(text=keyword),
+            )
+            for keyword in keywords
+        ]
+        points, _ = self.client.scroll(
+            collection_name=self.document_collection,
+            scroll_filter=models.Filter(
+                must=self._search_filter(knowledge_base_id).must,
+                min_should=models.MinShould(conditions=conditions, min_count=1),
+            ),
+            limit=min(256, max(32, limit * 8)),
+            with_payload=True,
+            with_vectors=False,
+        )
+        normalized_keywords = [
+            self._normalize_lexical(keyword)
+            for keyword in keywords
+        ]
+
+        def keyword_score(point) -> int:
+            routing_text = self._normalize_lexical(
+                str(point.payload.get(self.document_text_index_field) or "")
+            )
+            return sum(
+                len(keyword) ** 2
+                + (100 if any(char.isdigit() for char in keyword) else 0)
+                for keyword in normalized_keywords
+                if keyword and keyword in routing_text
+            )
+
+        ranked = sorted(
+            (
+                (point, keyword_score(point))
+                for point in points
+                if point.payload
+            ),
+            key=lambda item: (
+                -item[1],
+                str(item[0].payload.get("document_id") or ""),
+            ),
+        )
+        ranked = [(point, score) for point, score in ranked if score > 0]
+        if not ranked:
+            return []
+        max_score = ranked[0][1]
+        return self._best_document_hits([
+            self._to_document_hit(point, score / max_score)
+            for point, score in ranked
+        ], limit)
+
+    def search(
+        self,
+        knowledge_base_id: str,
+        vector: list[float],
+        limit: int,
+        document_ids: Sequence[str] | None = None,
+    ) -> list[SearchHit]:
+        if limit <= 0 or document_ids is not None and not document_ids:
+            return []
         result = self.client.query_points(
             collection_name=self.collection,
             query=vector,
-            query_filter=models.Filter(must=[models.FieldCondition(key="knowledge_base_id", match=models.MatchValue(value=knowledge_base_id))]),
+            query_filter=self._search_filter(knowledge_base_id, document_ids),
             search_params=models.SearchParams(hnsw_ef=self.search_hnsw_ef, exact=False),
             limit=limit,
             with_payload=True,
@@ -150,8 +348,9 @@ class QdrantVectorStore:
         knowledge_base_id: str,
         keywords: list[str],
         limit: int,
+        document_ids: Sequence[str] | None = None,
     ) -> list[SearchHit]:
-        if not keywords or limit <= 0:
+        if not keywords or limit <= 0 or document_ids is not None and not document_ids:
             return []
         conditions = [
             models.FieldCondition(
@@ -163,13 +362,10 @@ class QdrantVectorStore:
         points, _ = self.client.scroll(
             collection_name=self.collection,
             scroll_filter=models.Filter(
-                must=[models.FieldCondition(
-                    key="knowledge_base_id",
-                    match=models.MatchValue(value=knowledge_base_id),
-                )],
+                must=self._search_filter(knowledge_base_id, document_ids).must,
                 min_should=models.MinShould(conditions=conditions, min_count=1),
             ),
-            limit=min(256, max(64, limit * 16)),
+            limit=min(512, max(64, limit * 16)),
             with_payload=True,
             with_vectors=False,
         )
@@ -183,33 +379,73 @@ class QdrantVectorStore:
                 if keyword and keyword in text
             )
 
-        scored_points = [
-            (point, keyword_score(point))
-            for point in points
-        ]
+        scored_points = [(point, keyword_score(point)) for point in points if point.payload]
         ranked = sorted(
-            (
-                (point, score)
-                for point, score in scored_points
-                if score > 0
-            ),
-            key=lambda item: (
-                item[1],
-                str(item[0].payload.get("chunk_id") or ""),
-            ),
-            reverse=True,
+            ((point, score) for point, score in scored_points if score > 0),
+            key=lambda item: (-item[1], str(item[0].payload.get("chunk_id") or "")),
         )[:limit]
         if not ranked:
             return []
         max_score = ranked[0][1]
-        return [
-            self._to_search_hit(point, score / max_score)
-            for point, score in ranked
+        return [self._to_search_hit(point, score / max_score) for point, score in ranked]
+
+    @staticmethod
+    def _search_filter(
+        knowledge_base_id: str,
+        document_ids: Sequence[str] | None = None,
+    ) -> models.Filter:
+        must = [
+            models.FieldCondition(
+                key="knowledge_base_id",
+                match=models.MatchValue(value=knowledge_base_id),
+            )
         ]
+        if document_ids is not None:
+            must.append(
+                models.FieldCondition(
+                    key="document_id",
+                    match=models.MatchAny(any=list(dict.fromkeys(document_ids))),
+                )
+            )
+        return models.Filter(must=must)
 
     @staticmethod
     def _normalize_lexical(value: str) -> str:
         return "".join(unicodedata.normalize("NFKC", value).lower().split())
+
+    @staticmethod
+    def _to_document_hit(point, score: float | None = None) -> SearchHit:
+        payload = point.payload
+        document_id = str(payload["document_id"])
+        return SearchHit(
+            chunk_id=f"document:{document_id}",
+            document_id=document_id,
+            knowledge_base_id=str(payload["knowledge_base_id"]),
+            title=str(payload["title"]),
+            text=str(payload.get("summary") or ""),
+            folder_path=str(payload.get("folder_path") or ""),
+            page_number=None,
+            score=float(point.score if score is None else score),
+            file_name=str(payload.get("file_name") or payload["title"]),
+            relative_path=str(
+                payload.get("relative_path")
+                or payload.get("file_name")
+                or payload["title"]
+            ),
+        )
+
+    @staticmethod
+    def _best_document_hits(hits: list[SearchHit], limit: int) -> list[SearchHit]:
+        best_by_document: dict[str, SearchHit] = {}
+        document_order: list[str] = []
+        for hit in hits:
+            document_id = str(hit.document_id)
+            if document_id not in best_by_document:
+                document_order.append(document_id)
+            current = best_by_document.get(hit.document_id)
+            if current is None or hit.score > current.score:
+                best_by_document[document_id] = hit
+        return [best_by_document[document_id] for document_id in document_order[:limit]]
 
     @staticmethod
     def _to_search_hit(point, score: float | None = None) -> SearchHit:
@@ -240,16 +476,18 @@ class QdrantVectorStore:
         )
 
     def delete_document(self, document_id: str) -> None:
-        self._delete_by_payload("document_id", document_id)
+        for collection in (self.collection, self.document_collection):
+            self._delete_by_payload(collection, "document_id", document_id)
 
     def delete_knowledge_base(self, knowledge_base_id: str) -> None:
-        self._delete_by_payload("knowledge_base_id", knowledge_base_id)
+        for collection in (self.collection, self.document_collection):
+            self._delete_by_payload(collection, "knowledge_base_id", knowledge_base_id)
 
-    def _delete_by_payload(self, field: str, value: str) -> None:
-        if not self.client.collection_exists(self.collection):
+    def _delete_by_payload(self, collection: str, field: str, value: str) -> None:
+        if not self.client.collection_exists(collection):
             return
         self.client.delete(
-            collection_name=self.collection,
+            collection_name=collection,
             points_selector=models.FilterSelector(
                 filter=models.Filter(
                     must=[models.FieldCondition(key=field, match=models.MatchValue(value=value))]

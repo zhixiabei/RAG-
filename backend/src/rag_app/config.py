@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     minio_bucket: str = "rag-documents"
     qdrant_url: str
     qdrant_collection: str
+    qdrant_document_collection: str = ""
     qdrant_timeout_seconds: float = 30.0
     qdrant_upsert_batch_size: int = 32
     qdrant_upsert_max_retries: int = 2
@@ -51,6 +52,8 @@ class Settings(BaseSettings):
     remote_llm_retry_max_delay_seconds: float = 5.0
     rag_top_k: int = 10
     rag_retrieval_candidate_k: int = 30
+    rag_document_candidate_k: int = 50
+    rag_document_score_threshold: float = 0.45
     rag_rerank_enabled: bool = True
     rag_rerank_provider_name: str = ""
     rag_rerank_base_url: str = ""

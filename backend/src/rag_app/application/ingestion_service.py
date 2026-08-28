@@ -7,7 +7,9 @@ from threading import BoundedSemaphore, Lock, Thread
 from typing import BinaryIO
 from uuid import uuid4
 
+from ..domain.models import ParsedChunk
 from ..domain.ports import DocumentParser, MetadataRepository, ModelGateway, ObjectStore, VectorStore
+from .document_profile import DocumentProfile, build_document_profile
 
 
 logger = logging.getLogger(__name__)
@@ -354,6 +356,53 @@ class IngestionService:
             "content_hash": content_hash,
         }
 
+    def index_document_profile(
+        self,
+        *,
+        knowledge_base_id: str,
+        document_id: str,
+        title: str,
+        file_name: str,
+        folder_path: str,
+        relative_path: str,
+        chunks: list[ParsedChunk],
+    ) -> DocumentProfile:
+        profile = build_document_profile(
+            self.models,
+            file_name,
+            relative_path,
+            chunks,
+        )
+        routes = profile.route_texts(file_name, relative_path, chunks)
+        with self._embedding_slots:
+            embeddings = self.models.embed([text for _, text in routes])
+            if (
+                not embeddings
+                or len(embeddings) != len(routes)
+                or any(not vector for vector in embeddings)
+            ):
+                raise RuntimeError("embedding 服务未返回完整文件路由向量")
+            self.vectors.ensure_collection(len(embeddings[0]))
+            self.vectors.upsert_documents(
+                [
+                    {
+                        "knowledge_base_id": knowledge_base_id,
+                        "document_id": document_id,
+                        "title": title,
+                        "file_name": file_name,
+                        "folder_path": folder_path,
+                        "relative_path": relative_path,
+                        "summary": profile.summary,
+                        "topics": list(profile.topics),
+                        "route_kind": route_kind,
+                        "routing_text": route_text,
+                    }
+                    for (route_kind, route_text), _vector in zip(routes, embeddings)
+                ],
+                embeddings,
+            )
+        return profile
+
     def _process_ingestion(self, prepared: dict, stream: BinaryIO) -> dict:
         knowledge_base_id = prepared["knowledge_base_id"]
         document_id = prepared["document_id"]
@@ -369,7 +418,17 @@ class IngestionService:
             self._raise_if_cancelled(document_id)
             if not chunks:
                 raise ValueError("文档没有可索引的文本内容")
-            self.repository.update_document(document_id, progress=35, stage="embedding")
+            self.repository.update_document(document_id, progress=30, stage="profiling")
+            self.index_document_profile(
+                knowledge_base_id=knowledge_base_id,
+                document_id=document_id,
+                title=title,
+                file_name=safe_name,
+                folder_path=folder_path,
+                relative_path=relative_path,
+                chunks=chunks,
+            )
+            self.repository.update_document(document_id, progress=40, stage="embedding")
             with self._embedding_slots:
                 for start in range(0, len(chunks), self.embedding_batch_size):
                     chunk_batch = chunks[start:start + self.embedding_batch_size]

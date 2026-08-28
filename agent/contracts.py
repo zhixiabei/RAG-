@@ -35,11 +35,29 @@ class ModelGateway(Protocol):
 
 
 class VectorStore(Protocol):
+    def upsert_document(self, point: dict[str, Any], vector: list[float]) -> None: ...
+    def upsert_documents(self, points: list[dict[str, Any]], vectors: list[list[float]]) -> None: ...
+
+    def search_documents(
+        self,
+        knowledge_base_id: str,
+        vector: list[float],
+        limit: int,
+    ) -> Sequence[SearchHit]: ...
+
+    def search_keyword_documents(
+        self,
+        knowledge_base_id: str,
+        keywords: list[str],
+        limit: int,
+    ) -> Sequence[SearchHit]: ...
+
     def search(
         self,
         knowledge_base_id: str,
         vector: list[float],
         limit: int,
+        document_ids: Sequence[str] | None = None,
     ) -> Sequence[SearchHit]: ...
 
     def search_keywords(
@@ -47,6 +65,7 @@ class VectorStore(Protocol):
         knowledge_base_id: str,
         keywords: list[str],
         limit: int,
+        document_ids: Sequence[str] | None = None,
     ) -> Sequence[SearchHit]: ...
 
 

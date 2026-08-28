@@ -10,6 +10,7 @@ import httpx
 
 from rag_app.evaluation import (
     EvaluationError,
+    _print_summary_line,
     evaluate_sample,
     find_samples_outside_knowledge_base,
     load_dataset,
@@ -146,6 +147,43 @@ class EvaluationTest(unittest.TestCase):
         self.assertEqual(summary["judge_sample_count"], 0)
         self.assertEqual(summary["judge_error_count"], 0)
         self.assertNotIn("average_keyword_recall", summary)
+
+    def test_summary_tracks_retrieval_metric_samples(self):
+        summary = summarize([
+            {"document_hit": True, "chunk_hit": True},
+            {"document_hit": None, "chunk_hit": None},
+            {"error": "control request failed"},
+        ])
+
+        self.assertEqual(summary["sample_count"], 3)
+        self.assertEqual(summary["completed_count"], 2)
+        self.assertEqual(summary["error_count"], 1)
+        self.assertEqual(summary["retrieval_metric_sample_count"], 1)
+
+    def test_prints_one_machine_readable_summary_line(self):
+        summary = {
+            "sample_count": 200,
+            "retrieval_metric_sample_count": 198,
+            "completed_count": 200,
+            "error_count": 0,
+            "document_hit_rate": 0.8889,
+            "chunk_hit_rate": 0.8535,
+            "retrieval_recall_at_k": 0.7533,
+            "mrr": 0.7338,
+            "average_answer_score": 0.765,
+            "average_response_time_ms": 2762.57,
+            "p50_response_time_ms": 2572.74,
+            "p95_response_time_ms": 4802.53,
+        }
+
+        with patch("builtins.print") as print_mock:
+            _print_summary_line(summary)
+
+        line = print_mock.call_args.args[0]
+        self.assertIn("SUMMARY samples=200 retrieval_metric_samples=198", line)
+        self.assertIn("doc_hit_rate=88.89%", line)
+        self.assertIn("answer_score=76.50%", line)
+        self.assertIn("p95=4802.53ms", line)
 
     def test_evaluate_sample_keeps_rag_result_when_judge_fails(self):
         chat_payloads = []

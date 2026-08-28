@@ -12,19 +12,49 @@ class FakeModels:
 
 
 class FakeVectors:
-    def __init__(self, hits, keyword_hits=None):
+    def __init__(
+        self,
+        hits,
+        keyword_hits=None,
+        document_hits=None,
+        document_keyword_hits=None,
+    ):
         self.hits = hits
         self.keyword_hits = keyword_hits or []
+        self.document_hits = document_hits or []
+        self.document_keyword_hits = document_keyword_hits or []
         self.calls = []
         self.keyword_calls = []
+        self.document_calls = []
+        self.document_keyword_calls = []
 
-    def search(self, knowledge_base_id, vector, limit):
-        self.calls.append((knowledge_base_id, vector, limit))
-        return self.hits
+    def search(self, knowledge_base_id, vector, limit, document_ids=None):
+        call = (knowledge_base_id, vector, limit)
+        if document_ids is not None:
+            call = (*call, tuple(document_ids))
+        self.calls.append(call)
+        if document_ids is None:
+            return self.hits
+        allowed = set(document_ids)
+        return [hit for hit in self.hits if hit.document_id in allowed]
 
-    def search_keywords(self, knowledge_base_id, keywords, limit):
-        self.keyword_calls.append((knowledge_base_id, keywords, limit))
-        return self.keyword_hits
+    def search_keywords(self, knowledge_base_id, keywords, limit, document_ids=None):
+        call = (knowledge_base_id, keywords, limit)
+        if document_ids is not None:
+            call = (*call, tuple(document_ids))
+        self.keyword_calls.append(call)
+        if document_ids is None:
+            return self.keyword_hits
+        allowed = set(document_ids)
+        return [hit for hit in self.keyword_hits if hit.document_id in allowed]
+
+    def search_documents(self, knowledge_base_id, vector, limit):
+        self.document_calls.append((knowledge_base_id, vector, limit))
+        return self.document_hits
+
+    def search_keyword_documents(self, knowledge_base_id, keywords, limit):
+        self.document_keyword_calls.append((knowledge_base_id, keywords, limit))
+        return self.document_keyword_hits
 
 
 class FakeReranker:
@@ -172,6 +202,155 @@ class KnowledgeRetrievalAgentTest(unittest.TestCase):
 
         with self.assertRaisesRegex(RuntimeError, "embedding 模型"):
             agent.run({"id": "kb-1", "embedding_model": "old-embedding"}, "问题")
+
+    def test_document_threshold_filters_without_reranking(self):
+        chunks = [
+            SearchHit("doc-1:1", "doc-1", "kb-1", "one.txt", "目标内容", 0.9),
+            SearchHit("doc-2:1", "doc-2", "kb-1", "two.txt", "其他内容", 0.8),
+        ]
+        document_hits = [
+            SearchHit("document:doc-1", "doc-1", "kb-1", "one.txt", "", 0.92),
+            SearchHit("document:doc-2", "doc-2", "kb-1", "two.txt", "", 0.40),
+        ]
+        vectors = FakeVectors(chunks, document_hits=document_hits)
+        agent = KnowledgeRetrievalAgent(
+            vectors,
+            FakeModels(),
+            top_k=2,
+            candidate_k=4,
+            document_candidate_k=20,
+            document_score_threshold=0.45,
+        )
+
+        result = agent.run(
+            {"id": "kb-1", "embedding_model": "test-embedding"},
+            "目标内容是什么？",
+        )
+
+        self.assertEqual([hit.chunk_id for hit in result], ["doc-1:1"])
+        self.assertEqual(vectors.document_calls, [("kb-1", [0.1, 0.2], 20)])
+        self.assertEqual(vectors.calls, [("kb-1", [0.1, 0.2], 4, ("doc-1",))])
+
+    def test_all_documents_above_threshold_enter_one_chunk_search(self):
+        chunks = [
+            SearchHit(f"doc-{index}:1", f"doc-{index}", "kb-1", f"{index}.txt", "内容", 0.9)
+            for index in range(1, 4)
+        ]
+        document_hits = [
+            SearchHit(
+                f"document:doc-{index}",
+                f"doc-{index}",
+                "kb-1",
+                f"{index}.txt",
+                "",
+                score,
+            )
+            for index, score in ((1, 0.90), (2, 0.88), (3, 0.86))
+        ]
+        vectors = FakeVectors(chunks, document_hits=document_hits)
+        agent = KnowledgeRetrievalAgent(
+            vectors,
+            FakeModels(),
+            top_k=3,
+            candidate_k=4,
+            document_candidate_k=50,
+            document_score_threshold=0.45,
+        )
+
+        agent.run(
+            {"id": "kb-1", "embedding_model": "test-embedding"},
+            "比较这些内容",
+        )
+
+        self.assertEqual(
+            vectors.calls,
+            [("kb-1", [0.1, 0.2], 4, ("doc-1", "doc-2", "doc-3"))],
+        )
+        self.assertEqual(vectors.document_calls, [("kb-1", [0.1, 0.2], 50)])
+
+    def test_document_threshold_keeps_retriever_order(self):
+        chunks = [
+            SearchHit("doc-2:1", "doc-2", "kb-1", "two.txt", "second", 0.8),
+            SearchHit("doc-1:1", "doc-1", "kb-1", "one.txt", "first", 0.9),
+        ]
+        document_hits = [
+            SearchHit("document:doc-2", "doc-2", "kb-1", "two.txt", "", 0.8),
+            SearchHit("document:doc-1", "doc-1", "kb-1", "one.txt", "", 0.9),
+        ]
+        vectors = FakeVectors(chunks, document_hits=document_hits)
+        agent = KnowledgeRetrievalAgent(
+            vectors,
+            FakeModels(),
+            top_k=2,
+            candidate_k=4,
+            document_candidate_k=50,
+            document_score_threshold=0.45,
+        )
+
+        agent.run(
+            {"id": "kb-1", "embedding_model": "test-embedding"},
+            "compare documents",
+        )
+
+        self.assertEqual(
+            vectors.calls,
+            [("kb-1", [0.1, 0.2], 4, ("doc-2", "doc-1"))],
+        )
+
+    def test_documents_below_threshold_do_not_bypass_filter(self):
+        global_hit = SearchHit(
+            "doc-low:1", "doc-low", "kb-1", "low.txt", "content", 0.9
+        )
+        document_hit = SearchHit(
+            "document:doc-low", "doc-low", "kb-1", "low.txt", "", 0.44
+        )
+        vectors = FakeVectors([global_hit], document_hits=[document_hit])
+        agent = KnowledgeRetrievalAgent(
+            vectors,
+            FakeModels(),
+            top_k=1,
+            document_candidate_k=50,
+            document_score_threshold=0.45,
+        )
+
+        result = agent.run(
+            {"id": "kb-1", "embedding_model": "test-embedding"},
+            "unrelated question",
+        )
+
+        self.assertEqual(result, [])
+        self.assertEqual(vectors.calls, [])
+        self.assertEqual(vectors.document_keyword_calls, [])
+
+    def test_empty_routed_search_falls_back_to_global_chunks(self):
+        global_hit = SearchHit(
+            "doc-source:1", "doc-source", "kb-1", "source.txt", "目标内容", 0.9
+        )
+        routed_document = SearchHit(
+            "document:doc-stale", "doc-stale", "kb-1", "stale.txt", "", 0.95
+        )
+        vectors = FakeVectors([global_hit], document_hits=[routed_document])
+        agent = KnowledgeRetrievalAgent(
+            vectors,
+            FakeModels(),
+            top_k=1,
+            document_candidate_k=50,
+            document_score_threshold=0.45,
+        )
+
+        result = agent.run(
+            {"id": "kb-1", "embedding_model": "test-embedding"},
+            "目标内容",
+        )
+
+        self.assertEqual([hit.chunk_id for hit in result], ["doc-source:1"])
+        self.assertEqual(
+            vectors.calls,
+            [
+                ("kb-1", [0.1, 0.2], 1, ("doc-stale",)),
+                ("kb-1", [0.1, 0.2], 1),
+            ],
+        )
 
 
 if __name__ == "__main__":

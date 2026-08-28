@@ -535,6 +535,9 @@ def summarize(results: list[dict]) -> dict:
         "sample_count": len(results),
         "completed_count": len(completed),
         "error_count": len(results) - len(completed),
+        "retrieval_metric_sample_count": sum(
+            1 for result in completed if result.get("document_hit") is not None
+        ),
         "document_hit_rate": _rate([
             result["document_hit"]
             for result in completed
@@ -889,6 +892,40 @@ def _print_evaluation_result(completed_count: int, total_count: int, result: dic
         )
 
 
+def _print_summary_line(summary: dict) -> None:
+    # The two rates are aggregate values, so use the document metric's sample
+    # count when available rather than treating non-retrieval control samples
+    # as retrieval failures.
+    retrieval_metric_samples = summary.get("retrieval_metric_sample_count")
+    if retrieval_metric_samples is None:
+        retrieval_metric_samples = summary.get("completed_count", 0)
+
+    def percent(value: object) -> str:
+        if value is None:
+            return "NA"
+        return f"{float(value) * 100:.2f}%"
+
+    def number(value: object, suffix: str = "") -> str:
+        return "NA" if value is None else f"{value}{suffix}"
+
+    print(
+        "SUMMARY "
+        f"samples={summary.get('sample_count', 0)} "
+        f"retrieval_metric_samples={retrieval_metric_samples} "
+        f"completed={summary.get('completed_count', 0)} "
+        f"errors={summary.get('error_count', 0)} "
+        f"doc_hit_rate={percent(summary.get('document_hit_rate'))} "
+        f"chunk_hit_rate={percent(summary.get('chunk_hit_rate'))} "
+        f"recall={percent(summary.get('retrieval_recall_at_k'))} "
+        f"mrr={percent(summary.get('mrr'))} "
+        f"answer_score={percent(summary.get('average_answer_score'))} "
+        f"avg_latency={number(summary.get('average_response_time_ms'), 'ms')} "
+        f"p50={number(summary.get('p50_response_time_ms'), 'ms')} "
+        f"p95={number(summary.get('p95_response_time_ms'), 'ms')}",
+        flush=True,
+    )
+
+
 def run_evaluation(
     dataset_path: Path | None,
     knowledge_base_id: str,
@@ -1065,6 +1102,7 @@ def run_evaluation(
             else None
         ),
     })
+    _print_summary_line(summary)
 
     return {
         "dataset": dataset_source,

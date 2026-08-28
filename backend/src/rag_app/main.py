@@ -77,6 +77,7 @@ def build_services(settings: Settings) -> Services:
     vectors = QdrantVectorStore(
         settings.qdrant_url,
         settings.qdrant_collection,
+        document_collection=settings.qdrant_document_collection or None,
         timeout_seconds=settings.qdrant_timeout_seconds,
         upsert_batch_size=settings.qdrant_upsert_batch_size,
         upsert_max_retries=settings.qdrant_upsert_max_retries,
@@ -122,6 +123,8 @@ def build_services(settings: Settings) -> Services:
         models,
         settings.rag_top_k,
         candidate_k=settings.rag_retrieval_candidate_k,
+        document_candidate_k=settings.rag_document_candidate_k,
+        document_score_threshold=settings.rag_document_score_threshold,
         reranker=reranker,
     )
     answer_agent = AnswerAgent(

@@ -58,6 +58,35 @@ class QdrantVectorStoreTest(unittest.TestCase):
         self.assertFalse(params.exact)
 
     @patch("rag_app.infrastructure.qdrant.vector_store.QdrantClient")
+    def test_document_search_keeps_only_best_route_per_document(self, client_class):
+        client = client_class.return_value
+        client.collection_exists.return_value = True
+
+        def point(document_id, score, route_kind):
+            return SimpleNamespace(
+                score=score,
+                payload={
+                    "document_id": document_id,
+                    "knowledge_base_id": "kb-1",
+                    "title": f"{document_id}.pdf",
+                    "summary": route_kind,
+                },
+            )
+
+        client.query_points.return_value.points = [
+            point("doc-2", 0.87, "summary"),
+            point("doc-1", 0.91, "summary"),
+            point("doc-1", 0.82, "topics"),
+        ]
+        store = QdrantVectorStore("http://qdrant:6333", "chunks")
+
+        hits = store.search_documents("kb-1", [0.1, 0.2], 2)
+
+        self.assertEqual([hit.document_id for hit in hits], ["doc-2", "doc-1"])
+        self.assertEqual([hit.score for hit in hits], [0.87, 0.91])
+        self.assertEqual(client.query_points.call_args.kwargs["limit"], 16)
+
+    @patch("rag_app.infrastructure.qdrant.vector_store.QdrantClient")
     def test_search_hit_preserves_section_path_and_chunk_index(self, client_class):
         client = client_class.return_value
         client.query_points.return_value.points = [SimpleNamespace(
