@@ -73,6 +73,15 @@ function tokenUsageTitle(usage, serverResponseTimeMs) {
   return `${serverTiming}输入 ${formatTokens(usage.input_tokens)}；输出 ${formatTokens(usage.output_tokens)}${unreported}`
 }
 
+function timingTitle(timing) {
+  const stages = timing?.top_level
+  if (!stages || typeof stages !== 'object') return '模块耗时未采集'
+  const items = Object.entries(stages).map(([stage, value]) => (
+    stage + ' ' + formatResponseTime(value?.total_ms) + ' (' + (value?.share_percent ?? 0) + '%)'
+  ))
+  return items.length ? '模块耗时占比：' + items.join('；') : '模块耗时未采集'
+}
+
 function citedSources(message) {
   return referencedCitations(message.content, message.citations)
 }
@@ -374,6 +383,7 @@ async function send() {
         responseTimeMs,
         serverResponseTimeMs: result.response_time_ms,
         tokenUsage: result.token_usage,
+        timing: result.timing,
       },
     })
     if (saveFailureCount) attachmentNotice.value = `${saveFailureCount} 个附件未能保存到知识库，但已用于本次回答`
@@ -500,7 +510,7 @@ async function send() {
               </div>
             </details>
             <div v-if="message.metrics" class="response-metrics">
-              <span v-if="message.metrics.responseTimeMs != null" title="服务端处理耗时">
+              <span v-if="message.metrics.responseTimeMs != null" :title="timingTitle(message.metrics.timing)">
                 <Timer :size="12" />{{ formatResponseTime(message.metrics.responseTimeMs) }}
               </span>
               <span :title="tokenUsageTitle(message.metrics.tokenUsage, message.metrics.serverResponseTimeMs)">

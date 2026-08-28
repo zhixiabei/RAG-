@@ -7,8 +7,8 @@ from typing import Any, Mapping, Sequence
 from .context import ContextPolicy, build_answer_context, context_window_for_model
 from .contracts import ModelGateway, SearchHit
 from .history_summarizer import HistorySummarizer
-from .query_intent import is_assistant_identity_question
-from .telemetry import model_usage_stage
+from .query_intent import QueryIntent, analyze_query_intent
+from .telemetry import model_usage_stage, timed_stage
 
 
 ANSWER_SYSTEM_PROMPT = (
@@ -126,8 +126,10 @@ class AnswerAgent:
         knowledge_catalog: str = "",
         catalog_answer: str = "",
         attachment_context: str = "",
+        intent: QueryIntent | None = None,
     ) -> AnswerResult:
-        if is_assistant_identity_question(question):
+        intent = intent or analyze_query_intent(question)
+        if intent.assistant_identity:
             active_model = model or self.models.chat_model
             return AnswerResult(
                 f"我是知识库助手，当前回答使用的模型是 {active_model}。",
@@ -155,19 +157,20 @@ class AnswerAgent:
             else 0
         )
         history_summary = ""
-        context_view = build_answer_context(
-            system_prompt=ANSWER_SYSTEM_PROMPT,
-            question=question,
-            history=history,
-            hits=hits,
-            knowledge_catalog=knowledge_catalog,
-            attachment_context=attachment_context,
-            retrieved_context_override=context_override,
-            text_by_chunk_id=context_texts,
-            model=selected_model,
-            policy=self.context_policy,
-            history_summary_reserve_tokens=summary_reserve_tokens,
-        )
+        with timed_stage("answer.context_build"):
+            context_view = build_answer_context(
+                system_prompt=ANSWER_SYSTEM_PROMPT,
+                question=question,
+                history=history,
+                hits=hits,
+                knowledge_catalog=knowledge_catalog,
+                attachment_context=attachment_context,
+                retrieved_context_override=context_override,
+                text_by_chunk_id=context_texts,
+                model=selected_model,
+                policy=self.context_policy,
+                history_summary_reserve_tokens=summary_reserve_tokens,
+            )
         compression_trace = {
             "enabled": self.history_summarizer is not None,
             "used": False,
@@ -185,7 +188,8 @@ class AnswerAgent:
             )
             compression_trace["source_messages"] = len(compression_source)
             try:
-                history_summary = self.history_summarizer.summarize(compression_source)
+                with timed_stage("answer.history_compression"):
+                    history_summary = self.history_summarizer.summarize(compression_source)
             except Exception as exc:
                 logger.warning(
                     "本地上下文压缩失败，继续使用未压缩的最近历史: %s: %s",
@@ -195,23 +199,24 @@ class AnswerAgent:
                 compression_trace["error"] = f"{type(exc).__name__}: {exc}"
             if history_summary:
                 compression_trace["used"] = True
-                context_view = build_answer_context(
-                    system_prompt=ANSWER_SYSTEM_PROMPT,
-                    question=question,
-                    history=history,
-                    hits=hits,
-                    knowledge_catalog=knowledge_catalog,
-                    attachment_context=attachment_context,
-                    retrieved_context_override=context_override,
-                    history_summary=history_summary,
-                    history_summary_reserve_tokens=summary_reserve_tokens,
-                    text_by_chunk_id=context_texts,
-                    model=selected_model,
-                    policy=self.context_policy,
-                )
+                with timed_stage("answer.context_rebuild"):
+                    context_view = build_answer_context(
+                        system_prompt=ANSWER_SYSTEM_PROMPT,
+                        question=question,
+                        history=history,
+                        hits=hits,
+                        knowledge_catalog=knowledge_catalog,
+                        attachment_context=attachment_context,
+                        retrieved_context_override=context_override,
+                        history_summary=history_summary,
+                        history_summary_reserve_tokens=summary_reserve_tokens,
+                        text_by_chunk_id=context_texts,
+                        model=selected_model,
+                        policy=self.context_policy,
+                    )
         context_view.trace["compression"] = compression_trace
         try:
-            with model_usage_stage("answer_generation"):
+            with timed_stage("answer.generation"), model_usage_stage("answer_generation"):
                 answer = self.models.complete(
                     context_view.messages,
                     model=model,
@@ -240,7 +245,7 @@ class AnswerAgent:
                 model=selected_model,
                 policy=resolved_policy.scaled(0.6),
             )
-            with model_usage_stage("answer_generation"):
+            with timed_stage("answer.generation_retry"), model_usage_stage("answer_generation"):
                 answer = self.models.complete(
                     retry_view.messages,
                     model=model,

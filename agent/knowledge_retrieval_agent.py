@@ -4,7 +4,7 @@ from typing import Any
 import unicodedata
 
 from .contracts import ModelGateway, Reranker, SearchHit, VectorStore
-from .telemetry import model_usage_stage
+from .telemetry import model_usage_stage, timed_stage
 
 
 _IDENTIFIER_PATTERNS = (
@@ -91,7 +91,7 @@ class KnowledgeRetrievalAgent:
                 f"知识库使用 {knowledge_base['embedding_model']} 建立索引，当前 embedding 模型是 "
                 f"{self.models.embedding_model}，请重新建立知识库并导入文档"
             )
-        with model_usage_stage("query_embedding"):
+        with timed_stage("retrieval.query_embedding"), model_usage_stage("query_embedding"):
             query_vector = self.models.embed([question])[0]
         knowledge_base_id = knowledge_base["id"]
         keywords = extract_keyword_terms(question)
@@ -100,13 +100,14 @@ class KnowledgeRetrievalAgent:
         document_ids: list[str] = []
         search_documents = getattr(self.vectors, "search_documents", None)
         if callable(search_documents):
-            document_vector_hits = _best_document_hits(list(
-                search_documents(
-                    knowledge_base_id,
-                    query_vector,
-                    self.document_candidate_k,
-                )
-            ))
+            with timed_stage("retrieval.document_vector_search"):
+                document_vector_hits = _best_document_hits(list(
+                    search_documents(
+                        knowledge_base_id,
+                        query_vector,
+                        self.document_candidate_k,
+                    )
+                ))
             document_ids = [
                 hit.document_id
                 for hit in document_vector_hits
@@ -142,7 +143,7 @@ class KnowledgeRetrievalAgent:
         if self.reranker is None or not candidates:
             return candidates[:self.top_k]
         try:
-            with model_usage_stage("reranking"):
+            with timed_stage("retrieval.rerank"), model_usage_stage("reranking"):
                 reranked = list(
                     self.reranker.rerank(question, candidates, self.top_k)
                 )
@@ -169,49 +170,52 @@ class KnowledgeRetrievalAgent:
         keywords: list[str],
         document_ids: list[str] | None,
     ) -> list[SearchHit]:
-        if document_ids is None:
-            vector_hits = list(
-                self.vectors.search(
-                    knowledge_base_id,
-                    query_vector,
-                    self.candidate_k,
+        with timed_stage("retrieval.chunk_vector_search"):
+            if document_ids is None:
+                vector_hits = list(
+                    self.vectors.search(
+                        knowledge_base_id,
+                        query_vector,
+                        self.candidate_k,
+                    )
                 )
-            )
-        else:
-            vector_hits = list(
-                self.vectors.search(
-                    knowledge_base_id,
-                    query_vector,
-                    self.candidate_k,
-                    document_ids,
+            else:
+                vector_hits = list(
+                    self.vectors.search(
+                        knowledge_base_id,
+                        query_vector,
+                        self.candidate_k,
+                        document_ids,
+                    )
                 )
-            )
 
         keyword_limit = max(1, self.candidate_k // 2)
-        if not keywords:
-            keyword_hits = []
-        elif document_ids is None:
-            keyword_hits = list(
-                self.vectors.search_keywords(
-                    knowledge_base_id,
-                    keywords,
-                    keyword_limit,
+        with timed_stage("retrieval.chunk_keyword_search"):
+            if not keywords:
+                keyword_hits = []
+            elif document_ids is None:
+                keyword_hits = list(
+                    self.vectors.search_keywords(
+                        knowledge_base_id,
+                        keywords,
+                        keyword_limit,
+                    )
                 )
-            )
-        else:
-            keyword_hits = list(
-                self.vectors.search_keywords(
-                    knowledge_base_id,
-                    keywords,
-                    keyword_limit,
-                    document_ids,
+            else:
+                keyword_hits = list(
+                    self.vectors.search_keywords(
+                        knowledge_base_id,
+                        keywords,
+                        keyword_limit,
+                        document_ids,
+                    )
                 )
+        with timed_stage("retrieval.rrf_fusion"):
+            return _reciprocal_rank_fusion(
+                vector_hits,
+                keyword_hits,
+                len(vector_hits) + len(keyword_hits),
             )
-        return _reciprocal_rank_fusion(
-            vector_hits,
-            keyword_hits,
-            len(vector_hits) + len(keyword_hits),
-        )
 
 
 def _reciprocal_rank_fusion(

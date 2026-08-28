@@ -477,6 +477,7 @@ def measure_retrieval_hits(
         ),
         "server_response_time_ms": _optional_number(response.get("response_time_ms")),
         "token_usage": response.get("token_usage") or {"available": False},
+        "timing": response.get("timing") or {"available": False},
     }
 
 
@@ -497,6 +498,48 @@ def _percentile(values: list[float], percentile: float) -> float | None:
     upper = min(lower + 1, len(ordered) - 1)
     fraction = position - lower
     return round(ordered[lower] + (ordered[upper] - ordered[lower]) * fraction, 2)
+
+
+def _aggregate_timing(results: list[dict], bucket: str) -> dict:
+    totals: dict[str, dict[str, float]] = {}
+    total_ms = 0.0
+    sample_count = 0
+    for result in results:
+        timing = result.get("timing")
+        if not isinstance(timing, dict) or not timing.get("available"):
+            continue
+        request_ms = _optional_number(timing.get("total_ms"))
+        if request_ms is None:
+            continue
+        sample_count += 1
+        total_ms += request_ms
+        stages = timing.get(bucket)
+        if not isinstance(stages, dict):
+            continue
+        for stage, value in stages.items():
+            if not isinstance(value, dict):
+                continue
+            elapsed_ms = _optional_number(value.get("total_ms"))
+            if elapsed_ms is None:
+                continue
+            aggregate = totals.setdefault(stage, {"calls": 0.0, "total_ms": 0.0})
+            aggregate["calls"] += float(value.get("calls") or 0)
+            aggregate["total_ms"] += elapsed_ms
+
+    stages = {}
+    for stage, value in totals.items():
+        elapsed_ms = round(value["total_ms"], 2)
+        stages[stage] = {
+            "calls": int(value["calls"]),
+            "total_ms": elapsed_ms,
+            "average_ms": round(elapsed_ms / sample_count, 2) if sample_count else None,
+            "share_percent": round(elapsed_ms * 100 / total_ms, 2) if total_ms else 0.0,
+        }
+    return {
+        "sample_count": sample_count,
+        "total_ms": round(total_ms, 2),
+        "stages": stages,
+    }
 
 
 def summarize(results: list[dict]) -> dict:
@@ -531,6 +574,8 @@ def summarize(results: list[dict]) -> dict:
         for result in completed
         if (result.get("token_usage") or {}).get("available")
     ]
+    top_level_timing = _aggregate_timing(completed, "top_level")
+    nested_timing = _aggregate_timing(completed, "by_stage")
     return {
         "sample_count": len(results),
         "completed_count": len(completed),
@@ -602,6 +647,10 @@ def summarize(results: list[dict]) -> dict:
         "p50_response_time_ms": _percentile(latencies, 0.50),
         "p95_response_time_ms": _percentile(latencies, 0.95),
         "p99_response_time_ms": _percentile(latencies, 0.99),
+        "timing_sample_count": top_level_timing["sample_count"],
+        "timing_total_ms": top_level_timing["total_ms"],
+        "timing_top_level": top_level_timing["stages"],
+        "timing_by_stage": nested_timing["stages"],
         "token_usage_sample_count": len(reported_usage),
         "input_tokens": sum(int(usage.get("input_tokens") or 0) for usage in reported_usage),
         "output_tokens": sum(int(usage.get("output_tokens") or 0) for usage in reported_usage),

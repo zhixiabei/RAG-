@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 import re
 
 
@@ -44,27 +45,59 @@ _KNOWLEDGE_CATALOG_CONTENT_ACTIONS = re.compile(
 )
 
 
+@dataclass(frozen=True)
+class QueryIntent:
+    '''Deterministic routing facts computed for one user question.'''
+
+    assistant_identity: bool
+    needs_catalog: bool
+    catalog_inventory: bool
+    catalog_file_lookup: bool
+
+    @property
+    def skips_retrieval(self) -> bool:
+        return self.assistant_identity or self.catalog_inventory
+
+
+def analyze_query_intent(question: str) -> QueryIntent:
+    '''Classify all keyword intents in one normalized pass.'''
+    normalized = ' '.join(question.strip().split())
+    return QueryIntent(
+        assistant_identity=any(
+            pattern.search(normalized) for pattern in _ASSISTANT_IDENTITY_PATTERNS
+        ),
+        needs_catalog=any(
+            pattern.search(normalized) for pattern in _KNOWLEDGE_CATALOG_PATTERNS
+        ),
+        catalog_inventory=(
+            not _KNOWLEDGE_CATALOG_CONTENT_ACTIONS.search(normalized)
+            and any(
+                pattern.search(normalized)
+                for pattern in _KNOWLEDGE_CATALOG_INVENTORY_PATTERNS
+            )
+        ),
+        catalog_file_lookup=any(
+            pattern.search(normalized)
+            for pattern in _KNOWLEDGE_CATALOG_FILE_LOOKUP_PATTERNS
+        ),
+    )
+
+
 def is_assistant_identity_question(question: str) -> bool:
-    """Return whether the user is asking about this assistant or its active model."""
-    normalized = " ".join(question.strip().split())
-    return any(pattern.search(normalized) for pattern in _ASSISTANT_IDENTITY_PATTERNS)
+    '''Return whether the user asks about this assistant or its model.'''
+    return analyze_query_intent(question).assistant_identity
 
 
 def needs_knowledge_catalog(question: str) -> bool:
-    """Return whether answering requires knowledge-base folder and file metadata."""
-    normalized = " ".join(question.strip().split())
-    return any(pattern.search(normalized) for pattern in _KNOWLEDGE_CATALOG_PATTERNS)
+    '''Return whether answering requires knowledge-base metadata.'''
+    return analyze_query_intent(question).needs_catalog
 
 
 def is_knowledge_catalog_inventory_question(question: str) -> bool:
-    """Return whether the question asks for a deterministic file listing or count."""
-    normalized = " ".join(question.strip().split())
-    if _KNOWLEDGE_CATALOG_CONTENT_ACTIONS.search(normalized):
-        return False
-    return any(pattern.search(normalized) for pattern in _KNOWLEDGE_CATALOG_INVENTORY_PATTERNS)
+    '''Return whether the question asks for a deterministic file listing.'''
+    return analyze_query_intent(question).catalog_inventory
 
 
 def is_knowledge_catalog_file_lookup_question(question: str) -> bool:
-    """Return whether the user asks if a particular file exists in the catalog."""
-    normalized = " ".join(question.strip().split())
-    return any(pattern.search(normalized) for pattern in _KNOWLEDGE_CATALOG_FILE_LOOKUP_PATTERNS)
+    '''Return whether the question asks if a file exists in the catalog.'''
+    return analyze_query_intent(question).catalog_file_lookup

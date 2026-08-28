@@ -213,6 +213,22 @@ class RagServiceTest(unittest.TestCase):
         self.assertEqual(models.completion_calls, [])
         self.assertTrue(result["catalog_used"])
 
+    def test_keyword_catalog_skip_does_not_enter_decision_agent(self):
+        repository = FakeRepository()
+        repository.documents = [{'status': 'ready', 'folder_path': '资料', 'file_name': '制度.pdf'}]
+        vectors = FakeVectorStore()
+        models = FakeModelGateway(retrieval_needed=True)
+        service = self.build_service(repository, vectors, models)
+        service.decision_agent.run = lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError('keyword skip must not call decision agent')
+        )
+
+        result = service.answer('kb-1', 'conversation-1', '知识库里有哪些文件？')
+
+        self.assertFalse(result['retrieval_used'])
+        self.assertEqual(models.completion_calls, [])
+        self.assertEqual(result['agent_trace'][0]['status'], 'skipped')
+
     def test_reports_vector_stage_failures(self):
         repository = FakeRepository()
         vectors = FakeVectorStore()

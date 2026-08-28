@@ -26,6 +26,74 @@ class ModelUsageEvent:
         )
 
 
+@dataclass(frozen=True)
+class TimingEvent:
+    """One wall-clock measurement inside a request trace."""
+
+    stage: str
+    elapsed_ms: float
+    depth: int
+    parent: str | None
+
+
+@dataclass
+class TimingCollector:
+    events: list[TimingEvent] = field(default_factory=list)
+
+    def record(self, event: TimingEvent) -> None:
+        self.events.append(event)
+
+    def summary(self, total_ms: float | None = None) -> dict[str, Any]:
+        if total_ms is None:
+            roots = [event for event in self.events if event.depth == 0]
+            total_ms = max((event.elapsed_ms for event in roots), default=0.0)
+        total_ms = max(0.0, float(total_ms))
+
+        by_stage: dict[str, dict[str, Any]] = {}
+        for event in self.events:
+            stage = by_stage.setdefault(
+                event.stage,
+                {"calls": 0, "total_ms": 0.0, "max_depth": event.depth},
+            )
+            stage["calls"] += 1
+            stage["total_ms"] += event.elapsed_ms
+            stage["max_depth"] = max(stage["max_depth"], event.depth)
+
+        def finalize(values: dict[str, dict[str, Any]]) -> dict[str, dict[str, Any]]:
+            result = {}
+            for stage, value in values.items():
+                elapsed = round(value["total_ms"], 2)
+                result[stage] = {
+                    "calls": value["calls"],
+                    "total_ms": elapsed,
+                    "share_percent": round(elapsed * 100 / total_ms, 2) if total_ms else 0.0,
+                    "max_depth": value["max_depth"],
+                }
+            return result
+
+        # The shallowest events are the non-overlapping module buckets. A request
+        # wrapper is optional, so the base depth is discovered from the trace.
+        base_depth = min((event.depth for event in self.events), default=0)
+        direct = [event for event in self.events if event.depth == base_depth]
+        direct_by_stage: dict[str, dict[str, Any]] = {}
+        for event in direct:
+            stage = direct_by_stage.setdefault(
+                event.stage,
+                {"calls": 0, "total_ms": 0.0, "max_depth": event.depth},
+            )
+            stage["calls"] += 1
+            stage["total_ms"] += event.elapsed_ms
+            stage["max_depth"] = max(stage["max_depth"], event.depth)
+
+        return {
+            "available": bool(self.events),
+            "total_ms": round(total_ms, 2),
+            "event_count": len(self.events),
+            "by_stage": finalize(by_stage),
+            "top_level": finalize(direct_by_stage),
+        }
+
+
 @dataclass
 class ModelUsageCollector:
     events: list[ModelUsageEvent] = field(default_factory=list)
@@ -71,6 +139,14 @@ _active_collector: ContextVar[ModelUsageCollector | None] = ContextVar(
     default=None,
 )
 _active_stage: ContextVar[str] = ContextVar("active_model_usage_stage", default="unspecified")
+_active_timing_collector: ContextVar[TimingCollector | None] = ContextVar(
+    "active_timing_collector",
+    default=None,
+)
+_active_timing_stack: ContextVar[tuple[str, ...]] = ContextVar(
+    "active_timing_stack",
+    default=(),
+)
 
 
 @contextmanager
@@ -90,6 +166,41 @@ def model_usage_stage(stage: str) -> Iterator[None]:
         yield
     finally:
         _active_stage.reset(token)
+
+
+@contextmanager
+def collect_timing() -> Iterator[TimingCollector]:
+    collector = TimingCollector()
+    collector_token = _active_timing_collector.set(collector)
+    stack_token = _active_timing_stack.set(())
+    try:
+        yield collector
+    finally:
+        _active_timing_stack.reset(stack_token)
+        _active_timing_collector.reset(collector_token)
+
+
+@contextmanager
+def timed_stage(stage: str) -> Iterator[None]:
+    collector = _active_timing_collector.get()
+    if collector is None:
+        yield
+        return
+
+    stack = _active_timing_stack.get()
+    stack_token = _active_timing_stack.set((*stack, stage))
+    started_at = perf_counter()
+    try:
+        yield
+    finally:
+        elapsed_ms = (perf_counter() - started_at) * 1_000
+        _active_timing_stack.reset(stack_token)
+        collector.record(TimingEvent(
+            stage=stage,
+            elapsed_ms=elapsed_ms,
+            depth=len(stack),
+            parent=stack[-1] if stack else None,
+        ))
 
 
 def record_model_usage(

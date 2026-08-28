@@ -5,8 +5,8 @@ from typing import Any
 
 from .context import select_history_messages
 from .contracts import ModelGateway
-from .query_intent import is_assistant_identity_question, is_knowledge_catalog_inventory_question
-from .telemetry import model_usage_stage
+from .query_intent import QueryIntent, analyze_query_intent
+from .telemetry import model_usage_stage, timed_stage
 
 
 RETRIEVAL_DECISION_PROMPT = """判断当前消息是否需要检索新的知识库文档。
@@ -71,10 +71,16 @@ class RetrievalDecisionAgent:
     def __init__(self, models: ModelGateway):
         self.models = models
 
-    def run(self, question: str, history: list[dict[str, Any]]) -> RetrievalDecision:
-        if is_assistant_identity_question(question) or is_knowledge_catalog_inventory_question(question):
+    def run(
+        self,
+        question: str,
+        history: list[dict[str, Any]],
+        intent: QueryIntent | None = None,
+    ) -> RetrievalDecision:
+        intent = intent or analyze_query_intent(question)
+        if intent.skips_retrieval:
             return RetrievalDecision(False)
-        with model_usage_stage("retrieval_decision"):
+        with timed_stage("decision.generation"), model_usage_stage("retrieval_decision"):
             output = self.models.complete(
                 retrieval_decision_messages(question, history),
                 temperature=0,

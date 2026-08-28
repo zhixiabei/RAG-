@@ -9,11 +9,9 @@ from agent import (
     RetrievalDecisionAgent,
 )
 from agent.context import format_knowledge_catalog, format_knowledge_catalog_answer
-from agent.telemetry import collect_model_usage
+from agent.telemetry import collect_model_usage, collect_timing, timed_stage
 from agent.query_intent import (
-    is_knowledge_catalog_file_lookup_question,
-    is_knowledge_catalog_inventory_question,
-    needs_knowledge_catalog,
+    analyze_query_intent,
 )
 
 from ..domain.models import Citation
@@ -41,7 +39,8 @@ class RagStageError(RuntimeError):
 def _run_stage(stage: str, operation: Callable[[], T]) -> T:
     started_at = perf_counter()
     try:
-        result = operation()
+        with timed_stage(stage):
+            result = operation()
     except Exception as exc:
         elapsed = perf_counter() - started_at
         logger.exception("RAG 阶段失败 stage=%s elapsed_seconds=%.3f", stage, elapsed)
@@ -88,7 +87,7 @@ class RagService:
         force_retrieval: bool = False,
     ) -> dict:
         started_at = perf_counter()
-        with collect_model_usage() as collector:
+        with collect_timing() as timing, collect_model_usage() as collector:
             response = self._build_answer(
                 knowledge_base_id,
                 conversation_id,
@@ -101,10 +100,12 @@ class RagService:
             )
         response_time_ms = round((perf_counter() - started_at) * 1_000, 2)
         token_usage = collector.summary()
+        timing_summary = timing.summary(response_time_ms)
         metrics = {
             "responseTimeMs": response_time_ms,
             "serverResponseTimeMs": response_time_ms,
             "tokenUsage": token_usage,
+            "timing": timing_summary,
         }
         _run_stage(
             "保存回答",
@@ -119,6 +120,7 @@ class RagService:
         )
         response["response_time_ms"] = response_time_ms
         response["token_usage"] = token_usage
+        response["timing"] = timing_summary
         return response
 
     def _build_answer(
@@ -145,25 +147,38 @@ class RagService:
 
         knowledge_catalog = ""
         catalog_answer = ""
-        file_lookup_question = is_knowledge_catalog_file_lookup_question(question) and not attachment_context
-        inventory_question = is_knowledge_catalog_inventory_question(question) and not attachment_context
-        if needs_knowledge_catalog(question) or inventory_question:
-            documents = self.repository.list_documents(knowledge_base_id)
-            knowledge_catalog = format_knowledge_catalog(documents)
+        intent = analyze_query_intent(question)
+        file_lookup_question = intent.catalog_file_lookup and not attachment_context
+        inventory_question = intent.catalog_inventory and not attachment_context
+        if intent.needs_catalog or inventory_question:
+            documents = _run_stage(
+                "metadata.list_documents",
+                lambda: self.repository.list_documents(knowledge_base_id),
+            )
+            knowledge_catalog = _run_stage(
+                "metadata.format_catalog",
+                lambda: format_knowledge_catalog(documents),
+            )
             if inventory_question:
-                catalog_answer = format_knowledge_catalog_answer(
-                    question,
-                    documents,
-                    history,
-                    file_lookup=file_lookup_question,
+                catalog_answer = _run_stage(
+                    "metadata.catalog_answer",
+                    lambda: format_knowledge_catalog_answer(
+                        question,
+                        documents,
+                        history,
+                        file_lookup=file_lookup_question,
+                    ),
                 )
 
+        keyword_skip = intent.skips_retrieval
         decision = (
             RetrievalDecision(True)
             if force_retrieval
+            else RetrievalDecision(False)
+            if keyword_skip
             else _run_stage(
                 "检索判断",
-                lambda: self.decision_agent.run(question, history),
+                lambda: self.decision_agent.run(question, history, intent=intent),
             )
         )
         retrieval_used = decision.should_retrieve
@@ -185,6 +200,7 @@ class RagService:
                 knowledge_catalog=knowledge_catalog,
                 catalog_answer=catalog_answer,
                 attachment_context=attachment_context,
+                intent=intent,
             ),
         )
         answer = answer_result.answer
@@ -230,7 +246,7 @@ class RagService:
             "agent_trace": [
                 {
                     "agent": self.decision_agent.name,
-                    "status": "forced" if force_retrieval else "completed",
+                    "status": "forced" if force_retrieval else "skipped" if keyword_skip else "completed",
                     "outcome": decision.outcome,
                 },
                 {

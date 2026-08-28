@@ -354,6 +354,8 @@ Pop-Location
 
 ## 文档索引
 
+- [docs/retrieval-performance-and-optimization.md](docs/retrieval-performance-and-optimization.md)：检索链路耗时追踪、基线指标和分阶段优化方案。
+
 - [docs/project-runtime-code-analysis.md](docs/project-runtime-code-analysis.md)：当前代码调用链、文件职责和已知实现差异。
 - [docs/rag-knowledge-base-design.md](docs/rag-knowledge-base-design.md)：目标架构和后续演进设计，部分内容尚未实现。
 - [docs/knowledge-base-access-control-design.md](docs/knowledge-base-access-control-design.md)：权限和多租户设计草案。
