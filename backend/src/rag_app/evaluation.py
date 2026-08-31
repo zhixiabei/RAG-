@@ -869,7 +869,8 @@ def evaluate_sample(
                 "question": sample["question"],
                 "model": model,
                 "include_retrieved_content": bool(sample.get("evidence")),
-                "force_retrieval": True,
+                # Refusal samples must exercise the normal retrieval decision.
+                "force_retrieval": not bool(sample.get("should_refuse")),
             },
         )
         response["client_response_time_ms"] = round((perf_counter() - started_at) * 1_000, 2)

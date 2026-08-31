@@ -5,7 +5,7 @@ from agent.retrieval_decision_agent import (
     retrieval_decision_messages,
     should_retrieve,
 )
-from agent.query_intent import is_knowledge_catalog_inventory_question, needs_knowledge_catalog
+from agent.query_intent import analyze_query_intent
 
 
 class FakeModels:
@@ -62,6 +62,7 @@ class RetrievalDecisionAgentTest(unittest.TestCase):
         self.assertEqual(decision.outcome, "skip")
         self.assertEqual(models.calls[0][2:5], (0, 16, False))
         self.assertEqual(models.calls[0][5]["required"], ["decision"])
+
     def test_model_identity_question_skips_retrieval_without_completion(self):
         models = FakeModels('{"decision":"RETRIEVE"}')
 
@@ -76,8 +77,30 @@ class RetrievalDecisionAgentTest(unittest.TestCase):
 
         decision = RetrievalDecisionAgent(models).run(question, [])
 
-        self.assertFalse(needs_knowledge_catalog(question))
-        self.assertFalse(is_knowledge_catalog_inventory_question(question))
+        self.assertFalse(analyze_query_intent(question).skips_retrieval)
+        self.assertTrue(decision.should_retrieve)
+        self.assertEqual(len(models.calls), 1)
+
+    def test_full_file_listing_no_longer_bypasses_decision_model(self):
+        question = "请列出知识库中的全部文件"
+        models = FakeModels('{"decision":"RETRIEVE"}')
+
+        decision = RetrievalDecisionAgent(models).run(question, [])
+
+        self.assertFalse(analyze_query_intent(question).skips_retrieval)
+        self.assertTrue(decision.should_retrieve)
+        self.assertEqual(len(models.calls), 1)
+
+    def test_file_content_listing_is_not_misclassified_as_catalog_inventory(self):
+        question = (
+            "化167-3井的基线测井文件与同位素测井文件的测量深度范围是否一致？"
+            "请分别列出两个文件的起始深度和结束深度，并说明同位素线文件与它们的深度范围有何不同。"
+        )
+        models = FakeModels('{"decision":"RETRIEVE"}')
+
+        decision = RetrievalDecisionAgent(models).run(question, [])
+
+        self.assertFalse(analyze_query_intent(question).skips_retrieval)
         self.assertTrue(decision.should_retrieve)
         self.assertEqual(len(models.calls), 1)
 

@@ -8,7 +8,7 @@ from agent import (
     RetrievalDecision,
     RetrievalDecisionAgent,
 )
-from agent.context import format_knowledge_catalog, format_knowledge_catalog_answer
+from agent.context import format_file_lookup_answer
 from agent.telemetry import collect_model_usage, collect_timing, timed_stage
 from agent.query_intent import (
     analyze_query_intent,
@@ -149,26 +149,19 @@ class RagService:
         catalog_answer = ""
         intent = analyze_query_intent(question)
         file_lookup_question = intent.catalog_file_lookup and not attachment_context
-        inventory_question = intent.catalog_inventory and not attachment_context
-        if intent.needs_catalog or inventory_question:
+        if file_lookup_question:
             documents = _run_stage(
                 "metadata.list_documents",
                 lambda: self.repository.list_documents(knowledge_base_id),
             )
-            knowledge_catalog = _run_stage(
-                "metadata.format_catalog",
-                lambda: format_knowledge_catalog(documents),
+            catalog_answer = _run_stage(
+                "metadata.file_lookup_answer",
+                lambda: format_file_lookup_answer(
+                    question,
+                    documents,
+                    history,
+                ),
             )
-            if inventory_question:
-                catalog_answer = _run_stage(
-                    "metadata.catalog_answer",
-                    lambda: format_knowledge_catalog_answer(
-                        question,
-                        documents,
-                        history,
-                        file_lookup=file_lookup_question,
-                    ),
-                )
 
         keyword_skip = intent.skips_retrieval
         decision = (
@@ -241,7 +234,7 @@ class RagService:
             "context_chunk_ids": [hit.chunk_id for hit in context_hits],
             "context_document_count": len({hit.document_id for hit in context_hits}),
             "context_trace": answer_result.context_trace,
-            "catalog_used": bool(knowledge_catalog),
+            "catalog_used": bool(catalog_answer),
             "attachments_used": bool(attachment_context),
             "agent_trace": [
                 {

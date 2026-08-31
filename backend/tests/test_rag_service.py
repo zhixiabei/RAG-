@@ -198,36 +198,47 @@ class RagServiceTest(unittest.TestCase):
         self.assertNotIn("第四段", answer_payload["retrieved_context"])
         self.assertEqual(result["context_trace"]["evidence"]["selected"], 3)
 
-    def test_catalog_inventory_uses_metadata_without_vector_search(self):
+    def test_file_listing_request_uses_normal_retrieval_flow(self):
         repository = FakeRepository()
-        repository.documents = [{"status": "ready", "folder_path": "资料", "file_name": "制度.pdf"}]
+        repository.documents = [
+            {"status": "ready", "folder_path": "资料", "file_name": "制度.pdf"},
+        ]
         vectors = FakeVectorStore()
         models = FakeModelGateway(retrieval_needed=True)
 
         result = self.build_service(repository, vectors, models).answer(
-            "kb-1", "conversation-1", "知识库里有哪些文件？"
+            "kb-1", "conversation-1", "请列出知识库中的全部文件"
+        )
+
+        self.assertTrue(result["retrieval_used"])
+        self.assertEqual(models.embed_calls, [["请列出知识库中的全部文件"]])
+        self.assertEqual(len(models.completion_calls), 1)
+        self.assertFalse(result["catalog_used"])
+
+    def test_explicit_file_lookup_uses_metadata_without_decision_model(self):
+        repository = FakeRepository()
+        repository.documents = [
+            {"status": "ready", "folder_path": "资料", "file_name": "制度.pdf"},
+        ]
+        vectors = FakeVectorStore()
+        models = FakeModelGateway(retrieval_needed=True)
+        service = self.build_service(repository, vectors, models)
+        service.decision_agent.run = lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("file lookup must not call decision agent")
+        )
+
+        result = service.answer(
+            "kb-1",
+            "conversation-1",
+            "知识库里是否存在制度.pdf文件？",
         )
 
         self.assertFalse(result["retrieval_used"])
         self.assertEqual(vectors.search_calls, [])
         self.assertEqual(models.completion_calls, [])
         self.assertTrue(result["catalog_used"])
-
-    def test_keyword_catalog_skip_does_not_enter_decision_agent(self):
-        repository = FakeRepository()
-        repository.documents = [{'status': 'ready', 'folder_path': '资料', 'file_name': '制度.pdf'}]
-        vectors = FakeVectorStore()
-        models = FakeModelGateway(retrieval_needed=True)
-        service = self.build_service(repository, vectors, models)
-        service.decision_agent.run = lambda *args, **kwargs: (_ for _ in ()).throw(
-            AssertionError('keyword skip must not call decision agent')
-        )
-
-        result = service.answer('kb-1', 'conversation-1', '知识库里有哪些文件？')
-
-        self.assertFalse(result['retrieval_used'])
-        self.assertEqual(models.completion_calls, [])
-        self.assertEqual(result['agent_trace'][0]['status'], 'skipped')
+        self.assertIn("制度.pdf", result["answer"])
+        self.assertEqual(result["agent_trace"][0]["status"], "skipped")
 
     def test_reports_vector_stage_failures(self):
         repository = FakeRepository()

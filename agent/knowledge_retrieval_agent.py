@@ -97,6 +97,7 @@ class KnowledgeRetrievalAgent:
         keywords = extract_keyword_terms(question)
 
         document_vector_hits: list[SearchHit] = []
+        document_keyword_hits: list[SearchHit] = []
         document_ids: list[str] = []
         search_documents = getattr(self.vectors, "search_documents", None)
         if callable(search_documents):
@@ -108,11 +109,28 @@ class KnowledgeRetrievalAgent:
                         self.document_candidate_k,
                     )
                 ))
-            document_ids = [
-                hit.document_id
-                for hit in document_vector_hits
-                if float(hit.score) >= self.document_score_threshold
-            ]
+        search_keyword_documents = getattr(self.vectors, "search_keyword_documents", None)
+        if keywords and callable(search_keyword_documents):
+            with timed_stage("retrieval.document_keyword_search"):
+                document_keyword_hits = _best_document_hits(list(
+                    search_keyword_documents(
+                        knowledge_base_id,
+                        keywords,
+                        self.document_candidate_k,
+                    )
+                ))
+
+        # Exact document matches supplement, rather than replace, vector routing.
+        document_ids = [
+            hit.document_id
+            for hit in document_vector_hits
+            if float(hit.score) >= self.document_score_threshold
+        ]
+        document_ids.extend(
+            hit.document_id
+            for hit in document_keyword_hits
+            if hit.document_id not in document_ids
+        )
 
         if document_ids:
             candidates = self._retrieve_chunks(
