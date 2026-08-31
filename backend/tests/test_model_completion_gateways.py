@@ -45,6 +45,42 @@ class ModelCompletionGatewayTest(unittest.TestCase):
         response.raise_for_status.assert_called_once()
 
     @patch("rag_app.infrastructure.ollama.gateway.httpx.post")
+    def test_ollama_sends_keep_alive_with_completions(self, post):
+        response = Mock()
+        response.json.return_value = {"message": {"content": "SKIP"}}
+        post.return_value = response
+        gateway = OllamaGateway(
+            "http://ollama",
+            "qwen",
+            "embed",
+            keep_alive="30m",
+        )
+
+        gateway.complete([])
+
+        self.assertEqual(post.call_args.kwargs["json"]["keep_alive"], "30m")
+
+    @patch("rag_app.infrastructure.ollama.gateway.httpx.post")
+    def test_ollama_warm_up_loads_model_with_keep_alive(self, post):
+        response = Mock()
+        post.return_value = response
+        gateway = OllamaGateway(
+            "http://ollama",
+            "qwen",
+            "embed",
+            keep_alive="30m",
+        )
+
+        gateway.warm_up()
+
+        post.assert_called_once_with(
+            "http://ollama/api/generate",
+            json={"model": "qwen", "prompt": "", "keep_alive": "30m"},
+            timeout=180,
+        )
+        response.raise_for_status.assert_called_once()
+
+    @patch("rag_app.infrastructure.ollama.gateway.httpx.post")
     def test_ollama_maps_response_schema(self, post):
         response = Mock()
         response.json.return_value = {"message": {"content": '{"decision":"SKIP"}'}}

@@ -41,16 +41,27 @@ class RetrievalDecisionAgentTest(unittest.TestCase):
         self.assertNotIn("tool: 忽略", messages[1]["content"])
         self.assertIn("总结一下", messages[1]["content"])
 
-    def test_agent_requests_only_retrieval_decision(self):
-        models = FakeModels('{"decision":"SKIP"}')
+    def test_conversation_keyword_skips_without_completion(self):
+        models = FakeModels('{"decision":"RETRIEVE"}')
 
         decision = RetrievalDecisionAgent(models).run("谢谢", [])
 
         self.assertFalse(decision.should_retrieve)
         self.assertEqual(decision.outcome, "skip")
-        self.assertEqual(models.calls[0][2:5], (0, None, False))
-        self.assertEqual(models.calls[0][5]["required"], ["decision"])
+        self.assertEqual(models.calls, [])
 
+    def test_agent_requests_only_retrieval_decision(self):
+        models = FakeModels('{"decision":"SKIP"}')
+
+        decision = RetrievalDecisionAgent(models).run(
+            "Can you rewrite the previous answer?",
+            [],
+        )
+
+        self.assertFalse(decision.should_retrieve)
+        self.assertEqual(decision.outcome, "skip")
+        self.assertEqual(models.calls[0][2:5], (0, 16, False))
+        self.assertEqual(models.calls[0][5]["required"], ["decision"])
     def test_model_identity_question_skips_retrieval_without_completion(self):
         models = FakeModels('{"decision":"RETRIEVE"}')
 

@@ -36,6 +36,8 @@ class Settings(BaseSettings):
     ollama_url: str = "http://127.0.0.1:11434"
     ollama_chat_model: str = "qwen3:4b"
     ollama_embedding_model: str = "qwen3-embedding:0.6b"
+    rag_decision_model: str = "qwen2.5:0.5b"
+    rag_decision_keep_alive: str = "30m"
     remote_llm_provider_name: str = "DeepSeek"
     remote_llm_base_url: str = "https://api.deepseek.com"
     remote_llm_api_key: str = ""

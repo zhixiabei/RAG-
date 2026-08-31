@@ -18,6 +18,13 @@ _ASSISTANT_IDENTITY_PATTERNS = (
     re.compile(r"\bwho\s+are\s+you\b", re.IGNORECASE),
 )
 
+_CONVERSATION_ONLY_PATTERNS = (
+    re.compile(
+        r"^(?:你好|您好|嗨|哈喽|hello|hi|hey|谢谢|谢谢你|感谢|多谢|好的|好|明白了|知道了|收到|再见|拜拜)[！!。.\s]*$",
+        re.IGNORECASE,
+    ),
+)
+
 _KNOWLEDGE_CATALOG_PATTERNS = (
     re.compile(r"(?:文件夹|目录|路径|子目录)", re.IGNORECASE),
     re.compile(r"(?:有哪些|列出|查看|显示|所有|多少).{0,10}(?:文件|文档)", re.IGNORECASE),
@@ -50,13 +57,14 @@ class QueryIntent:
     '''Deterministic routing facts computed for one user question.'''
 
     assistant_identity: bool
+    conversation_only: bool
     needs_catalog: bool
     catalog_inventory: bool
     catalog_file_lookup: bool
 
     @property
     def skips_retrieval(self) -> bool:
-        return self.assistant_identity or self.catalog_inventory
+        return self.assistant_identity or self.conversation_only or self.catalog_inventory
 
 
 def analyze_query_intent(question: str) -> QueryIntent:
@@ -65,6 +73,9 @@ def analyze_query_intent(question: str) -> QueryIntent:
     return QueryIntent(
         assistant_identity=any(
             pattern.search(normalized) for pattern in _ASSISTANT_IDENTITY_PATTERNS
+        ),
+        conversation_only=any(
+            pattern.search(normalized) for pattern in _CONVERSATION_ONLY_PATTERNS
         ),
         needs_catalog=any(
             pattern.search(normalized) for pattern in _KNOWLEDGE_CATALOG_PATTERNS

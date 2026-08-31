@@ -4,10 +4,17 @@ from agent.telemetry import record_model_usage
 
 
 class OllamaGateway:
-    def __init__(self, base_url: str, chat_model: str, embedding_model: str):
+    def __init__(
+        self,
+        base_url: str,
+        chat_model: str,
+        embedding_model: str,
+        keep_alive: str | int | None = None,
+    ):
         self.base_url = base_url.rstrip("/")
         self.chat_model = chat_model
         self.embedding_model = embedding_model
+        self.keep_alive = keep_alive
 
     def check_connection(
         self,
@@ -26,6 +33,17 @@ class OllamaGateway:
         missing = [model for model in required if model not in available]
         if missing:
             raise RuntimeError(f"缺少 Ollama 模型: {', '.join(missing)}")
+
+    def warm_up(self) -> None:
+        payload = {"model": self.chat_model, "prompt": ""}
+        if self.keep_alive is not None:
+            payload["keep_alive"] = self.keep_alive
+        response = httpx.post(
+            f"{self.base_url}/api/generate",
+            json=payload,
+            timeout=180,
+        )
+        response.raise_for_status()
 
     def list_chat_models(self) -> list[dict]:
         response = httpx.get(f"{self.base_url}/api/tags", timeout=10)
@@ -64,6 +82,8 @@ class OllamaGateway:
             "options": options,
             "messages": messages,
         }
+        if self.keep_alive is not None:
+            payload["keep_alive"] = self.keep_alive
         if reasoning is not None:
             payload["think"] = reasoning
         if response_schema is not None:

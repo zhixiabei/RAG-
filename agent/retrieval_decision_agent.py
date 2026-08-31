@@ -20,7 +20,7 @@ RETRIEVAL_DECISION_SCHEMA = {
     },
     "required": ["decision"],
 }
-RETRIEVAL_DECISION_HISTORY_TOKENS = 3_000
+RETRIEVAL_DECISION_HISTORY_TOKENS = 512
 
 
 def retrieval_decision_messages(question: str, history: list[dict[str, Any]]) -> list[dict[str, str]]:
@@ -84,6 +84,7 @@ class RetrievalDecisionAgent:
             output = self.models.complete(
                 retrieval_decision_messages(question, history),
                 temperature=0,
+                max_tokens=16,
                 reasoning=False,
                 response_schema=RETRIEVAL_DECISION_SCHEMA,
             )

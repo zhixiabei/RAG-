@@ -60,7 +60,7 @@ docker-compose.yml  本机 PostgreSQL、MinIO、Qdrant
 - Python 3.12+
 - Node.js 和 npm
 - Docker Desktop 和 Docker Compose
-- 本地模式：正在运行的 Ollama，以及 `qwen3:4b`、`qwen3-embedding:0.6b`
+- 本地模式：正在运行的 Ollama，以及 `qwen3:4b`、`qwen2.5:0.5b`、`qwen3-embedding:0.6b`
 - 远程模式：聊天 API Key 和支持 OpenAI 兼容 `/embeddings` 的 embedding API Key
 
 ## Windows 快速启动
@@ -81,6 +81,7 @@ Pop-Location
 
 ```powershell
 ollama pull qwen3:4b
+ollama pull qwen2.5:0.5b
 ollama pull qwen3-embedding:0.6b
 ```
 
@@ -167,6 +168,8 @@ bash scripts/start-server.sh
 MODEL_MODE=local
 OLLAMA_URL=http://127.0.0.1:11434
 OLLAMA_CHAT_MODEL=qwen3:4b
+RAG_DECISION_MODEL=qwen2.5:0.5b
+RAG_DECISION_KEEP_ALIVE=30m
 OLLAMA_EMBEDDING_MODEL=qwen3-embedding:0.6b
 QDRANT_COLLECTION=rag_chunks_qwen3_embedding
 ```
@@ -175,6 +178,11 @@ QDRANT_COLLECTION=rag_chunks_qwen3_embedding
 
 ```dotenv
 MODEL_MODE=remote
+
+# 意图识别固定使用本地 Ollama 小模型。
+OLLAMA_URL=http://127.0.0.1:11434
+RAG_DECISION_MODEL=qwen2.5:0.5b
+RAG_DECISION_KEEP_ALIVE=30m
 
 REMOTE_LLM_PROVIDER_NAME=DeepSeek
 REMOTE_LLM_BASE_URL=https://api.deepseek.com

@@ -38,6 +38,7 @@ from .infrastructure.qdrant.vector_store import QdrantVectorStore
 from .infrastructure.rerank import HttpReranker
 from .model_gateway_factory import (
     ModelGateway,
+    build_decision_gateway,
     build_context_compression_gateway,
     build_judge_gateway,
     build_model_gateway,
@@ -55,6 +56,7 @@ class Services:
     objects: MinioObjectStore
     vectors: QdrantVectorStore
     models: ModelGateway
+    decision_models: ModelGateway
     context_compression_models: ModelGateway | None
     judge_models: ModelGateway | None
     reranker: HttpReranker | None
@@ -87,6 +89,7 @@ def build_services(settings: Settings) -> Services:
         search_hnsw_ef=settings.qdrant_search_hnsw_ef,
     )
     models = build_model_gateway(settings)
+    decision_models = build_decision_gateway(settings, models)
     context_compression_models = build_context_compression_gateway(settings)
     judge_models = build_judge_gateway(settings, models)
     answer_judge = (
@@ -117,7 +120,7 @@ def build_services(settings: Settings) -> Services:
             )
         else:
             logger.warning("Reranking is enabled but no reranker base URL is configured")
-    decision_agent = RetrievalDecisionAgent(models)
+    decision_agent = RetrievalDecisionAgent(decision_models)
     retrieval_agent = KnowledgeRetrievalAgent(
         vectors,
         models,
@@ -170,6 +173,7 @@ def build_services(settings: Settings) -> Services:
         objects=objects,
         vectors=vectors,
         models=models,
+        decision_models=decision_models,
         context_compression_models=context_compression_models,
         judge_models=judge_models,
         reranker=reranker,
@@ -181,12 +185,22 @@ def build_services(settings: Settings) -> Services:
     )
 
 
+def _initialize_decision_model(models: ModelGateway) -> None:
+    models.check_connection(require_embedding_model=False)
+    warm_up = getattr(models, "warm_up", None)
+    if callable(warm_up):
+        warm_up()
+
+
 def initialize_services(services: Services) -> None:
     checks = [
         ("PostgreSQL", services.repository.initialize),
         ("MinIO", services.objects.ensure_bucket),
         ("Qdrant", services.vectors.check_connection),
         ("模型服务", services.models.check_connection),
+        ("intent decision model", lambda: _initialize_decision_model(
+            services.decision_models,
+        )),
     ]
     if services.context_compression_models is not None:
         checks.append((
@@ -232,6 +246,7 @@ async def lifespan(app: FastAPI):
         closed_gateways = set()
         for gateway in (
             services.models,
+            services.decision_models,
             services.context_compression_models,
             services.judge_models,
         ):

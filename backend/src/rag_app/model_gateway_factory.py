@@ -33,6 +33,28 @@ def build_model_gateway(settings: Settings) -> ModelGateway:
     raise ValueError("MODEL_MODE 只能是 local 或 remote")
 
 
+def build_decision_gateway(
+    settings: Settings,
+    default_gateway: ModelGateway,
+) -> ModelGateway:
+    """Build the lightweight local gateway used for retrieval decisions.
+
+    The answer model may be remote, but intent classification must stay on its
+    own small Ollama model so it never reuses the main generation model.
+    """
+    decision_model = settings.rag_decision_model.strip()
+    if not decision_model:
+        raise ValueError("RAG_DECISION_MODEL 不能为空")
+    if decision_model == getattr(default_gateway, "chat_model", None):
+        raise ValueError("RAG_DECISION_MODEL 不能使用主聊天模型")
+    return OllamaGateway(
+        settings.ollama_url,
+        decision_model,
+        settings.ollama_embedding_model,
+        keep_alive=settings.rag_decision_keep_alive,
+    )
+
+
 def build_context_compression_gateway(settings: Settings) -> OllamaGateway | None:
     if not settings.rag_context_compression_enabled:
         return None
