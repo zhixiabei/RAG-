@@ -5,7 +5,6 @@ import unittest
 from agent import (
     AnswerAgent,
     KnowledgeRetrievalAgent,
-    QueryPlanningAgent,
     RetrievalDecisionAgent,
 )
 from rag_app.application.rag_service import RagService, RagStageError
@@ -56,17 +55,22 @@ class FakeModelGateway:
 
     def complete(self, messages, model=None, temperature=0.1, max_tokens=None, reasoning=None, response_schema=None):
         self.completion_calls.append((messages, model, temperature, max_tokens, reasoning, response_schema))
-        if response_schema and response_schema.get("required") == ["decision"]:
+        required = response_schema.get("required", []) if response_schema else []
+        if required == ["decision"]:
             decision = "RETRIEVE" if self.retrieval_needed else "SKIP"
             return json.dumps({"decision": decision})
-        if response_schema and response_schema.get("required") == [
+        if response_schema and set(required) >= {
+            "decision",
             "strategy",
             "standalone_query",
             "subqueries",
-        ]:
-            if self.planner_output is None:
-                raise AssertionError("planner output was not configured")
-            return self.planner_output
+        }:
+            return self.planner_output or json.dumps({
+                "decision": "RETRIEVE",
+                "strategy": "single",
+                "standalone_query": "测试问题",
+                "subqueries": [],
+            })
         return "测试回答"
 
     def embed(self, texts):
@@ -79,10 +83,9 @@ class RagServiceTest(unittest.TestCase):
     def build_service(repository, vectors, models, top_k=3, query_planning=False):
         return RagService(
             repository,
-            RetrievalDecisionAgent(models),
+            RetrievalDecisionAgent(models, query_planning_enabled=query_planning),
             KnowledgeRetrievalAgent(vectors, models, top_k=top_k),
             AnswerAgent(models),
-            query_planning_agent=QueryPlanningAgent(models) if query_planning else None,
         )
 
     def test_simple_retrieval_skips_planner_model(self):
@@ -114,6 +117,7 @@ class RagServiceTest(unittest.TestCase):
         models = FakeModelGateway(
             retrieval_needed=True,
             planner_output=json.dumps({
+                "decision": "RETRIEVE",
                 "strategy": "rewrite",
                 "standalone_query": "井控方案的审批要求有哪些？",
                 "subqueries": [],
@@ -124,7 +128,7 @@ class RagServiceTest(unittest.TestCase):
             repository, vectors, models, query_planning=True
         ).answer("kb-1", "conversation-1", "这个方案的审批要求呢？")
 
-        self.assertEqual(len(models.completion_calls), 3)
+        self.assertEqual(len(models.completion_calls), 2)
         self.assertEqual(
             models.embed_calls,
             [["这个方案的审批要求呢？", "井控方案的审批要求有哪些？"]],
@@ -136,10 +140,8 @@ class RagServiceTest(unittest.TestCase):
             ["这个方案的审批要求呢？", "井控方案的审批要求有哪些？"],
         )
         self.assertEqual(result["retrieval_trace"]["query_count"], 2)
-        self.assertIn("planning.generation", result["timing"]["by_stage"])
-        self.assertEqual(
-            result["timing"]["by_stage"]["planning.generation"]["calls"], 1
-        )
+        self.assertIn("decision.generation", result["timing"]["by_stage"])
+        self.assertNotIn("planning.generation", result["timing"]["by_stage"])
 
     def test_skips_embedding_and_vector_search_when_retrieval_is_not_needed(self):
         repository = FakeRepository([{"role": "assistant", "content": "已有回答"}])

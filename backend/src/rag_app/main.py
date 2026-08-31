@@ -24,7 +24,6 @@ from agent import (
     ContextPolicy,
     HistorySummarizer,
     KnowledgeRetrievalAgent,
-    QueryPlanningAgent,
     RetrievalDecisionAgent,
 )
 from .api.routes import router
@@ -121,11 +120,9 @@ def build_services(settings: Settings) -> Services:
             )
         else:
             logger.warning("Reranking is enabled but no reranker base URL is configured")
-    decision_agent = RetrievalDecisionAgent(decision_models)
-    query_planning_agent = (
-        QueryPlanningAgent(decision_models)
-        if settings.rag_query_planning_enabled
-        else None
+    decision_agent = RetrievalDecisionAgent(
+        decision_models,
+        query_planning_enabled=settings.rag_query_planning_enabled,
     )
     retrieval_agent = KnowledgeRetrievalAgent(
         vectors,
@@ -186,13 +183,7 @@ def build_services(settings: Settings) -> Services:
         answer_judge=answer_judge,
         ingestion=ingestion,
         deletion=DeletionService(repository, objects, vectors, ingestion.cancel),
-        rag=RagService(
-            repository,
-            decision_agent,
-            retrieval_agent,
-            answer_agent,
-            query_planning_agent=query_planning_agent,
-        ),
+        rag=RagService(repository, decision_agent, retrieval_agent, answer_agent),
         testset_sync=testset_sync,
     )
 

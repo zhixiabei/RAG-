@@ -22,8 +22,21 @@ _PLAN_SCHEMA = {
     "required": ["strategy", "standalone_query", "subqueries"],
 }
 _HISTORY_TOKENS = 1_200
+_MAX_HISTORY_MESSAGES = 4
+_MAX_HISTORY_CHARS = 800
 _MAX_QUERY_CHARS = 500
 _MAX_SUBQUERIES = 4
+_QUERY_CONTAMINATION_MARKERS = (
+    "trigger reason",
+    "current question:",
+    "standalone query:",
+    "rewrite:",
+    "触发原因：",
+    "对话历史：",
+    "当前问题：",
+    "独立问题：",
+    "改写：",
+)
 _REFERENCE_PATTERN = re.compile(r"(?:它|这个|那个|这些|那些|上述|上面|前面|刚才|前者|后者|其中|该方案|该文件|该井|该层|this|that|it|they|above)", re.IGNORECASE)
 _SHORT_FOLLOW_UP_PATTERN = re.compile(r"(?:呢|怎么样|如何|多少|是什么|怎么办|有何影响|有什么区别)[？?]?$", re.IGNORECASE)
 _STRONG_COMPLEX_PATTERN = re.compile(r"(?:综合|分别|对比|比较|异同|各自|逐项|多个方面|哪些方面)", re.IGNORECASE)
@@ -85,8 +98,13 @@ class QueryPlanningAgent:
                     temperature=0, max_tokens=384, reasoning=False, response_schema=_PLAN_SCHEMA,
                 )
             return parse_query_plan(output, question, trigger)
-        except Exception:
-            logger.warning("Query planning failed; falling back to the original question", exc_info=True)
+        except Exception as exc:
+            logger.warning(
+                "Query planning output invalid; using the original question (%s: %s)",
+                type(exc).__name__,
+                exc,
+            )
+            logger.debug("Query planning failure details", exc_info=True)
             return QueryPlan.single(question, trigger=trigger, fallback=True)
 
 
@@ -104,8 +122,15 @@ def query_planning_trigger(question: str, history: Sequence[dict[str, Any]]) -> 
 
 
 def query_planning_messages(question: str, history: Sequence[dict[str, Any]], trigger: str) -> list[dict[str, str]]:
-    history_view = select_history_messages(history, _HISTORY_TOKENS)
-    transcript = "\n".join(f"{item['role']}: {item['content']}" for item in history_view.messages)
+    history_view = select_history_messages(
+        history,
+        _HISTORY_TOKENS if trigger == "context_reference" else 0,
+    )
+    selected_history = history_view.messages[-_MAX_HISTORY_MESSAGES:]
+    transcript = "\n".join(
+        f"{item['role']}: {_clip_history_text(item['content'])}"
+        for item in selected_history
+    )
     if history_view.omission_notice:
         transcript = f"{history_view.omission_notice}\n{transcript}"
     return [
@@ -115,21 +140,25 @@ def query_planning_messages(question: str, history: Sequence[dict[str, Any]], tr
 
 
 def parse_query_plan(output: str, question: str, trigger: str) -> QueryPlan:
-    normalized = output.strip()
-    if normalized.startswith("```"):
-        normalized = re.sub(r"^```(?:json)?\s*|\s*```$", "", normalized, flags=re.IGNORECASE)
-    payload = json.loads(normalized)
+    payload = _load_json_object(output)
     if not isinstance(payload, dict):
         raise ValueError("Query planner output must be a JSON object")
     strategy = str(payload.get("strategy") or "").strip().lower()
     if strategy not in {"single", "rewrite", "decompose"}:
         raise ValueError("Query planner returned an unsupported strategy")
     original = _clean_query(question)
-    standalone_query = _clean_query(str(payload.get("standalone_query") or original))
+    standalone_query = _validated_generated_query(
+        payload.get("standalone_query") or original,
+        fallback=original,
+    )
     raw_subqueries = payload.get("subqueries") or []
     if not isinstance(raw_subqueries, list):
         raise ValueError("Query planner subqueries must be a list")
-    subqueries = tuple(_unique_queries([_clean_query(str(item)) for item in raw_subqueries if str(item).strip()]))[:_MAX_SUBQUERIES]
+    subqueries = tuple(_unique_queries([
+        _validated_generated_query(item)
+        for item in raw_subqueries
+        if str(item).strip()
+    ]))[:_MAX_SUBQUERIES]
     if strategy == "rewrite" and standalone_query == original:
         strategy = "single"
     if strategy == "decompose" and len(subqueries) < 2:
@@ -138,6 +167,83 @@ def parse_query_plan(output: str, question: str, trigger: str) -> QueryPlan:
     if strategy != "decompose":
         subqueries = ()
     return QueryPlan(strategy, standalone_query, subqueries, trigger=trigger)
+
+
+def _load_json_object(output: str) -> dict[str, Any]:
+    """Parse strict JSON while tolerating a model's prose or code-fence wrapper."""
+    if not isinstance(output, str) or not output.strip():
+        raise ValueError("Query planner returned empty output")
+    normalized = output.strip()
+    if normalized.startswith("```"):
+        normalized = re.sub(r"^```[^\r\n]*\r?\n?", "", normalized, count=1)
+        normalized = re.sub(r"\r?\n?```\s*$", "", normalized).strip()
+
+    candidates = [normalized]
+    extracted = _extract_json_object(normalized)
+    if extracted and extracted != normalized:
+        candidates.append(extracted)
+    last_error: json.JSONDecodeError | None = None
+    for candidate in candidates:
+        try:
+            payload = json.loads(candidate)
+        except json.JSONDecodeError as exc:
+            last_error = exc
+            continue
+        if not isinstance(payload, dict):
+            raise ValueError("Query planner output must be a JSON object")
+        return payload
+    if last_error is not None:
+        raise last_error
+    raise ValueError("Query planner output must be a JSON object")
+
+
+def _extract_json_object(value: str) -> str | None:
+    """Return the first balanced JSON object, ignoring braces inside strings."""
+    start = value.find("{")
+    if start < 0:
+        return None
+    depth = 0
+    in_string = False
+    escaped = False
+    for index in range(start, len(value)):
+        character = value[index]
+        if in_string:
+            if escaped:
+                escaped = False
+            elif character == chr(92):
+                escaped = True
+            elif character == '"':
+                in_string = False
+            continue
+        if character == '"':
+            in_string = True
+        elif character == "{":
+            depth += 1
+        elif character == "}":
+            depth -= 1
+            if depth == 0:
+                return value[start:index + 1]
+    return None
+
+
+def _validated_generated_query(value: object, fallback: str = "") -> str:
+    query = _clean_query(str(value or ""))
+    lowered = query.casefold()
+    if any(marker in lowered or marker in query for marker in _QUERY_CONTAMINATION_MARKERS):
+        raise ValueError("Query planner copied prompt text into a query")
+    if not query:
+        if fallback:
+            return fallback
+        raise ValueError("Query planner returned an empty query")
+    return query
+
+
+def _clip_history_text(value: str) -> str:
+    text = re.sub(r"\s+", " ", str(value or "")).strip()
+    if len(text) <= _MAX_HISTORY_CHARS:
+        return text
+    half = (_MAX_HISTORY_CHARS - 18) // 2
+    return f"{text[:half]} ...[省略]... {text[-half:]}"
 
 
 def _clean_query(value: str) -> str:

@@ -30,6 +30,9 @@ class RetrievalDecisionAgentTest(unittest.TestCase):
         self.assertTrue(should_retrieve("SKIP because history is enough"))
         self.assertTrue(should_retrieve("RETRIEVE"))
 
+        self.assertFalse(should_retrieve('{"decision":"SKIP","strategy":"rewrite"'))
+        self.assertTrue(should_retrieve('{"decision":"RETRIEVE","strategy":"rewrite"'))
+
     def test_prompt_contains_history_and_current_question(self):
         messages = retrieval_decision_messages(
             "总结一下",
@@ -62,6 +65,27 @@ class RetrievalDecisionAgentTest(unittest.TestCase):
         self.assertEqual(decision.outcome, "skip")
         self.assertEqual(models.calls[0][2:5], (0, 16, False))
         self.assertEqual(models.calls[0][5]["required"], ["decision"])
+
+    def test_combined_mode_returns_query_plan_in_the_same_model_call(self):
+        output = '{"decision":"RETRIEVE","strategy":"rewrite","standalone_query":"化348-4井的含油率是多少？","subqueries":[]}'
+        models = FakeModels(output)
+
+        result = RetrievalDecisionAgent(
+            models,
+            query_planning_enabled=True,
+        ).run(
+            "那它的含油率呢？",
+            [{"role": "user", "content": "介绍化348-4井"}],
+        )
+
+        self.assertTrue(result.should_retrieve)
+        self.assertEqual(result.query_plan.strategy, "rewrite")
+        self.assertEqual(result.query_plan.standalone_query, "化348-4井的含油率是多少？")
+        self.assertEqual(models.calls[0][3], 384)
+        self.assertEqual(
+            models.calls[0][5]["required"],
+            ["decision", "strategy", "standalone_query", "subqueries"],
+        )
 
     def test_model_identity_question_skips_retrieval_without_completion(self):
         models = FakeModels('{"decision":"RETRIEVE"}')
