@@ -4,6 +4,7 @@ from typing import Any
 import unicodedata
 
 from .contracts import ModelGateway, Reranker, SearchHit, VectorStore
+from .query_planning_agent import QueryPlan
 from .telemetry import model_usage_stage, timed_stage
 
 
@@ -85,17 +86,58 @@ class KnowledgeRetrievalAgent:
         self.document_score_threshold = document_score_threshold
         self.reranker = reranker
 
-    def run(self, knowledge_base: dict[str, Any], question: str) -> list[SearchHit]:
+    def run(
+        self,
+        knowledge_base: dict[str, Any],
+        question: str,
+        query_plan: QueryPlan | None = None,
+    ) -> list[SearchHit]:
         if knowledge_base["embedding_model"] != self.models.embedding_model:
             raise RuntimeError(
                 f"知识库使用 {knowledge_base['embedding_model']} 建立索引，当前 embedding 模型是 "
                 f"{self.models.embedding_model}，请重新建立知识库并导入文档"
             )
+        plan = query_plan or QueryPlan.single(question)
+        queries = plan.retrieval_queries(question)
         with timed_stage("retrieval.query_embedding"), model_usage_stage("query_embedding"):
-            query_vector = self.models.embed([question])[0]
+            query_vectors = self.models.embed(queries)
+        if len(query_vectors) != len(queries) or any(not vector for vector in query_vectors):
+            raise RuntimeError("embedding service returned incomplete query vectors")
         knowledge_base_id = knowledge_base["id"]
-        keywords = extract_keyword_terms(question)
+        query_candidates = [
+            self._retrieve_for_query(knowledge_base_id, query_vector, query)
+            for query, query_vector in zip(queries, query_vectors)
+        ]
+        candidates = _multi_query_fusion(
+            query_candidates,
+            limit=max(self.candidate_k, self.top_k * 6),
+        )
+        if self.reranker is None or not candidates:
+            return candidates[:self.top_k]
+        try:
+            with timed_stage("retrieval.rerank"), model_usage_stage("reranking"):
+                reranked = list(
+                    self.reranker.rerank(plan.rerank_query(question), candidates, self.top_k)
+                )
+            if not reranked:
+                raise RuntimeError("Reranker returned no results")
+            seen = {hit.chunk_id for hit in reranked}
+            reranked.extend(hit for hit in candidates if hit.chunk_id not in seen)
+            return reranked[:self.top_k]
+        except Exception:
+            logger.warning(
+                "Reranking failed; falling back to fused retrieval order",
+                exc_info=True,
+            )
+            return candidates[:self.top_k]
 
+    def _retrieve_for_query(
+        self,
+        knowledge_base_id: str,
+        query_vector: list[float],
+        question: str,
+    ) -> list[SearchHit]:
+        keywords = extract_keyword_terms(question)
         document_vector_hits: list[SearchHit] = []
         document_keyword_hits: list[SearchHit] = []
         document_ids: list[str] = []
@@ -103,24 +145,15 @@ class KnowledgeRetrievalAgent:
         if callable(search_documents):
             with timed_stage("retrieval.document_vector_search"):
                 document_vector_hits = _best_document_hits(list(
-                    search_documents(
-                        knowledge_base_id,
-                        query_vector,
-                        self.document_candidate_k,
-                    )
+                    search_documents(knowledge_base_id, query_vector, self.document_candidate_k)
                 ))
         search_keyword_documents = getattr(self.vectors, "search_keyword_documents", None)
         if keywords and callable(search_keyword_documents):
             with timed_stage("retrieval.document_keyword_search"):
                 document_keyword_hits = _best_document_hits(list(
-                    search_keyword_documents(
-                        knowledge_base_id,
-                        keywords,
-                        self.document_candidate_k,
-                    )
+                    search_keyword_documents(knowledge_base_id, keywords, self.document_candidate_k)
                 ))
 
-        # Exact document matches supplement, rather than replace, vector routing.
         document_ids = [
             hit.document_id
             for hit in document_vector_hits
@@ -131,55 +164,21 @@ class KnowledgeRetrievalAgent:
             for hit in document_keyword_hits
             if hit.document_id not in document_ids
         )
-
         if document_ids:
             candidates = self._retrieve_chunks(
-                knowledge_base_id,
-                query_vector,
-                keywords,
-                document_ids,
+                knowledge_base_id, query_vector, keywords, document_ids
             )
         elif not document_vector_hits:
             candidates = self._retrieve_chunks(
-                knowledge_base_id,
-                query_vector,
-                keywords,
-                None,
+                knowledge_base_id, query_vector, keywords, None
             )
         else:
             candidates = []
-
-        # A stale or incomplete document index must not turn routing into a hard failure.
         if document_ids and not candidates:
             candidates = self._retrieve_chunks(
-                knowledge_base_id,
-                query_vector,
-                keywords,
-                None,
+                knowledge_base_id, query_vector, keywords, None
             )
-
-        if self.reranker is None or not candidates:
-            return candidates[:self.top_k]
-        try:
-            with timed_stage("retrieval.rerank"), model_usage_stage("reranking"):
-                reranked = list(
-                    self.reranker.rerank(question, candidates, self.top_k)
-                )
-            if not reranked:
-                raise RuntimeError("Reranker returned no results")
-            seen = {hit.chunk_id for hit in reranked}
-            reranked.extend(
-                hit
-                for hit in candidates
-                if hit.chunk_id not in seen
-            )
-            return reranked[:self.top_k]
-        except Exception:
-            logger.warning(
-                "Reranking failed; falling back to fused retrieval order",
-                exc_info=True,
-            )
-            return candidates[:self.top_k]
+        return candidates
 
     def _retrieve_chunks(
         self,
@@ -265,6 +264,41 @@ def _reciprocal_rank_fusion(
         ),
     )
     return [hits_by_id[hit_id] for hit_id in ranked_ids[:limit]]
+
+
+def _multi_query_fusion(
+    query_results: list[list[SearchHit]],
+    limit: int | None = None,
+) -> list[SearchHit]:
+    """Fuse per-query rankings while giving the original query a small priority."""
+    if not query_results:
+        return []
+    if len(query_results) == 1:
+        return query_results[0]
+    hits_by_id: dict[str, SearchHit] = {}
+    fused_scores: dict[str, float] = {}
+    best_rank: dict[str, int] = {}
+    for query_index, hits in enumerate(query_results):
+        weight = 1.0 if query_index == 0 else 0.85
+        for rank, hit in enumerate(hits, start=1):
+            hit_id = str(hit.chunk_id)
+            hits_by_id.setdefault(hit_id, hit)
+            fused_scores[hit_id] = fused_scores.get(hit_id, 0.0) + weight / (
+                _RRF_RANK_CONSTANT + rank
+            )
+            best_rank[hit_id] = min(best_rank.get(hit_id, rank), rank)
+    ranked_ids = sorted(
+        hits_by_id,
+        key=lambda hit_id: (
+            -fused_scores[hit_id],
+            best_rank[hit_id],
+            -float(hits_by_id[hit_id].score),
+            hit_id,
+        ),
+    )
+    if limit is not None:
+        ranked_ids = ranked_ids[:max(0, limit)]
+    return [hits_by_id[hit_id] for hit_id in ranked_ids]
 
 
 def _best_document_hits(hits: list[SearchHit]) -> list[SearchHit]:

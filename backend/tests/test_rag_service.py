@@ -2,7 +2,12 @@ from dataclasses import replace
 import json
 import unittest
 
-from agent import AnswerAgent, KnowledgeRetrievalAgent, RetrievalDecisionAgent
+from agent import (
+    AnswerAgent,
+    KnowledgeRetrievalAgent,
+    QueryPlanningAgent,
+    RetrievalDecisionAgent,
+)
 from rag_app.application.rag_service import RagService, RagStageError
 from rag_app.domain.models import SearchHit
 
@@ -43,8 +48,9 @@ class FakeModelGateway:
     chat_model = "test-chat"
     embedding_model = "test-embedding"
 
-    def __init__(self, retrieval_needed):
+    def __init__(self, retrieval_needed, planner_output=None):
         self.retrieval_needed = retrieval_needed
+        self.planner_output = planner_output
         self.embed_calls = []
         self.completion_calls = []
 
@@ -53,6 +59,14 @@ class FakeModelGateway:
         if response_schema and response_schema.get("required") == ["decision"]:
             decision = "RETRIEVE" if self.retrieval_needed else "SKIP"
             return json.dumps({"decision": decision})
+        if response_schema and response_schema.get("required") == [
+            "strategy",
+            "standalone_query",
+            "subqueries",
+        ]:
+            if self.planner_output is None:
+                raise AssertionError("planner output was not configured")
+            return self.planner_output
         return "测试回答"
 
     def embed(self, texts):
@@ -62,12 +76,69 @@ class FakeModelGateway:
 
 class RagServiceTest(unittest.TestCase):
     @staticmethod
-    def build_service(repository, vectors, models, top_k=3):
+    def build_service(repository, vectors, models, top_k=3, query_planning=False):
         return RagService(
             repository,
             RetrievalDecisionAgent(models),
             KnowledgeRetrievalAgent(vectors, models, top_k=top_k),
             AnswerAgent(models),
+            query_planning_agent=QueryPlanningAgent(models) if query_planning else None,
+        )
+
+    def test_simple_retrieval_skips_planner_model(self):
+        repository = FakeRepository()
+        vectors = FakeVectorStore([
+            SearchHit("chunk-1", "doc-1", "kb-1", "制度.pdf", "测试证据", 0.9, 1),
+        ])
+        models = FakeModelGateway(retrieval_needed=True)
+
+        result = self.build_service(
+            repository, vectors, models, query_planning=True
+        ).answer("kb-1", "conversation-1", "报销制度是什么？")
+
+        self.assertEqual(len(models.completion_calls), 2)
+        self.assertEqual(models.embed_calls, [["报销制度是什么？"]])
+        self.assertEqual(result["query_plan"]["strategy"], "single")
+        self.assertFalse(result["query_plan"]["model_invoked"])
+        self.assertEqual(result["retrieval_trace"]["query_count"], 1)
+        self.assertNotIn("planning.generation", result["timing"]["by_stage"])
+
+    def test_rewrite_plans_after_decision_and_batches_original_with_standalone_query(self):
+        repository = FakeRepository([
+            {"role": "user", "content": "井控方案有哪些审批要求？"},
+            {"role": "assistant", "content": "已有审批要求回答"},
+        ])
+        vectors = FakeVectorStore([
+            SearchHit("chunk-1", "doc-1", "kb-1", "方案.pdf", "审批要求", 0.9, 1),
+        ])
+        models = FakeModelGateway(
+            retrieval_needed=True,
+            planner_output=json.dumps({
+                "strategy": "rewrite",
+                "standalone_query": "井控方案的审批要求有哪些？",
+                "subqueries": [],
+            }),
+        )
+
+        result = self.build_service(
+            repository, vectors, models, query_planning=True
+        ).answer("kb-1", "conversation-1", "这个方案的审批要求呢？")
+
+        self.assertEqual(len(models.completion_calls), 3)
+        self.assertEqual(
+            models.embed_calls,
+            [["这个方案的审批要求呢？", "井控方案的审批要求有哪些？"]],
+        )
+        self.assertEqual(result["query_plan"]["strategy"], "rewrite")
+        self.assertTrue(result["query_plan"]["model_invoked"])
+        self.assertEqual(
+            result["retrieval_trace"]["queries"],
+            ["这个方案的审批要求呢？", "井控方案的审批要求有哪些？"],
+        )
+        self.assertEqual(result["retrieval_trace"]["query_count"], 2)
+        self.assertIn("planning.generation", result["timing"]["by_stage"])
+        self.assertEqual(
+            result["timing"]["by_stage"]["planning.generation"]["calls"], 1
         )
 
     def test_skips_embedding_and_vector_search_when_retrieval_is_not_needed(self):

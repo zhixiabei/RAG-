@@ -211,6 +211,7 @@ DeepSeek 官方 API 不提供 embedding，必须另配一个支持 `/embeddings`
 | `RAG_RETRIEVAL_CANDIDATE_K` | dense 候选召回数量；关键词候选取其一半 | `30` |
 | `RAG_DOCUMENT_CANDIDATE_K` | 第一阶段文件候选池大小；候选按原始顺序去重，不做文档重排 | `50` |
 | `RAG_DOCUMENT_SCORE_THRESHOLD` | 文件原始 dense 相似度过滤阈值；通过阈值的文件全部进入二级检索 | `0.45` |
+| `RAG_QUERY_PLANNING_ENABLED` | 对多轮指代和明显复合问题启用条件式改写/拆解；简单查询不调用规划模型 | `true` |
 | `RAG_ANSWER_MAX_OUTPUT_TOKENS` | 最终回答的硬输出上限；提示词默认要求 300～600 个中文字 | `1200` |
 | `RAG_RERANK_ENABLED` | 是否启用 HTTP reranker | `true` |
 | `RAG_RERANK_PROVIDER_NAME` / `RAG_RERANK_BASE_URL` / `RAG_RERANK_API_KEY` | reranker 服务覆盖配置；留空复用 `REMOTE_EMBEDDING_*` | 空 |
@@ -231,6 +232,8 @@ DeepSeek 官方 API 不提供 embedding，必须另配一个支持 `/embeddings`
     python backend\src\rag_app\cli.py rebuild-document-index --knowledge-base-id "实际的知识库 ID"
 
 新上传的文档会在入库时自动生成多个文件路由节点（文件名/路径、摘要、主题、章节），每个节点都绑定同一个 document_id。检索阶段先取文件候选池，按原始顺序聚合去重，不做文档重排；仅过滤掉低于 `RAG_DOCUMENT_SCORE_THRESHOLD` 的文件，通过阈值的文件全部进入一次批量二级 chunk 检索。只有文件索引无结果或限定检索无结果时才使用全局 chunk 兜底。文件阶段不做 rerank，最终只对 chunk 做一次 rerank。迁移命令只读取已有 chunk，不会重新上传或切分文档。
+
+启用 `RAG_QUERY_PLANNING_ENABLED` 后，查询规划器只对带历史指代的追问或明显复合问题调用本地决策模型；简单问题直接沿用原检索路径，不增加一次模型调用。规划结果分为 `single`、`rewrite` 和 `decompose`，原问题始终保留在召回查询中，改写/子问题通过一次批量 embedding 后合并召回，最终仍只执行一次 chunk rerank。规划模型输出异常时会回退到原问题，不阻断问答。接口响应的 `query_plan`、`retrieval_trace` 可查看策略和查询数量，`timing.by_stage.planning.generation.total_ms` 可用于实测规划延迟。
 
 本地模型占用内存较高时，不要启动多个 Uvicorn worker；每个进程都会创建自己的入库 worker 和 embedding 并发限制。
 

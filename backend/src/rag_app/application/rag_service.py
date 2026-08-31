@@ -7,6 +7,8 @@ from agent import (
     KnowledgeRetrievalAgent,
     RetrievalDecision,
     RetrievalDecisionAgent,
+    QueryPlan,
+    QueryPlanningAgent,
 )
 from agent.context import format_file_lookup_answer
 from agent.telemetry import collect_model_usage, collect_timing, timed_stage
@@ -69,11 +71,13 @@ class RagService:
         decision_agent: RetrievalDecisionAgent,
         retrieval_agent: KnowledgeRetrievalAgent,
         answer_agent: AnswerAgent,
+        query_planning_agent: QueryPlanningAgent | None = None,
     ):
         self.repository = repository
         self.decision_agent = decision_agent
         self.retrieval_agent = retrieval_agent
         self.answer_agent = answer_agent
+        self.query_planning_agent = query_planning_agent
 
     def answer(
         self,
@@ -176,10 +180,20 @@ class RagService:
         )
         retrieval_used = decision.should_retrieve
         hits = []
+        query_plan = QueryPlan.single(question)
         if retrieval_used:
+            if self.query_planning_agent is not None:
+                query_plan = _run_stage(
+                    "查询规划",
+                    lambda: self.query_planning_agent.run(question, history),
+                )
             hits = _run_stage(
                 "问题向量化并执行相似度检索",
-                lambda: self.retrieval_agent.run(knowledge_base, question),
+                lambda: self.retrieval_agent.run(
+                    knowledge_base,
+                    question,
+                    query_plan=query_plan,
+                ),
             )
 
         answer_result = _run_stage(
@@ -225,6 +239,14 @@ class RagService:
             "retrieval_k": self.retrieval_agent.top_k,
             "retrieval_candidate_k": self.retrieval_agent.candidate_k,
             "reranker": getattr(self.retrieval_agent.reranker, "name", None),
+            "query_plan": query_plan.as_dict(),
+            "retrieval_trace": {
+                "strategy": query_plan.strategy,
+                "queries": query_plan.retrieval_queries(question) if retrieval_used else [],
+                "query_count": (
+                    len(query_plan.retrieval_queries(question)) if retrieval_used else 0
+                ),
+            },
             "retrieved_document_ids": list(dict.fromkeys(
                 hit.document_id for hit in hits if hit.document_id
             )),

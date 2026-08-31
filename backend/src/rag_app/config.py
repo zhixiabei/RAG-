@@ -38,6 +38,7 @@ class Settings(BaseSettings):
     ollama_embedding_model: str = "qwen3-embedding:0.6b"
     rag_decision_model: str = "qwen2.5:0.5b"
     rag_decision_keep_alive: str = "30m"
+    rag_query_planning_enabled: bool = True
     remote_llm_provider_name: str = "DeepSeek"
     remote_llm_base_url: str = "https://api.deepseek.com"
     remote_llm_api_key: str = ""

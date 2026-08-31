@@ -1,6 +1,7 @@
 import unittest
 
 from agent.knowledge_retrieval_agent import KnowledgeRetrievalAgent, extract_keyword_terms
+from agent.query_planning_agent import QueryPlan
 from rag_app.domain.models import SearchHit
 
 
@@ -73,6 +74,64 @@ class FakeReranker:
 
 
 class KnowledgeRetrievalAgentTest(unittest.TestCase):
+    def test_batches_planned_queries_and_reranks_once(self):
+        shared = SearchHit("shared", "doc-1", "kb-1", "hse.txt", "共同要求", 0.8)
+        emergency = SearchHit("emergency", "doc-1", "kb-1", "hse.txt", "井喷处置", 0.9)
+        environment = SearchHit("environment", "doc-2", "kb-1", "env.txt", "污染物管理", 0.9)
+
+        class PlannedModels:
+            embedding_model = "test-embedding"
+
+            def __init__(self):
+                self.calls = []
+
+            def embed(self, texts):
+                self.calls.append(texts)
+                return [[float(index), 0.2] for index, _text in enumerate(texts)]
+
+        class PlannedVectors:
+            def __init__(self):
+                self.calls = []
+
+            def search(self, knowledge_base_id, vector, limit, document_ids=None):
+                index = int(vector[0])
+                self.calls.append((knowledge_base_id, index, limit))
+                return {
+                    0: [shared],
+                    1: [shared, emergency],
+                    2: [environment],
+                }[index]
+
+            def search_keywords(self, knowledge_base_id, keywords, limit, document_ids=None):
+                return []
+
+        models = PlannedModels()
+        vectors = PlannedVectors()
+        reranker = FakeReranker([emergency, environment])
+        agent = KnowledgeRetrievalAgent(
+            vectors, models, top_k=2, candidate_k=3, reranker=reranker
+        )
+        question = "综合说明井喷处置和污染物管理要求"
+        plan = QueryPlan(
+            "decompose", question, ("井喷处置要求", "污染物管理要求"),
+            trigger="complex_query",
+        )
+
+        result = agent.run(
+            {"id": "kb-1", "embedding_model": "test-embedding"},
+            question,
+            query_plan=plan,
+        )
+
+        self.assertEqual(models.calls, [[question, "井喷处置要求", "污染物管理要求"]])
+        self.assertEqual(len(vectors.calls), 3)
+        self.assertEqual(len(reranker.calls), 1)
+        self.assertEqual([hit.chunk_id for hit in reranker.calls[0][1]], [
+            "shared", "environment", "emergency",
+        ])
+        self.assertEqual([hit.chunk_id for hit in result], ["emergency", "environment"])
+        self.assertEqual(len(plan.retrieval_queries(question)), 3)
+
     def test_returns_similarity_ordered_top_k_candidates(self):
         hits = [
             SearchHit(f"chunk-{index}", "doc-1", "kb-1", "制度.pdf", f"内容 {index}", 0.9)
