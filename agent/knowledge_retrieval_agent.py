@@ -1,6 +1,6 @@
 import logging
 import re
-from typing import Any
+from typing import Any, Sequence
 import unicodedata
 
 from .contracts import ModelGateway, Reranker, SearchHit, VectorStore
@@ -114,6 +114,17 @@ class KnowledgeRetrievalAgent:
         )
         if self.reranker is None or not candidates:
             return candidates[:self.top_k]
+
+        # A decomposed question has multiple independent evidence targets. A
+        # single rerank over the fused pool lets one target crowd out another,
+        # so rank each subquery against its own candidates before interleaving
+        # the results for the answer model.
+        if plan.strategy == "decompose":
+            return self._rerank_decomposed_queries(
+                queries,
+                query_candidates,
+                plan.subqueries,
+            )
         try:
             with timed_stage("retrieval.rerank"), model_usage_stage("reranking"):
                 reranked = list(
@@ -131,6 +142,68 @@ class KnowledgeRetrievalAgent:
             )
             return candidates[:self.top_k]
 
+
+    def _rerank_decomposed_queries(
+        self,
+        queries: list[str],
+        query_candidates: list[list[SearchHit]],
+        subqueries: Sequence[str],
+    ) -> list[SearchHit]:
+        candidates_by_query = {
+            query.casefold(): candidates
+            for query, candidates in zip(queries, query_candidates)
+        }
+        ranked_groups: list[list[SearchHit]] = []
+        reranked_query_keys: set[str] = set()
+        for query in subqueries:
+            query_key = query.casefold()
+            if query_key in reranked_query_keys:
+                continue
+            reranked_query_keys.add(query_key)
+            candidates = candidates_by_query.get(query_key, [])
+            if not candidates:
+                continue
+            ranked_groups.append(self._rerank_one_query(query, candidates))
+
+        # Once at least one subquery has usable evidence, keep the generation
+        # context focused on those independent targets. The original query is
+        # still retrieved above and is used as the all-groups-empty fallback.
+        if not ranked_groups:
+            return _multi_query_fusion(
+                query_candidates,
+                limit=max(self.candidate_k, self.top_k * 6),
+            )[:self.top_k]
+        return _interleave_ranked_groups(ranked_groups)
+
+    def _rerank_one_query(
+        self,
+        query: str,
+        candidates: list[SearchHit],
+    ) -> list[SearchHit]:
+        try:
+            with timed_stage("retrieval.rerank"), model_usage_stage("reranking"):
+                reranked = list(self.reranker.rerank(query, candidates, self.top_k))
+            if not reranked:
+                raise RuntimeError("Reranker returned no results")
+            candidate_ids = {hit.chunk_id for hit in candidates}
+            seen: set[str] = set()
+            valid_reranked = []
+            for hit in reranked:
+                hit_id = str(hit.chunk_id)
+                if hit_id in candidate_ids and hit_id not in seen:
+                    seen.add(hit_id)
+                    valid_reranked.append(hit)
+            if not valid_reranked:
+                raise RuntimeError("Reranker returned no candidate results")
+            valid_reranked.extend(hit for hit in candidates if hit.chunk_id not in seen)
+            return valid_reranked[:self.top_k]
+        except Exception:
+            logger.warning(
+                "Reranking failed for decomposed query; falling back to its retrieval order query=%r",
+                query,
+                exc_info=True,
+            )
+            return candidates[:self.top_k]
     def _retrieve_for_query(
         self,
         knowledge_base_id: str,
@@ -301,6 +374,23 @@ def _multi_query_fusion(
     return [hits_by_id[hit_id] for hit_id in ranked_ids]
 
 
+
+def _interleave_ranked_groups(groups: Sequence[Sequence[SearchHit]]) -> list[SearchHit]:
+    """Interleave per-query rankings so each evidence target gets fair context space."""
+    result: list[SearchHit] = []
+    seen: set[str] = set()
+    max_group_size = max((len(group) for group in groups), default=0)
+    for rank in range(max_group_size):
+        for group in groups:
+            if rank >= len(group):
+                continue
+            hit = group[rank]
+            hit_id = str(hit.chunk_id)
+            if hit_id in seen:
+                continue
+            seen.add(hit_id)
+            result.append(hit)
+    return result
 def _best_document_hits(hits: list[SearchHit]) -> list[SearchHit]:
     """Deduplicate route nodes while keeping the retriever's first-seen order."""
     best_by_document: dict[str, SearchHit] = {}

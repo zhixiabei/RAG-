@@ -221,6 +221,10 @@ class RagService:
             ],
             *list(attachment_citations or []),
         ])
+        retrieval_queries = query_plan.retrieval_queries(question) if retrieval_used else []
+        reranker_name = getattr(self.retrieval_agent.reranker, "name", None)
+        reranker_enabled = self.retrieval_agent.reranker is not None
+        decompose_rerank = retrieval_used and reranker_enabled and query_plan.strategy == "decompose"
         response = {
             "conversation_id": conversation_id,
             "model": model or self.answer_agent.models.chat_model,
@@ -229,15 +233,26 @@ class RagService:
             "retrieval_used": retrieval_used,
             "retrieved_count": len(hits),
             "retrieval_k": self.retrieval_agent.top_k,
+            "retrieval_k_per_query": self.retrieval_agent.top_k if query_plan.strategy == "decompose" else None,
+            "retrieval_total_k": len(hits),
             "retrieval_candidate_k": self.retrieval_agent.candidate_k,
-            "reranker": getattr(self.retrieval_agent.reranker, "name", None),
+            "reranker": reranker_name,
             "query_plan": query_plan.as_dict(),
             "retrieval_trace": {
                 "strategy": query_plan.strategy,
-                "queries": query_plan.retrieval_queries(question) if retrieval_used else [],
-                "query_count": (
-                    len(query_plan.retrieval_queries(question)) if retrieval_used else 0
+                "queries": retrieval_queries,
+                "query_count": len(retrieval_queries),
+                "rerank_mode": (
+                    "per_query" if decompose_rerank
+                    else "fused" if retrieval_used and reranker_enabled
+                    else "disabled"
                 ),
+                "rerank_query_count": (
+                    len(query_plan.subqueries) if decompose_rerank
+                    else 1 if retrieval_used and reranker_enabled
+                    else 0
+                ),
+                "rerank_top_k": self.retrieval_agent.top_k if reranker_enabled else None,
             },
             "retrieved_document_ids": list(dict.fromkeys(
                 hit.document_id for hit in hits if hit.document_id

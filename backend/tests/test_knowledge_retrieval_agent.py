@@ -74,7 +74,7 @@ class FakeReranker:
 
 
 class KnowledgeRetrievalAgentTest(unittest.TestCase):
-    def test_batches_planned_queries_and_reranks_once(self):
+    def test_reranks_each_decomposed_query_and_interleaves_results(self):
         shared = SearchHit("shared", "doc-1", "kb-1", "hse.txt", "共同要求", 0.8)
         emergency = SearchHit("emergency", "doc-1", "kb-1", "hse.txt", "井喷处置", 0.9)
         environment = SearchHit("environment", "doc-2", "kb-1", "env.txt", "污染物管理", 0.9)
@@ -107,7 +107,17 @@ class KnowledgeRetrievalAgentTest(unittest.TestCase):
 
         models = PlannedModels()
         vectors = PlannedVectors()
-        reranker = FakeReranker([emergency, environment])
+
+        class PlannedReranker(FakeReranker):
+            def rerank(self, query, hits, limit):
+                self.calls.append((query, list(hits), limit))
+                ranking = {
+                    "井喷处置要求": [emergency, shared],
+                    "污染物管理要求": [environment],
+                }
+                return ranking[query][:limit]
+
+        reranker = PlannedReranker()
         agent = KnowledgeRetrievalAgent(
             vectors, models, top_k=2, candidate_k=3, reranker=reranker
         )
@@ -125,13 +135,66 @@ class KnowledgeRetrievalAgentTest(unittest.TestCase):
 
         self.assertEqual(models.calls, [[question, "井喷处置要求", "污染物管理要求"]])
         self.assertEqual(len(vectors.calls), 3)
-        self.assertEqual(len(reranker.calls), 1)
-        self.assertEqual([hit.chunk_id for hit in reranker.calls[0][1]], [
-            "shared", "environment", "emergency",
+        self.assertEqual(len(reranker.calls), 2)
+        self.assertEqual([call[0] for call in reranker.calls], [
+            "井喷处置要求", "污染物管理要求",
         ])
-        self.assertEqual([hit.chunk_id for hit in result], ["emergency", "environment"])
+        self.assertEqual([hit.chunk_id for hit in reranker.calls[0][1]], [
+            "shared", "emergency",
+        ])
+        self.assertEqual([hit.chunk_id for hit in reranker.calls[1][1]], ["environment"])
+        self.assertEqual([hit.chunk_id for hit in result], [
+            "emergency", "environment", "shared",
+        ])
         self.assertEqual(len(plan.retrieval_queries(question)), 3)
 
+    def test_decomposed_rerank_failure_falls_back_only_for_that_query(self):
+        first = SearchHit("first", "doc-1", "kb-1", "one.txt", "first", 0.9)
+        second = SearchHit("second", "doc-1", "kb-1", "one.txt", "second", 0.8)
+        third = SearchHit("third", "doc-2", "kb-1", "two.txt", "third", 0.9)
+
+        class PlannedModels:
+            embedding_model = "test-embedding"
+
+            def embed(self, texts):
+                return [[float(index), 0.2] for index, _text in enumerate(texts)]
+
+        class PlannedVectors:
+            def search(self, knowledge_base_id, vector, limit, document_ids=None):
+                return {
+                    0: [first],
+                    1: [first, second],
+                    2: [third],
+                }[int(vector[0])]
+
+            def search_keywords(self, knowledge_base_id, keywords, limit, document_ids=None):
+                return []
+
+        class PlannedReranker(FakeReranker):
+            def rerank(self, query, hits, limit):
+                self.calls.append((query, list(hits), limit))
+                if query == "first target":
+                    raise TimeoutError("timed out")
+                return [third]
+
+        reranker = PlannedReranker()
+        agent = KnowledgeRetrievalAgent(
+            PlannedVectors(), PlannedModels(), top_k=2, candidate_k=3, reranker=reranker
+        )
+        plan = QueryPlan(
+            "decompose", "combined question", ("first target", "second target"),
+            trigger="complex_query",
+        )
+
+        with self.assertLogs("agent.knowledge_retrieval_agent", level="WARNING"):
+            result = agent.run(
+                {"id": "kb-1", "embedding_model": "test-embedding"},
+                "combined question",
+                query_plan=plan,
+            )
+
+        self.assertEqual([call[0] for call in reranker.calls], ["first target", "second target"])
+        self.assertEqual([hit.chunk_id for hit in result], ["first", "third", "second"])
     def test_returns_similarity_ordered_top_k_candidates(self):
         hits = [
             SearchHit(f"chunk-{index}", "doc-1", "kb-1", "制度.pdf", f"内容 {index}", 0.9)

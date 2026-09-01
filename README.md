@@ -231,9 +231,9 @@ DeepSeek 官方 API 不提供 embedding，必须另配一个支持 `/embeddings`
 
     python backend\src\rag_app\cli.py rebuild-document-index --knowledge-base-id "实际的知识库 ID"
 
-新上传的文档会在入库时自动生成多个文件路由节点（文件名/路径、摘要、主题、章节），每个节点都绑定同一个 document_id。检索阶段先取文件候选池，按原始顺序聚合去重，不做文档重排；仅过滤掉低于 `RAG_DOCUMENT_SCORE_THRESHOLD` 的文件，通过阈值的文件全部进入一次批量二级 chunk 检索。只有文件索引无结果或限定检索无结果时才使用全局 chunk 兜底。文件阶段不做 rerank，最终只对 chunk 做一次 rerank。迁移命令只读取已有 chunk，不会重新上传或切分文档。
+新上传的文档会在入库时自动生成多个文件路由节点（文件名/路径、摘要、主题、章节），每个节点都绑定同一个 document_id。检索阶段先取文件候选池，按原始顺序聚合去重，不做文档重排；仅过滤掉低于 `RAG_DOCUMENT_SCORE_THRESHOLD` 的文件，通过阈值的文件全部进入一次批量二级 chunk 检索。只有文件索引无结果或限定检索无结果时才使用全局 chunk 兜底。文件阶段不做 rerank；普通查询对 chunk 做一次 rerank，复杂拆解查询按子问题分别 rerank。迁移命令只读取已有 chunk，不会重新上传或切分文档。
 
-启用 `RAG_QUERY_PLANNING_ENABLED` 后，轻量本地决策模型在一次调用中同时判断是否检索，并按需生成 `single`、`rewrite` 或 `decompose` 查询计划；不会额外启动或调用 `qwen3:4b`。简单问题仍只调用一次决策模型，历史指代和明显复合问题也不会再增加第二次规划调用。原问题始终保留在召回查询中，改写/子问题通过一次批量 embedding 后合并召回，最终仍只执行一次 chunk rerank。模型输出异常时会回退到原问题，不阻断问答。接口响应的 `query_plan`、`retrieval_trace` 可查看策略和查询数量，`timing.by_stage.decision.generation.total_ms` 可用于实测合并调用延迟。
+启用 `RAG_QUERY_PLANNING_ENABLED` 后，轻量本地决策模型在一次调用中同时判断是否检索，并按需生成 `single`、`rewrite` 或 `decompose` 查询计划；不会额外启动或调用 `qwen3:4b`。简单问题仍只调用一次决策模型，历史指代和明显复合问题也不会再增加第二次规划调用。原问题始终保留在召回查询中，改写查询继续合并召回后执行一次 chunk rerank；`decompose` 查询则对每个子问题的候选池分别执行 chunk rerank，各保留配置的 `RAG_TOP_K`（默认 10）并轮询去重后送入生成，避免一个子问题的证据挤掉另一个。单个子问题的 rerank 失败只回退该子问题的召回顺序，全部子问题无候选时才回退原有融合 top-k。模型输出异常时会回退到原问题，不阻断问答。接口响应的 `query_plan`、`retrieval_trace` 可查看策略和查询数量，`timing.by_stage.retrieval.rerank` 可用于实测各子问题 rerank 延迟。
 
 本地模型占用内存较高时，不要启动多个 Uvicorn worker；每个进程都会创建自己的入库 worker 和 embedding 并发限制。
 

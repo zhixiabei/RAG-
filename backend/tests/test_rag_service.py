@@ -80,11 +80,11 @@ class FakeModelGateway:
 
 class RagServiceTest(unittest.TestCase):
     @staticmethod
-    def build_service(repository, vectors, models, top_k=3, query_planning=False):
+    def build_service(repository, vectors, models, top_k=3, query_planning=False, reranker=None):
         return RagService(
             repository,
             RetrievalDecisionAgent(models, query_planning_enabled=query_planning),
-            KnowledgeRetrievalAgent(vectors, models, top_k=top_k),
+            KnowledgeRetrievalAgent(vectors, models, top_k=top_k, reranker=reranker),
             AnswerAgent(models),
         )
 
@@ -143,6 +143,48 @@ class RagServiceTest(unittest.TestCase):
         self.assertIn("decision.generation", result["timing"]["by_stage"])
         self.assertNotIn("planning.generation", result["timing"]["by_stage"])
 
+    def test_reports_per_query_rerank_trace_for_decomposed_plan(self):
+        repository = FakeRepository()
+        vectors = FakeVectorStore([
+            SearchHit("chunk-1", "doc-1", "kb-1", "资料.pdf", "证据一", 0.9),
+            SearchHit("chunk-2", "doc-2", "kb-1", "资料.pdf", "证据二", 0.8),
+        ])
+        models = FakeModelGateway(
+            retrieval_needed=True,
+            planner_output=json.dumps({
+                "decision": "RETRIEVE",
+                "strategy": "decompose",
+                "standalone_query": "综合说明井喷处置和污染物管理要求分别有哪些？",
+                "subqueries": ["目标一", "目标二"],
+            }),
+        )
+
+        class TraceReranker:
+            name = "test-reranker"
+
+            def __init__(self):
+                self.calls = []
+
+            def rerank(self, query, hits, limit):
+                self.calls.append((query, list(hits), limit))
+                return list(hits)[:limit]
+
+        reranker = TraceReranker()
+        result = self.build_service(
+            repository,
+            vectors,
+            models,
+            top_k=2,
+            query_planning=True,
+            reranker=reranker,
+        ).answer("kb-1", "conversation-1", "综合说明井喷处置和污染物管理要求分别有哪些？")
+
+        self.assertEqual([call[0] for call in reranker.calls], ["目标一", "目标二"])
+        self.assertEqual(result["retrieval_trace"]["rerank_mode"], "per_query")
+        self.assertEqual(result["retrieval_trace"]["rerank_query_count"], 2)
+        self.assertEqual(result["retrieval_trace"]["rerank_top_k"], 2)
+        self.assertEqual(result["retrieval_k_per_query"], 2)
+        self.assertEqual(result["retrieval_total_k"], result["retrieved_count"])
     def test_skips_embedding_and_vector_search_when_retrieval_is_not_needed(self):
         repository = FakeRepository([{"role": "assistant", "content": "已有回答"}])
         vectors = FakeVectorStore()

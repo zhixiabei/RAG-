@@ -54,7 +54,7 @@ def _ordered_unique(values: object) -> list[str]:
 
 
 def _retrieval_k(response: dict, ranked_ids: list[str]) -> int:
-    for value in (response.get("retrieval_k"), response.get("retrieved_count")):
+    for value in (response.get("retrieval_total_k"), response.get("retrieval_k"), response.get("retrieved_count")):
         if value is None or isinstance(value, bool):
             continue
         try:
