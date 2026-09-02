@@ -317,48 +317,28 @@ class KnowledgeRetrievalAgent:
             if hit.document_id not in document_ids
         )
 
-        # Document routing is a recall boost, not a gate. A profile can miss a
-        # row-level identifier (especially in large spreadsheets), while the
-        # chunk index can still contain the exact answer. Always keep the
-        # global search and fuse routed candidates into it when available.
-        global_candidates = self._retrieve_chunks(
-            knowledge_base_id, query_vector, keywords, None
+        if not document_ids:
+            return []
+        return self._retrieve_chunks(
+            knowledge_base_id, query_vector, keywords, document_ids
         )
-        if document_ids:
-            routed_candidates = self._retrieve_chunks(
-                knowledge_base_id, query_vector, keywords, document_ids
-            )
-            return _multi_query_fusion(
-                [global_candidates, routed_candidates],
-                limit=max(self.candidate_k, self.top_k * 6),
-            )
-        return global_candidates
 
     def _retrieve_chunks(
         self,
         knowledge_base_id: str,
         query_vector: list[float],
         keywords: list[str],
-        document_ids: list[str] | None,
+        document_ids: list[str],
     ) -> list[SearchHit]:
         with timed_stage("retrieval.chunk_vector_search"):
-            if document_ids is None:
-                vector_hits = list(
-                    self.vectors.search(
-                        knowledge_base_id,
-                        query_vector,
-                        self.candidate_k,
-                    )
+            vector_hits = list(
+                self.vectors.search(
+                    knowledge_base_id,
+                    query_vector,
+                    self.candidate_k,
+                    document_ids,
                 )
-            else:
-                vector_hits = list(
-                    self.vectors.search(
-                        knowledge_base_id,
-                        query_vector,
-                        self.candidate_k,
-                        document_ids,
-                    )
-                )
+            )
 
         # Exact identifiers are often the only reliable signal for row-level
         # facts. Give lexical search a pool as large as dense search so a
@@ -367,14 +347,6 @@ class KnowledgeRetrievalAgent:
         with timed_stage("retrieval.chunk_keyword_search"):
             if not keywords:
                 keyword_hits = []
-            elif document_ids is None:
-                keyword_hits = list(
-                    self.vectors.search_keywords(
-                        knowledge_base_id,
-                        keywords,
-                        keyword_limit,
-                    )
-                )
             else:
                 keyword_hits = list(
                     self.vectors.search_keywords(

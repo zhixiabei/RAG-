@@ -22,8 +22,44 @@ class FakeVectors:
     ):
         self.hits = hits
         self.keyword_hits = keyword_hits or []
-        self.document_hits = document_hits or []
-        self.document_keyword_hits = document_keyword_hits or []
+        if document_hits is None:
+            self.document_hits = []
+            seen_document_ids = set()
+            for hit in hits:
+                if hit.document_id in seen_document_ids:
+                    continue
+                seen_document_ids.add(hit.document_id)
+                self.document_hits.append(
+                    SearchHit(
+                        f"document:{hit.document_id}",
+                        hit.document_id,
+                        hit.knowledge_base_id,
+                        hit.title,
+                        "",
+                        hit.score,
+                    )
+                )
+        else:
+            self.document_hits = document_hits
+        if document_keyword_hits is None:
+            self.document_keyword_hits = []
+            seen_document_ids = set()
+            for hit in self.keyword_hits:
+                if hit.document_id in seen_document_ids:
+                    continue
+                seen_document_ids.add(hit.document_id)
+                self.document_keyword_hits.append(
+                    SearchHit(
+                        f"document:{hit.document_id}",
+                        hit.document_id,
+                        hit.knowledge_base_id,
+                        hit.title,
+                        "",
+                        hit.score,
+                    )
+                )
+        else:
+            self.document_keyword_hits = document_keyword_hits
         self.calls = []
         self.keyword_calls = []
         self.document_calls = []
@@ -102,6 +138,17 @@ class KnowledgeRetrievalAgentTest(unittest.TestCase):
                     2: [environment],
                 }[index]
 
+            def search_documents(self, knowledge_base_id, vector, limit):
+                document_id = "doc-2" if int(vector[0]) == 2 else "doc-1"
+                return [SearchHit(
+                    f"document:{document_id}",
+                    document_id,
+                    knowledge_base_id,
+                    "routed.txt",
+                    "",
+                    0.9,
+                )]
+
             def search_keywords(self, knowledge_base_id, keywords, limit, document_ids=None):
                 return []
 
@@ -167,6 +214,17 @@ class KnowledgeRetrievalAgentTest(unittest.TestCase):
                     2: [third],
                 }[int(vector[0])]
 
+            def search_documents(self, knowledge_base_id, vector, limit):
+                document_id = "doc-2" if int(vector[0]) == 2 else "doc-1"
+                return [SearchHit(
+                    f"document:{document_id}",
+                    document_id,
+                    knowledge_base_id,
+                    "routed.txt",
+                    "",
+                    0.9,
+                )]
+
             def search_keywords(self, knowledge_base_id, keywords, limit, document_ids=None):
                 return []
 
@@ -228,7 +286,7 @@ class KnowledgeRetrievalAgentTest(unittest.TestCase):
         result = agent.run({"id": "kb-1", "embedding_model": "test-embedding"}, "报销制度")
 
         self.assertEqual(len(result), 2)
-        self.assertEqual(vectors.calls, [("kb-1", [0.1, 0.2], 2)])
+        self.assertEqual(vectors.calls, [("kb-1", [0.1, 0.2], 2, ("doc-1",))])
         self.assertEqual(vectors.keyword_calls[0][0], "kb-1")
 
     def test_prioritizes_normalized_keyword_hits_before_vector_hits(self):
@@ -290,7 +348,10 @@ class KnowledgeRetrievalAgentTest(unittest.TestCase):
             "Policy 12-3 details",
         )
 
-        self.assertEqual(vectors.calls, [("kb-1", [0.1, 0.2], 4)])
+        self.assertEqual(
+            vectors.calls,
+            [("kb-1", [0.1, 0.2], 4, ("doc-1", "doc-2", "doc-3", "doc-4"))],
+        )
         self.assertEqual(vectors.keyword_calls[0][2], 4)
         query, candidates, limit = reranker.calls[0]
         self.assertEqual(query, "Policy 12-3 details")
@@ -385,12 +446,11 @@ class KnowledgeRetrievalAgentTest(unittest.TestCase):
             "目标内容是什么？",
         )
 
-        self.assertEqual([hit.chunk_id for hit in result], ["doc-1:1", "doc-2:1"])
+        self.assertEqual([hit.chunk_id for hit in result], ["doc-1:1"])
         self.assertEqual(vectors.document_calls, [("kb-1", [0.1, 0.2], 20)])
         self.assertEqual(
             vectors.calls,
             [
-                ("kb-1", [0.1, 0.2], 4),
                 ("kb-1", [0.1, 0.2], 4, ("doc-1",)),
             ],
         )
@@ -429,7 +489,6 @@ class KnowledgeRetrievalAgentTest(unittest.TestCase):
         self.assertEqual(
             vectors.calls,
             [
-                ("kb-1", [0.1, 0.2], 4),
                 ("kb-1", [0.1, 0.2], 4, ("doc-1", "doc-2", "doc-3")),
             ],
         )
@@ -462,12 +521,11 @@ class KnowledgeRetrievalAgentTest(unittest.TestCase):
         self.assertEqual(
             vectors.calls,
             [
-                ("kb-1", [0.1, 0.2], 4),
                 ("kb-1", [0.1, 0.2], 4, ("doc-1", "doc-2")),
             ],
         )
 
-    def test_documents_below_threshold_do_not_bypass_filter(self):
+    def test_documents_below_threshold_return_no_chunks(self):
         global_hit = SearchHit(
             "doc-low:1", "doc-low", "kb-1", "low.txt", "content", 0.9
         )
@@ -488,11 +546,11 @@ class KnowledgeRetrievalAgentTest(unittest.TestCase):
             "unrelated question",
         )
 
-        self.assertEqual([hit.chunk_id for hit in result], ["doc-low:1"])
-        self.assertEqual(vectors.calls, [("kb-1", [0.1, 0.2], 1)])
+        self.assertEqual(result, [])
+        self.assertEqual(vectors.calls, [])
         self.assertEqual(vectors.document_keyword_calls, [])
 
-    def test_empty_routed_search_falls_back_to_global_chunks(self):
+    def test_empty_routed_search_returns_no_chunks(self):
         global_hit = SearchHit(
             "doc-source:1", "doc-source", "kb-1", "source.txt", "目标内容", 0.9
         )
@@ -513,11 +571,10 @@ class KnowledgeRetrievalAgentTest(unittest.TestCase):
             "目标内容",
         )
 
-        self.assertEqual([hit.chunk_id for hit in result], ["doc-source:1"])
+        self.assertEqual(result, [])
         self.assertEqual(
             vectors.calls,
             [
-                ("kb-1", [0.1, 0.2], 1),
                 ("kb-1", [0.1, 0.2], 1, ("doc-stale",)),
             ],
         )
