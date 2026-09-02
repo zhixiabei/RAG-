@@ -1,0 +1,969 @@
+{
+  "dataset": "D:\\startwell\\RAG\\testsets\\heishanliang_rag_eval_v2.jsonl",
+  "dataset_metadata": {},
+  "question_ids": [
+    "mf_b572_cross_001",
+    "mf_b572_cross_037",
+    "mf_b572_cross_071"
+  ],
+  "evidence_embedding_model": "SiliconFlow::Pro/BAAI/bge-m3",
+  "knowledge_base_id": "b572e8be-f96c-4699-ac95-dbfff058824c",
+  "base_url": "http://127.0.0.1:8081",
+  "model": null,
+  "judge_model": null,
+  "evaluated_at": "2026-09-02T05:58:02.759130+00:00",
+  "summary": {
+    "sample_count": 3,
+    "completed_count": 3,
+    "error_count": 0,
+    "retrieval_metric_sample_count": 3,
+    "document_hit_rate": 1.0,
+    "chunk_hit_rate": 0.6667,
+    "evidence_sample_count": 0,
+    "evidence_hit_rate": null,
+    "evidence_recall_at_k": null,
+    "evidence_coverage_at_k": null,
+    "evidence_mrr": null,
+    "document_precision": 0.3111,
+    "document_recall": 0.8333,
+    "document_mrr": 1.0,
+    "chunk_precision": 0.0842,
+    "chunk_recall": 0.35,
+    "chunk_mrr": 0.4444,
+    "retrieval_k": null,
+    "retrieval_recall_at_k": 0.35,
+    "mrr": 0.4444,
+    "judge_sample_count": 0,
+    "judge_error_count": 0,
+    "answer_pass_rate": null,
+    "average_answer_score": null,
+    "average_correctness_score": null,
+    "average_completeness_score": null,
+    "average_faithfulness_score": null,
+    "judge_token_usage_sample_count": 0,
+    "judge_input_tokens": 0,
+    "judge_output_tokens": 0,
+    "judge_total_tokens": 0,
+    "average_judge_time_ms": null,
+    "p95_judge_time_ms": null,
+    "average_response_time_ms": 7192.52,
+    "p50_response_time_ms": 6736.44,
+    "p95_response_time_ms": 9297.82,
+    "p99_response_time_ms": 9525.5,
+    "timing_sample_count": 3,
+    "timing_total_ms": 21540.92,
+    "timing_top_level": {
+      "读取知识库": {
+        "calls": 3,
+        "total_ms": 5.18,
+        "average_ms": 1.73,
+        "share_percent": 0.02
+      },
+      "读取对话历史": {
+        "calls": 3,
+        "total_ms": 5.64,
+        "average_ms": 1.88,
+        "share_percent": 0.03
+      },
+      "检索判断": {
+        "calls": 3,
+        "total_ms": 3714.92,
+        "average_ms": 1238.31,
+        "share_percent": 17.25
+      },
+      "问题向量化并执行相似度检索": {
+        "calls": 3,
+        "total_ms": 7272.63,
+        "average_ms": 2424.21,
+        "share_percent": 33.76
+      },
+      "生成最终回答": {
+        "calls": 3,
+        "total_ms": 10541.98,
+        "average_ms": 3513.99,
+        "share_percent": 48.94
+      }
+    },
+    "timing_by_stage": {
+      "读取知识库": {
+        "calls": 3,
+        "total_ms": 5.18,
+        "average_ms": 1.73,
+        "share_percent": 0.02
+      },
+      "读取对话历史": {
+        "calls": 3,
+        "total_ms": 5.64,
+        "average_ms": 1.88,
+        "share_percent": 0.03
+      },
+      "decision.generation": {
+        "calls": 3,
+        "total_ms": 3712.34,
+        "average_ms": 1237.45,
+        "share_percent": 17.23
+      },
+      "检索判断": {
+        "calls": 3,
+        "total_ms": 3714.92,
+        "average_ms": 1238.31,
+        "share_percent": 17.25
+      },
+      "retrieval.query_embedding": {
+        "calls": 3,
+        "total_ms": 1025.8,
+        "average_ms": 341.93,
+        "share_percent": 4.76
+      },
+      "retrieval.document_vector_search": {
+        "calls": 9,
+        "total_ms": 359.01,
+        "average_ms": 119.67,
+        "share_percent": 1.67
+      },
+      "retrieval.document_keyword_search": {
+        "calls": 9,
+        "total_ms": 213.81,
+        "average_ms": 71.27,
+        "share_percent": 0.99
+      },
+      "retrieval.chunk_vector_search": {
+        "calls": 18,
+        "total_ms": 324.77,
+        "average_ms": 108.26,
+        "share_percent": 1.51
+      },
+      "retrieval.chunk_keyword_search": {
+        "calls": 18,
+        "total_ms": 409.09,
+        "average_ms": 136.36,
+        "share_percent": 1.9
+      },
+      "retrieval.rrf_fusion": {
+        "calls": 18,
+        "total_ms": 1.25,
+        "average_ms": 0.42,
+        "share_percent": 0.01
+      },
+      "retrieval.rerank": {
+        "calls": 6,
+        "total_ms": 4931.68,
+        "average_ms": 1643.89,
+        "share_percent": 22.89
+      },
+      "问题向量化并执行相似度检索": {
+        "calls": 3,
+        "total_ms": 7272.63,
+        "average_ms": 2424.21,
+        "share_percent": 33.76
+      },
+      "answer.context_build": {
+        "calls": 3,
+        "total_ms": 5.87,
+        "average_ms": 1.96,
+        "share_percent": 0.03
+      },
+      "answer.generation": {
+        "calls": 3,
+        "total_ms": 10535.98,
+        "average_ms": 3511.99,
+        "share_percent": 48.91
+      },
+      "生成最终回答": {
+        "calls": 3,
+        "total_ms": 10541.98,
+        "average_ms": 3513.99,
+        "share_percent": 48.94
+      }
+    },
+    "token_usage_sample_count": 3,
+    "input_tokens": 21529,
+    "output_tokens": 2376,
+    "total_tokens": 23905,
+    "average_tokens": 7968.33,
+    "requested_count": 3,
+    "remaining_count": 0,
+    "stopped_early": false,
+    "concurrency": 1,
+    "requested_concurrency": 1,
+    "final_concurrency": 1,
+    "concurrency_reduced": false,
+    "evaluation_time_ms": 21810.51,
+    "throughput_per_minute": 8.25
+  },
+  "stop_reason": null,
+  "results": [
+    {
+      "question_id": "mf_b572_cross_001",
+      "question": "根据《2024年化子坪测试解释结果汇总》和《2024年杏子川采油厂油水井测试解释成果汇总表》，比较化309-5井与杏6329-1井的绝对吸水量：哪口井更高，高出多少方/天，约为另一口井的多少倍？结果保留两位小数。",
+      "question_type": "comparison",
+      "difficulty": "hard",
+      "document_hit": true,
+      "chunk_hit": false,
+      "evidence_hit": null,
+      "evidence_recall_at_k": null,
+      "evidence_coverage_at_k": null,
+      "evidence_mrr": null,
+      "evidence_count": 0,
+      "evidence_covered_count": 0,
+      "evidence_details": [],
+      "retrieval_basis": "chunk",
+      "document_precision": 0.25,
+      "document_recall": 0.5,
+      "document_reciprocal_rank": 1.0,
+      "chunk_precision": 0.0,
+      "chunk_recall": 0.0,
+      "chunk_reciprocal_rank": 0.0,
+      "retrieval_k": 19,
+      "retrieval_recall_at_k": 0.0,
+      "retrieval_reciprocal_rank": 0.0,
+      "mrr": 0.0,
+      "answer": "化309-5井的绝对吸水量为12.1 m³/d [证据:9eabf4d0-ee56-4c05-a99e-5bc572a1c634:7]。杏6329-1井的绝对吸水量为5.6 m³/d [证据:96427128-328f-4179-9f27-e4d4106f719c:40]。\n\n化309-5井更高，高出 $12.1 - 5.6 = 6.50$ 方/天，约为杏6329-1井的 $12.1 \\div 5.6 \\approx 2.16$ 倍。",
+      "retrieval_used": true,
+      "retrieved_count": 19,
+      "retrieved_document_ids": [
+        "8a379442-9a49-4c48-83ce-47bd0c91e5a5",
+        "96427128-328f-4179-9f27-e4d4106f719c",
+        "9eabf4d0-ee56-4c05-a99e-5bc572a1c634",
+        "c7f68622-17ad-4d41-afa3-bc70af27b602"
+      ],
+      "retrieved_chunk_ids": [
+        "8a379442-9a49-4c48-83ce-47bd0c91e5a5:101",
+        "8a379442-9a49-4c48-83ce-47bd0c91e5a5:39",
+        "8a379442-9a49-4c48-83ce-47bd0c91e5a5:60",
+        "8a379442-9a49-4c48-83ce-47bd0c91e5a5:1",
+        "96427128-328f-4179-9f27-e4d4106f719c:60",
+        "8a379442-9a49-4c48-83ce-47bd0c91e5a5:103",
+        "9eabf4d0-ee56-4c05-a99e-5bc572a1c634:7",
+        "96427128-328f-4179-9f27-e4d4106f719c:39",
+        "96427128-328f-4179-9f27-e4d4106f719c:101",
+        "96427128-328f-4179-9f27-e4d4106f719c:40",
+        "c7f68622-17ad-4d41-afa3-bc70af27b602:449",
+        "8a379442-9a49-4c48-83ce-47bd0c91e5a5:2",
+        "c7f68622-17ad-4d41-afa3-bc70af27b602:89",
+        "96427128-328f-4179-9f27-e4d4106f719c:2",
+        "96427128-328f-4179-9f27-e4d4106f719c:97",
+        "96427128-328f-4179-9f27-e4d4106f719c:99",
+        "8a379442-9a49-4c48-83ce-47bd0c91e5a5:102",
+        "8a379442-9a49-4c48-83ce-47bd0c91e5a5:99",
+        "8a379442-9a49-4c48-83ce-47bd0c91e5a5:3"
+      ],
+      "expected_document_ids": [
+        "41a710c0-65e6-49d5-b409-cc4d6d99168d",
+        "8a379442-9a49-4c48-83ce-47bd0c91e5a5"
+      ],
+      "expected_chunk_ids": [
+        "41a710c0-65e6-49d5-b409-cc4d6d99168d:0",
+        "8a379442-9a49-4c48-83ce-47bd0c91e5a5:40"
+      ],
+      "retrieved_documents": [
+        "2024年杏子川采油厂油水井测试解释成果汇总表（2025.1.6）.xlsx",
+        "杏子川采油厂2024年油水井测试解释成果汇总表（2025.1.6）.xlsx",
+        "化309-5井注入剖面(同位素)测井解释报告.doc",
+        "2022年杏子川采油厂解释成果汇总表2.3.xlsx"
+      ],
+      "expected_documents": [],
+      "response_time_ms": 5258.7,
+      "server_response_time_ms": 5245.65,
+      "token_usage": {
+        "available": true,
+        "calls": 5,
+        "reported_calls": 3,
+        "unreported_calls": 2,
+        "input_tokens": 6453,
+        "output_tokens": 442,
+        "total_tokens": 6895,
+        "by_stage": {
+          "retrieval_decision": {
+            "calls": 1,
+            "reported_calls": 1,
+            "input_tokens": 299,
+            "output_tokens": 295,
+            "total_tokens": 594
+          },
+          "query_embedding": {
+            "calls": 1,
+            "reported_calls": 1,
+            "input_tokens": 205,
+            "output_tokens": 0,
+            "total_tokens": 205
+          },
+          "reranking": {
+            "calls": 2,
+            "reported_calls": 0,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "total_tokens": 0
+          },
+          "answer_generation": {
+            "calls": 1,
+            "reported_calls": 1,
+            "input_tokens": 5949,
+            "output_tokens": 147,
+            "total_tokens": 6096
+          }
+        }
+      },
+      "timing": {
+        "available": true,
+        "total_ms": 5245.65,
+        "event_count": 35,
+        "by_stage": {
+          "读取知识库": {
+            "calls": 1,
+            "total_ms": 1.71,
+            "share_percent": 0.03,
+            "max_depth": 0
+          },
+          "读取对话历史": {
+            "calls": 1,
+            "total_ms": 2.01,
+            "share_percent": 0.04,
+            "max_depth": 0
+          },
+          "decision.generation": {
+            "calls": 1,
+            "total_ms": 1298.18,
+            "share_percent": 24.75,
+            "max_depth": 1
+          },
+          "检索判断": {
+            "calls": 1,
+            "total_ms": 1298.82,
+            "share_percent": 24.76,
+            "max_depth": 0
+          },
+          "retrieval.query_embedding": {
+            "calls": 1,
+            "total_ms": 457.84,
+            "share_percent": 8.73,
+            "max_depth": 1
+          },
+          "retrieval.document_vector_search": {
+            "calls": 3,
+            "total_ms": 116.42,
+            "share_percent": 2.22,
+            "max_depth": 1
+          },
+          "retrieval.document_keyword_search": {
+            "calls": 3,
+            "total_ms": 55.78,
+            "share_percent": 1.06,
+            "max_depth": 1
+          },
+          "retrieval.chunk_vector_search": {
+            "calls": 6,
+            "total_ms": 106.95,
+            "share_percent": 2.04,
+            "max_depth": 1
+          },
+          "retrieval.chunk_keyword_search": {
+            "calls": 6,
+            "total_ms": 137.46,
+            "share_percent": 2.62,
+            "max_depth": 1
+          },
+          "retrieval.rrf_fusion": {
+            "calls": 6,
+            "total_ms": 0.43,
+            "share_percent": 0.01,
+            "max_depth": 1
+          },
+          "retrieval.rerank": {
+            "calls": 2,
+            "total_ms": 1790.85,
+            "share_percent": 34.14,
+            "max_depth": 1
+          },
+          "问题向量化并执行相似度检索": {
+            "calls": 1,
+            "total_ms": 2669.88,
+            "share_percent": 50.9,
+            "max_depth": 0
+          },
+          "answer.context_build": {
+            "calls": 1,
+            "total_ms": 1.69,
+            "share_percent": 0.03,
+            "max_depth": 1
+          },
+          "answer.generation": {
+            "calls": 1,
+            "total_ms": 1271.28,
+            "share_percent": 24.23,
+            "max_depth": 1
+          },
+          "生成最终回答": {
+            "calls": 1,
+            "total_ms": 1273.02,
+            "share_percent": 24.27,
+            "max_depth": 0
+          }
+        },
+        "top_level": {
+          "读取知识库": {
+            "calls": 1,
+            "total_ms": 1.71,
+            "share_percent": 0.03,
+            "max_depth": 0
+          },
+          "读取对话历史": {
+            "calls": 1,
+            "total_ms": 2.01,
+            "share_percent": 0.04,
+            "max_depth": 0
+          },
+          "检索判断": {
+            "calls": 1,
+            "total_ms": 1298.82,
+            "share_percent": 24.76,
+            "max_depth": 0
+          },
+          "问题向量化并执行相似度检索": {
+            "calls": 1,
+            "total_ms": 2669.88,
+            "share_percent": 50.9,
+            "max_depth": 0
+          },
+          "生成最终回答": {
+            "calls": 1,
+            "total_ms": 1273.02,
+            "share_percent": 24.27,
+            "max_depth": 0
+          }
+        }
+      }
+    },
+    {
+      "question_id": "mf_b572_cross_037",
+      "question": "化166-1井的连续示踪注入剖面测井报告、同位素吸水剖面测井解释报告和注入剖面(同位素)测井解释报告对主要吸水层段的描述有何异同？结合井组示踪剂监测报告，化166-1井组中哪口油井的注入水分配占比最高？",
+      "question_type": "多文件题",
+      "difficulty": "medium",
+      "document_hit": true,
+      "chunk_hit": true,
+      "evidence_hit": null,
+      "evidence_recall_at_k": null,
+      "evidence_coverage_at_k": null,
+      "evidence_mrr": null,
+      "evidence_count": 0,
+      "evidence_covered_count": 0,
+      "evidence_details": [],
+      "retrieval_basis": "chunk",
+      "document_precision": 0.4167,
+      "document_recall": 1.0,
+      "document_reciprocal_rank": 1.0,
+      "chunk_precision": 0.2,
+      "chunk_recall": 0.8,
+      "chunk_reciprocal_rank": 1.0,
+      "retrieval_k": 20,
+      "retrieval_recall_at_k": 0.8,
+      "retrieval_reciprocal_rank": 1.0,
+      "mrr": 1.0,
+      "answer": "**三份测井报告对化166-1井主要吸水层段的描述**\n\n- **连续示踪注入剖面测井报告**：在日注水量7.98方时，吸水井段为1495.5-1498.0m、1503.5-1507.0m、1512.0-1516.0m [证据:8bb9fa00-5ddb-41f6-90bd-ec34e0cefc11:18][证据:8bb9fa00-5ddb-41f6-90bd-ec34e0cefc11:19]。\n- **同位素吸水剖面测井解释报告**：射孔段对应1496.0-1498.4m、1504.0-1507.3m、1512.0-1516.4m层段吸水明显，吸水厚度10.1m [证据:a1803223-cbfb-4a5a-bdfb-3f5f34062b2a:21]。\n- **注入剖面(同位素)测井解释报告**：吸水层段为1495.2-1498.8m、1502.5-1507.6m、1511.4-1516.8m，吸水厚度14.1m，3个射孔层均吸水 [证据:df00f5d8-54f9-4dd3-b16a-c7df1315a2e1:19][证据:df00f5d8-54f9-4dd3-b16a-c7df1315a2e1:20]。\n\n三份报告均识别出3个主要吸水层段，层段位置总体对应（约1495-1498m、1503-1507m、1512-1516m），但各报告在吸水层段的具体起止深度、吸水厚度（10.1m vs 14.1m）及绝对吸水量上存在差异，这与测井方法（连续示踪 vs 同位素）及施工条件（日注水量7.98方 vs 10.4方）不同有关。\n\n**井组示踪剂监测报告中注入水分配占比最高的油井**\n\n化166-1井组中，化278-3井的注入水分配占比最高，达73.2%，为主要受效井 [证据:1fc03057-5253-4678-bdb1-a16bd160c7f5:42][证据:1fc03057-5253-4678-bdb1-a16bd160c7f5:58]。",
+      "retrieval_used": true,
+      "retrieved_count": 20,
+      "retrieved_document_ids": [
+        "8bb9fa00-5ddb-41f6-90bd-ec34e0cefc11",
+        "1fc03057-5253-4678-bdb1-a16bd160c7f5",
+        "2b074e2e-56ce-42f9-b577-501ed19a95d9",
+        "a1803223-cbfb-4a5a-bdfb-3f5f34062b2a",
+        "fd4336b0-2949-496b-aef6-f08461d4fb9a",
+        "2e4b8288-3c31-42d2-9009-b56c0e9f7fae",
+        "fa09b8a8-9822-4ad2-9d18-5ecef3c68828",
+        "df00f5d8-54f9-4dd3-b16a-c7df1315a2e1",
+        "0d66cb13-357c-4db6-8492-017d715c0bab",
+        "d8160b62-2de8-48a0-a715-dee0f335c63a",
+        "653908e0-da81-4eb0-bd08-3572be3799e1",
+        "ab401613-ebc4-4b25-a26b-461457fcb1ec"
+      ],
+      "retrieved_chunk_ids": [
+        "8bb9fa00-5ddb-41f6-90bd-ec34e0cefc11:19",
+        "1fc03057-5253-4678-bdb1-a16bd160c7f5:42",
+        "2b074e2e-56ce-42f9-b577-501ed19a95d9:21",
+        "1fc03057-5253-4678-bdb1-a16bd160c7f5:58",
+        "a1803223-cbfb-4a5a-bdfb-3f5f34062b2a:21",
+        "fd4336b0-2949-496b-aef6-f08461d4fb9a:50",
+        "2e4b8288-3c31-42d2-9009-b56c0e9f7fae:21",
+        "fa09b8a8-9822-4ad2-9d18-5ecef3c68828:46",
+        "df00f5d8-54f9-4dd3-b16a-c7df1315a2e1:8",
+        "fd4336b0-2949-496b-aef6-f08461d4fb9a:49",
+        "df00f5d8-54f9-4dd3-b16a-c7df1315a2e1:20",
+        "0d66cb13-357c-4db6-8492-017d715c0bab:46",
+        "d8160b62-2de8-48a0-a715-dee0f335c63a:13",
+        "653908e0-da81-4eb0-bd08-3572be3799e1:36",
+        "8bb9fa00-5ddb-41f6-90bd-ec34e0cefc11:18",
+        "fd4336b0-2949-496b-aef6-f08461d4fb9a:40",
+        "df00f5d8-54f9-4dd3-b16a-c7df1315a2e1:19",
+        "fa09b8a8-9822-4ad2-9d18-5ecef3c68828:48",
+        "ab401613-ebc4-4b25-a26b-461457fcb1ec:20",
+        "fd4336b0-2949-496b-aef6-f08461d4fb9a:46"
+      ],
+      "expected_document_ids": [
+        "1fc03057-5253-4678-bdb1-a16bd160c7f5",
+        "8bb9fa00-5ddb-41f6-90bd-ec34e0cefc11",
+        "a1803223-cbfb-4a5a-bdfb-3f5f34062b2a",
+        "df00f5d8-54f9-4dd3-b16a-c7df1315a2e1",
+        "fd4336b0-2949-496b-aef6-f08461d4fb9a"
+      ],
+      "expected_chunk_ids": [
+        "1fc03057-5253-4678-bdb1-a16bd160c7f5:57",
+        "8bb9fa00-5ddb-41f6-90bd-ec34e0cefc11:19",
+        "a1803223-cbfb-4a5a-bdfb-3f5f34062b2a:21",
+        "df00f5d8-54f9-4dd3-b16a-c7df1315a2e1:8",
+        "fd4336b0-2949-496b-aef6-f08461d4fb9a:50"
+      ],
+      "retrieved_documents": [
+        "化166-1井连续示踪注入剖面测井报告.doc",
+        "化166-1井组示踪剂监测报告.doc",
+        "化166-4井同位素吸水剖面测井解释报告.doc",
+        "化166-1井同位素吸水剖面测井解释报告.doc",
+        "化166-1井组井间化学示踪剂监测报告 .doc",
+        "化166-4井吸水剖面测井解释报告.doc",
+        "化169-1井组井间化学示踪剂监测报告 .doc",
+        "化166-1井注入剖面(同位素)测井解释报告.doc",
+        "化164-1井组井间化学示踪剂监测报告 .doc",
+        "化166-2井解释报告.docx",
+        "化166-2示踪剂报告.doc",
+        "化164-6井吸水剖面测井解释报告.doc"
+      ],
+      "expected_documents": [],
+      "response_time_ms": 6736.44,
+      "server_response_time_ms": 6724.76,
+      "token_usage": {
+        "available": true,
+        "calls": 5,
+        "reported_calls": 3,
+        "unreported_calls": 2,
+        "input_tokens": 7098,
+        "output_tokens": 769,
+        "total_tokens": 7867,
+        "by_stage": {
+          "retrieval_decision": {
+            "calls": 1,
+            "reported_calls": 1,
+            "input_tokens": 298,
+            "output_tokens": 208,
+            "total_tokens": 506
+          },
+          "query_embedding": {
+            "calls": 1,
+            "reported_calls": 1,
+            "input_tokens": 165,
+            "output_tokens": 0,
+            "total_tokens": 165
+          },
+          "reranking": {
+            "calls": 2,
+            "reported_calls": 0,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "total_tokens": 0
+          },
+          "answer_generation": {
+            "calls": 1,
+            "reported_calls": 1,
+            "input_tokens": 6635,
+            "output_tokens": 561,
+            "total_tokens": 7196
+          }
+        }
+      },
+      "timing": {
+        "available": true,
+        "total_ms": 6724.76,
+        "event_count": 35,
+        "by_stage": {
+          "读取知识库": {
+            "calls": 1,
+            "total_ms": 1.54,
+            "share_percent": 0.02,
+            "max_depth": 0
+          },
+          "读取对话历史": {
+            "calls": 1,
+            "total_ms": 2.15,
+            "share_percent": 0.03,
+            "max_depth": 0
+          },
+          "decision.generation": {
+            "calls": 1,
+            "total_ms": 927.63,
+            "share_percent": 13.79,
+            "max_depth": 1
+          },
+          "检索判断": {
+            "calls": 1,
+            "total_ms": 927.76,
+            "share_percent": 13.8,
+            "max_depth": 0
+          },
+          "retrieval.query_embedding": {
+            "calls": 1,
+            "total_ms": 142.15,
+            "share_percent": 2.11,
+            "max_depth": 1
+          },
+          "retrieval.document_vector_search": {
+            "calls": 3,
+            "total_ms": 169.67,
+            "share_percent": 2.52,
+            "max_depth": 1
+          },
+          "retrieval.document_keyword_search": {
+            "calls": 3,
+            "total_ms": 60.28,
+            "share_percent": 0.9,
+            "max_depth": 1
+          },
+          "retrieval.chunk_vector_search": {
+            "calls": 6,
+            "total_ms": 151.89,
+            "share_percent": 2.26,
+            "max_depth": 1
+          },
+          "retrieval.chunk_keyword_search": {
+            "calls": 6,
+            "total_ms": 187.38,
+            "share_percent": 2.79,
+            "max_depth": 1
+          },
+          "retrieval.rrf_fusion": {
+            "calls": 6,
+            "total_ms": 0.45,
+            "share_percent": 0.01,
+            "max_depth": 1
+          },
+          "retrieval.rerank": {
+            "calls": 2,
+            "total_ms": 1464.7,
+            "share_percent": 21.78,
+            "max_depth": 1
+          },
+          "问题向量化并执行相似度检索": {
+            "calls": 1,
+            "total_ms": 2178.13,
+            "share_percent": 32.39,
+            "max_depth": 0
+          },
+          "answer.context_build": {
+            "calls": 1,
+            "total_ms": 2.14,
+            "share_percent": 0.03,
+            "max_depth": 1
+          },
+          "answer.generation": {
+            "calls": 1,
+            "total_ms": 3612.82,
+            "share_percent": 53.72,
+            "max_depth": 1
+          },
+          "生成最终回答": {
+            "calls": 1,
+            "total_ms": 3615.0,
+            "share_percent": 53.76,
+            "max_depth": 0
+          }
+        },
+        "top_level": {
+          "读取知识库": {
+            "calls": 1,
+            "total_ms": 1.54,
+            "share_percent": 0.02,
+            "max_depth": 0
+          },
+          "读取对话历史": {
+            "calls": 1,
+            "total_ms": 2.15,
+            "share_percent": 0.03,
+            "max_depth": 0
+          },
+          "检索判断": {
+            "calls": 1,
+            "total_ms": 927.76,
+            "share_percent": 13.8,
+            "max_depth": 0
+          },
+          "问题向量化并执行相似度检索": {
+            "calls": 1,
+            "total_ms": 2178.13,
+            "share_percent": 32.39,
+            "max_depth": 0
+          },
+          "生成最终回答": {
+            "calls": 1,
+            "total_ms": 3615.0,
+            "share_percent": 53.76,
+            "max_depth": 0
+          }
+        }
+      }
+    },
+    {
+      "question_id": "mf_b572_cross_071",
+      "question": "化313-5井的射孔层段在四份报告中描述有何差异？请结合各报告解释结论，说明吸水层段、射孔厚度及建议措施。",
+      "question_type": "多文件比较",
+      "difficulty": "hard",
+      "document_hit": true,
+      "chunk_hit": true,
+      "evidence_hit": null,
+      "evidence_recall_at_k": null,
+      "evidence_coverage_at_k": null,
+      "evidence_mrr": null,
+      "evidence_count": 0,
+      "evidence_covered_count": 0,
+      "evidence_details": [],
+      "retrieval_basis": "chunk",
+      "document_precision": 0.2667,
+      "document_recall": 1.0,
+      "document_reciprocal_rank": 1.0,
+      "chunk_precision": 0.0526,
+      "chunk_recall": 0.25,
+      "chunk_reciprocal_rank": 0.3333,
+      "retrieval_k": 19,
+      "retrieval_recall_at_k": 0.25,
+      "retrieval_reciprocal_rank": 0.3333,
+      "mrr": 0.3333,
+      "answer": "化313-5井在四份报告中的射孔层段描述基本一致，均为长6层位、两个射孔层段：1411.0-1417.0m 和 1448.0-1452.0m，射开总厚度10m [证据:de20cd0c-870c-4da5-bc8a-9491a70233f0:8][证据:de20cd0c-870c-4da5-bc8a-9491a70233f0:19]。各报告差异主要体现在测井日期、日注水量及解释成果数据上。\n\n**各报告解释结论对比：**\n\n1. **《化313-5井注入剖面(同位素)测井解释报告.doc》**（2013年6月29日测井）：日注水量12.4 m³/d，油压6.9 MPa。第1层（1411.0-1417.0m，射孔厚度6.0m）吸水层段1410.8-1417.7m，吸水厚度6.9m，相对吸水47.18%，绝对吸水5.85 m³/d；第2层（1448.0-1452.0m，射孔厚度4.0m）吸水层段1448.1-1452.9m，吸水厚度4.8m，相对吸水52.82%，绝对吸水6.55 m³/d。两个射孔层均吸水 [证据:de20cd0c-870c-4da5-bc8a-9491a70233f0:19][证据:de20cd0c-870c-4da5-bc8a-9491a70233f0:20]。\n\n2. **《化313-5井同位素吸水剖面测井解释报告.doc》**（2023年12月02日测井）：测量井段1360.0-1470.0m，射孔井段1411.0-1417.0m（该片段仅列出此段）。报告结论为该井共有2个射孔层，测出2个射孔层，其中2个层吸水 [证据:7c3fd201-8149-4659-b075-c3da7a619a27:9][证据:7c3fd201-8149-4659-b075-c3da7a619a27:21]。\n\n3. **《化313-5井注入剖面（同位素）解释报告.docx》**：人工井底1507.2m，测量井段1340.0-1460.0m，射孔井段1411.0-1417.0m和1448.0-1452.0m，日注入量7.8 m³/d [证据:410b4989-d6b3-4619-8100-571da386bf44:7]。\n\n4. **《化313-5井注入剖面（同位素）测试解释报告.doc》**（2014年06月14日测井）：日配注10.0 m³，油压7.2 MPa，套压7.0 MPa，泵压8.8 MPa，人工井底1507.2m [证据:ac6e3aea-ab50-4896-b078-13a74e7e572d:6]。\n\n**建议措施：** 各报告建议基本一致，即保持稳定注水，提高注水效率，实现科学注水、合理注水 [证据:7c3fd201-8149-4659-b075-c3da7a619a27:21]。",
+      "retrieval_used": true,
+      "retrieved_count": 19,
+      "retrieved_document_ids": [
+        "7c3fd201-8149-4659-b075-c3da7a619a27",
+        "131f3efe-db47-4f1a-bc48-186e023528d5",
+        "de20cd0c-870c-4da5-bc8a-9491a70233f0",
+        "42f86870-94f7-4ef6-9bcd-ef16d1feec8d",
+        "63557db8-a4fa-4f98-a32e-c3eede5722cd",
+        "476c189e-3898-4010-b2fe-fb1653b52e8c",
+        "5981ac56-a0d5-4358-a3a9-55ba1bdad32f",
+        "410b4989-d6b3-4619-8100-571da386bf44",
+        "b8afcd0e-5686-4109-86aa-23c5fd552720",
+        "ac6e3aea-ab50-4896-b078-13a74e7e572d",
+        "206aff29-dfad-492d-9935-640adf9243a7",
+        "df00f5d8-54f9-4dd3-b16a-c7df1315a2e1",
+        "40603f22-00ea-41fc-b77a-f14ce9d8ed8e",
+        "6308c297-1bba-433e-8b33-f2d6ed7ed4b9",
+        "26d36354-9faf-4e10-9d37-422561c99c16"
+      ],
+      "retrieved_chunk_ids": [
+        "7c3fd201-8149-4659-b075-c3da7a619a27:21",
+        "131f3efe-db47-4f1a-bc48-186e023528d5:17",
+        "de20cd0c-870c-4da5-bc8a-9491a70233f0:8",
+        "42f86870-94f7-4ef6-9bcd-ef16d1feec8d:19",
+        "63557db8-a4fa-4f98-a32e-c3eede5722cd:20",
+        "476c189e-3898-4010-b2fe-fb1653b52e8c:20",
+        "de20cd0c-870c-4da5-bc8a-9491a70233f0:19",
+        "5981ac56-a0d5-4358-a3a9-55ba1bdad32f:19",
+        "410b4989-d6b3-4619-8100-571da386bf44:7",
+        "b8afcd0e-5686-4109-86aa-23c5fd552720:17",
+        "de20cd0c-870c-4da5-bc8a-9491a70233f0:20",
+        "ac6e3aea-ab50-4896-b078-13a74e7e572d:6",
+        "206aff29-dfad-492d-9935-640adf9243a7:19",
+        "7c3fd201-8149-4659-b075-c3da7a619a27:9",
+        "df00f5d8-54f9-4dd3-b16a-c7df1315a2e1:19",
+        "40603f22-00ea-41fc-b77a-f14ce9d8ed8e:8331",
+        "6308c297-1bba-433e-8b33-f2d6ed7ed4b9:20",
+        "40603f22-00ea-41fc-b77a-f14ce9d8ed8e:7636",
+        "26d36354-9faf-4e10-9d37-422561c99c16:13"
+      ],
+      "expected_document_ids": [
+        "410b4989-d6b3-4619-8100-571da386bf44",
+        "7c3fd201-8149-4659-b075-c3da7a619a27",
+        "ac6e3aea-ab50-4896-b078-13a74e7e572d",
+        "de20cd0c-870c-4da5-bc8a-9491a70233f0"
+      ],
+      "expected_chunk_ids": [
+        "410b4989-d6b3-4619-8100-571da386bf44:12",
+        "7c3fd201-8149-4659-b075-c3da7a619a27:20",
+        "ac6e3aea-ab50-4896-b078-13a74e7e572d:12",
+        "de20cd0c-870c-4da5-bc8a-9491a70233f0:8"
+      ],
+      "retrieved_documents": [
+        "化313-5井同位素吸水剖面测井解释报告.doc",
+        "化164-1井吸水剖面报告.doc",
+        "化313-5井注入剖面(同位素)测井解释报告.doc",
+        "化169-1井吸水剖面报告.doc",
+        "化315-1井吸水剖面测井解释报告.doc",
+        "化167-3井吸水剖面报告.doc",
+        "化168-2井吸水剖面报告.doc",
+        "化313-5井注入剖面（同位素）解释报告.docx",
+        "化166-2井吸水剖面报告.doc",
+        "化313-5井注入剖面（同位素）测试解释报告.doc",
+        "化164-1井注入剖面(同位素)测井解释报告.doc",
+        "化166-1井注入剖面(同位素)测井解释报告.doc",
+        "综合数据统计（射孔段数据）.xlsx",
+        "化306-7井注入剖面(同位素)测井解释报告.doc",
+        "化296-3井注入剖面(同位素)测井解释报告.doc"
+      ],
+      "expected_documents": [],
+      "response_time_ms": 9582.42,
+      "server_response_time_ms": 9570.51,
+      "token_usage": {
+        "available": true,
+        "calls": 5,
+        "reported_calls": 3,
+        "unreported_calls": 2,
+        "input_tokens": 7978,
+        "output_tokens": 1165,
+        "total_tokens": 9143,
+        "by_stage": {
+          "retrieval_decision": {
+            "calls": 1,
+            "reported_calls": 1,
+            "input_tokens": 256,
+            "output_tokens": 384,
+            "total_tokens": 640
+          },
+          "query_embedding": {
+            "calls": 1,
+            "reported_calls": 1,
+            "input_tokens": 87,
+            "output_tokens": 0,
+            "total_tokens": 87
+          },
+          "reranking": {
+            "calls": 2,
+            "reported_calls": 0,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "total_tokens": 0
+          },
+          "answer_generation": {
+            "calls": 1,
+            "reported_calls": 1,
+            "input_tokens": 7635,
+            "output_tokens": 781,
+            "total_tokens": 8416
+          }
+        }
+      },
+      "timing": {
+        "available": true,
+        "total_ms": 9570.51,
+        "event_count": 35,
+        "by_stage": {
+          "读取知识库": {
+            "calls": 1,
+            "total_ms": 1.93,
+            "share_percent": 0.02,
+            "max_depth": 0
+          },
+          "读取对话历史": {
+            "calls": 1,
+            "total_ms": 1.48,
+            "share_percent": 0.02,
+            "max_depth": 0
+          },
+          "decision.generation": {
+            "calls": 1,
+            "total_ms": 1486.53,
+            "share_percent": 15.53,
+            "max_depth": 1
+          },
+          "检索判断": {
+            "calls": 1,
+            "total_ms": 1488.34,
+            "share_percent": 15.55,
+            "max_depth": 0
+          },
+          "retrieval.query_embedding": {
+            "calls": 1,
+            "total_ms": 425.81,
+            "share_percent": 4.45,
+            "max_depth": 1
+          },
+          "retrieval.document_vector_search": {
+            "calls": 3,
+            "total_ms": 72.92,
+            "share_percent": 0.76,
+            "max_depth": 1
+          },
+          "retrieval.document_keyword_search": {
+            "calls": 3,
+            "total_ms": 97.75,
+            "share_percent": 1.02,
+            "max_depth": 1
+          },
+          "retrieval.chunk_vector_search": {
+            "calls": 6,
+            "total_ms": 65.93,
+            "share_percent": 0.69,
+            "max_depth": 1
+          },
+          "retrieval.chunk_keyword_search": {
+            "calls": 6,
+            "total_ms": 84.25,
+            "share_percent": 0.88,
+            "max_depth": 1
+          },
+          "retrieval.rrf_fusion": {
+            "calls": 6,
+            "total_ms": 0.37,
+            "share_percent": 0.0,
+            "max_depth": 1
+          },
+          "retrieval.rerank": {
+            "calls": 2,
+            "total_ms": 1676.13,
+            "share_percent": 17.51,
+            "max_depth": 1
+          },
+          "问题向量化并执行相似度检索": {
+            "calls": 1,
+            "total_ms": 2424.62,
+            "share_percent": 25.33,
+            "max_depth": 0
+          },
+          "answer.context_build": {
+            "calls": 1,
+            "total_ms": 2.04,
+            "share_percent": 0.02,
+            "max_depth": 1
+          },
+          "answer.generation": {
+            "calls": 1,
+            "total_ms": 5651.88,
+            "share_percent": 59.06,
+            "max_depth": 1
+          },
+          "生成最终回答": {
+            "calls": 1,
+            "total_ms": 5653.96,
+            "share_percent": 59.08,
+            "max_depth": 0
+          }
+        },
+        "top_level": {
+          "读取知识库": {
+            "calls": 1,
+            "total_ms": 1.93,
+            "share_percent": 0.02,
+            "max_depth": 0
+          },
+          "读取对话历史": {
+            "calls": 1,
+            "total_ms": 1.48,
+            "share_percent": 0.02,
+            "max_depth": 0
+          },
+          "检索判断": {
+            "calls": 1,
+            "total_ms": 1488.34,
+            "share_percent": 15.55,
+            "max_depth": 0
+          },
+          "问题向量化并执行相似度检索": {
+            "calls": 1,
+            "total_ms": 2424.62,
+            "share_percent": 25.33,
+            "max_depth": 0
+          },
+          "生成最终回答": {
+            "calls": 1,
+            "total_ms": 5653.96,
+            "share_percent": 59.08,
+            "max_depth": 0
+          }
+        }
+      }
+    }
+  ]
+}

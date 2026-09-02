@@ -1,0 +1,15 @@
+INFO:     Started server process [28840]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8081 (Press CTRL+C to quit)
+Combined retrieval decision/query plan was invalid; using deterministic fallback (JSONDecodeError: Unterminated string starting at: line 4 column 23 (char 75))
+Combined retrieval decision/query plan was invalid; using deterministic fallback (JSONDecodeError: Unterminated string starting at: line 9 column 5 (char 561))
+Combined retrieval decision/query plan was invalid; using deterministic fallback (JSONDecodeError: Unterminated string starting at: line 8 column 5 (char 456))
+Combined retrieval decision/query plan was invalid; using deterministic fallback (JSONDecodeError: Unterminated string starting at: line 7 column 5 (char 471))
+Combined retrieval decision/query plan was invalid; using deterministic fallback (JSONDecodeError: Unterminated string starting at: line 8 column 5 (char 465))
+Combined retrieval decision/query plan was invalid; using deterministic fallback (JSONDecodeError: Expecting ',' delimiter: line 10 column 4 (char 582))
+Combined retrieval decision/query plan was invalid; using deterministic fallback (JSONDecodeError: Unterminated string starting at: line 4 column 23 (char 75))
+Combined retrieval decision/query plan was invalid; using deterministic fallback (JSONDecodeError: Unterminated string starting at: line 6 column 5 (char 325))
+Combined retrieval decision/query plan was invalid; using deterministic fallback (JSONDecodeError: Unterminated string starting at: line 4 column 23 (char 75))
+Combined retrieval decision/query plan was invalid; using deterministic fallback (JSONDecodeError: Unterminated string starting at: line 6 column 5 (char 401))
+Combined retrieval decision/query plan was invalid; using deterministic fallback (JSONDecodeError: Unterminated string starting at: line 4 column 23 (char 75))

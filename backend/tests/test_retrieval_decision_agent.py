@@ -127,6 +127,47 @@ class RetrievalDecisionAgentTest(unittest.TestCase):
         self.assertFalse(analyze_query_intent(question).skips_retrieval)
         self.assertTrue(decision.should_retrieve)
         self.assertEqual(len(models.calls), 1)
+    def test_malformed_complex_plan_uses_deterministic_decomposition(self):
+        question = (
+            "根据《设计报告》和《实际报告》，分别统计设计数量和实际数量。"
+        )
+        models = FakeModels(
+            '{"decision":"RETRIEVE","strategy":"decompose","standalone_query":"'
+        )
+
+        decision = RetrievalDecisionAgent(
+            models,
+            query_planning_enabled=True,
+        ).run(question, [])
+
+        self.assertTrue(decision.should_retrieve)
+        self.assertTrue(decision.query_plan.fallback)
+        self.assertEqual(decision.query_plan.strategy, "decompose")
+        self.assertEqual(len(decision.query_plan.subqueries), 2)
+
+    def test_complex_question_cannot_be_silently_skipped(self):
+        question = "请分别说明井喷处置和污染物管理有哪些要求？"
+        models = FakeModels('{"decision":"SKIP"}')
+
+        decision = RetrievalDecisionAgent(
+            models,
+            query_planning_enabled=True,
+        ).run(question, [])
+
+        self.assertTrue(decision.should_retrieve)
+        self.assertEqual(decision.query_plan.strategy, "decompose")
+
+    def test_decision_model_failure_defaults_to_retrieval(self):
+        class FailingModels:
+            def complete(self, *args, **kwargs):
+                raise TimeoutError("timed out")
+
+        models = FailingModels()
+
+        decision = RetrievalDecisionAgent(models).run("报销制度是什么？", [])
+
+        self.assertTrue(decision.should_retrieve)
+        self.assertTrue(decision.query_plan.fallback)
 
 
 if __name__ == "__main__":

@@ -12,6 +12,18 @@ _IDENTIFIER_PATTERNS = (
     re.compile(r"[A-Za-z\u4e00-\u9fff]{1,8}\s*\d+(?:\s*[-\u2010-\u2015./]\s*\d+)+"),
     re.compile(r"[A-Za-z]{1,12}\s*\d+(?:\.\d+)+", re.IGNORECASE),
 )
+_QUOTED_TITLE_PATTERN = re.compile(r"\u300a([^\u300b]{2,160})\u300b")
+_FILE_NAME_PATTERN = re.compile(
+    r"(?<![\w\u4e00-\u9fff])"
+    r"[\w\u4e00-\u9fff][\w\u4e00-\u9fff./\\ ()\uFF08\uFF09_-]{1,159}"
+    r"\.(?:docx?|pdf|xlsx?|pptx?|txt|csv|gdb|att|md)",
+    re.IGNORECASE,
+)
+_NUMERIC_TERM_PATTERN = re.compile(
+    r"(?<![\w\u4e00-\u9fff])"
+    r"(?:(?:19\d{2}|20\d{2})\u5e74|\d+(?:\.\d+)?(?:%|\uFF05|\u4e07\u5143|\u5428|\u53e3|\u4e95|\u7c73|m|\u5929|\u4e2a\u6708))"
+)
+_SOURCE_CAPTURE_PATTERN = re.compile(r"\u300a([^\u300b]{2,160})\u300b")
 _RRF_RANK_CONSTANT = 60
 _KEYWORD_RRF_WEIGHT = 1.25
 logger = logging.getLogger(__name__)
@@ -24,7 +36,7 @@ def _normalize_keyword(value: str) -> str:
 
 
 def extract_keyword_terms(question: str, limit: int = 32) -> list[str]:
-    """Extract exact identifiers plus short Chinese phrases for lexical recall."""
+    """Extract source names, exact identifiers, and short phrases for lexical recall."""
     terms = []
     seen = set()
 
@@ -36,9 +48,35 @@ def extract_keyword_terms(question: str, limit: int = 32) -> list[str]:
         terms.append(term)
 
     normalized_question = unicodedata.normalize("NFKC", question)
+    # Source names are high-value lexical anchors in cross-file questions. Add
+    # them before generic Chinese sliding windows so they cannot be crowded out.
+    for pattern in (_QUOTED_TITLE_PATTERN, _FILE_NAME_PATTERN):
+        for match in pattern.finditer(normalized_question):
+            add(match.group(1) if pattern is _QUOTED_TITLE_PATTERN else match.group(0))
+            if len(terms) >= limit:
+                return terms
+
     for pattern in _IDENTIFIER_PATTERNS:
         for match in pattern.finditer(normalized_question):
             add(match.group(0))
+            # The broad pattern can absorb a preceding Chinese verb such as
+            # “比较化309-5”. Also add the compact identifier suffix so lexical
+            # search can match the exact spreadsheet row.
+            compact = _normalize_keyword(match.group(0))
+            suffix_matches = list(re.finditer(
+                r"(?=([A-Za-z\u4e00-\u9fff]{1,4}\d+(?:[-\u2010-\u2015./]\d+)+)$)",
+                compact,
+            ))
+            suffix = suffix_matches[-1].group(1) if suffix_matches else None
+            if suffix:
+                add(suffix)
+            if len(terms) >= limit:
+                return terms
+
+    for match in _NUMERIC_TERM_PATTERN.finditer(normalized_question):
+        add(match.group(0))
+        if len(terms) >= limit:
+            return terms
 
     for run in re.findall(r"[\u4e00-\u9fff]{4,}", normalized_question):
         for size in (6, 5, 4):
@@ -108,39 +146,27 @@ class KnowledgeRetrievalAgent:
             self._retrieve_for_query(knowledge_base_id, query_vector, query)
             for query, query_vector in zip(queries, query_vectors)
         ]
+        result_limit = self._result_limit(plan)
+        # A decomposed question has multiple independent evidence targets. A
+        # single rerank over the fused pool lets one target crowd out another,
+        # so rank each subquery against its own candidates before interleaving
+        # the results for the answer model. Do this before constructing any
+        # cross-query fusion pool so the reranker never sees mixed intents.
+        if plan.strategy == "decompose" and self.reranker is not None:
+            return self._rerank_decomposed_queries(
+                queries,
+                query_candidates,
+                plan.subqueries,
+                result_limit,
+            )
+
         candidates = _multi_query_fusion(
             query_candidates,
             limit=max(self.candidate_k, self.top_k * 6),
         )
         if self.reranker is None or not candidates:
-            return candidates[:self.top_k]
-
-        # A decomposed question has multiple independent evidence targets. A
-        # single rerank over the fused pool lets one target crowd out another,
-        # so rank each subquery against its own candidates before interleaving
-        # the results for the answer model.
-        if plan.strategy == "decompose":
-            return self._rerank_decomposed_queries(
-                queries,
-                query_candidates,
-                plan.subqueries,
-            )
-        try:
-            with timed_stage("retrieval.rerank"), model_usage_stage("reranking"):
-                reranked = list(
-                    self.reranker.rerank(plan.rerank_query(question), candidates, self.top_k)
-                )
-            if not reranked:
-                raise RuntimeError("Reranker returned no results")
-            seen = {hit.chunk_id for hit in reranked}
-            reranked.extend(hit for hit in candidates if hit.chunk_id not in seen)
-            return reranked[:self.top_k]
-        except Exception:
-            logger.warning(
-                "Reranking failed; falling back to fused retrieval order",
-                exc_info=True,
-            )
-            return candidates[:self.top_k]
+            return candidates[:result_limit]
+        return self._rerank_one_query(plan.rerank_query(question), candidates)
 
 
     def _rerank_decomposed_queries(
@@ -148,6 +174,7 @@ class KnowledgeRetrievalAgent:
         queries: list[str],
         query_candidates: list[list[SearchHit]],
         subqueries: Sequence[str],
+        result_limit: int,
     ) -> list[SearchHit]:
         candidates_by_query = {
             query.casefold(): candidates
@@ -172,8 +199,17 @@ class KnowledgeRetrievalAgent:
             return _multi_query_fusion(
                 query_candidates,
                 limit=max(self.candidate_k, self.top_k * 6),
-            )[:self.top_k]
-        return _interleave_ranked_groups(ranked_groups)
+            )[:result_limit]
+        return _interleave_ranked_groups(ranked_groups, result_limit)
+
+    def _result_limit(self, plan: QueryPlan) -> int:
+        if plan.strategy != "decompose":
+            return self.top_k
+        # Keep a minimum evidence budget for every independent target. Cap at
+        # three top-k blocks so four-way questions do not flood the answer
+        # context with low-ranked duplicates.
+        subquery_count = max(2, len(plan.subqueries))
+        return self.top_k * min(3, subquery_count)
 
     def _rerank_one_query(
         self,
@@ -195,8 +231,50 @@ class KnowledgeRetrievalAgent:
                     valid_reranked.append(hit)
             if not valid_reranked:
                 raise RuntimeError("Reranker returned no candidate results")
-            valid_reranked.extend(hit for hit in candidates if hit.chunk_id not in seen)
-            return valid_reranked[:self.top_k]
+            candidate_by_id = {str(hit.chunk_id): hit for hit in candidates}
+            source_anchors = []
+            query_terms = extract_keyword_terms(query, limit=64)
+            ranked_by_id = {str(hit.chunk_id): hit for hit in valid_reranked}
+            source_names = _SOURCE_CAPTURE_PATTERN.findall(query)
+            anchor_limit = max(
+                1,
+                min(3, self.top_k // max(1, len(source_names))),
+            )
+            for source_name in source_names:
+                matching_hits = [
+                    candidate_by_id[str(hit.chunk_id)]
+                    for hit in candidates
+                    if _hit_matches_source_name(hit, source_name)
+                ]
+                matching_hits.sort(
+                    key=lambda hit: _source_anchor_score(hit, query_terms),
+                    reverse=True,
+                )
+                for anchor in matching_hits[:anchor_limit]:
+                    source_anchors.append(
+                        ranked_by_id.get(str(anchor.chunk_id), anchor)
+                    )
+            ordered = []
+            ordered_ids = set()
+            # Explicit source names are hard evidence about which document the
+            # user meant. Keep one matching chunk at the front even if a noisy
+            # cross-document reranker scores it below its top-N cutoff.
+            for hit in source_anchors:
+                hit_id = str(hit.chunk_id)
+                if hit_id not in ordered_ids:
+                    ordered.append(hit)
+                    ordered_ids.add(hit_id)
+            for hit in valid_reranked:
+                hit_id = str(hit.chunk_id)
+                if hit_id not in ordered_ids:
+                    ordered.append(hit)
+                    ordered_ids.add(hit_id)
+            for hit in candidates:
+                hit_id = str(hit.chunk_id)
+                if hit_id not in ordered_ids:
+                    ordered.append(hit)
+                    ordered_ids.add(hit_id)
+            return ordered[:self.top_k]
         except Exception:
             logger.warning(
                 "Reranking failed for decomposed query; falling back to its retrieval order query=%r",
@@ -204,6 +282,7 @@ class KnowledgeRetrievalAgent:
                 exc_info=True,
             )
             return candidates[:self.top_k]
+
     def _retrieve_for_query(
         self,
         knowledge_base_id: str,
@@ -237,21 +316,23 @@ class KnowledgeRetrievalAgent:
             for hit in document_keyword_hits
             if hit.document_id not in document_ids
         )
+
+        # Document routing is a recall boost, not a gate. A profile can miss a
+        # row-level identifier (especially in large spreadsheets), while the
+        # chunk index can still contain the exact answer. Always keep the
+        # global search and fuse routed candidates into it when available.
+        global_candidates = self._retrieve_chunks(
+            knowledge_base_id, query_vector, keywords, None
+        )
         if document_ids:
-            candidates = self._retrieve_chunks(
+            routed_candidates = self._retrieve_chunks(
                 knowledge_base_id, query_vector, keywords, document_ids
             )
-        elif not document_vector_hits:
-            candidates = self._retrieve_chunks(
-                knowledge_base_id, query_vector, keywords, None
+            return _multi_query_fusion(
+                [global_candidates, routed_candidates],
+                limit=max(self.candidate_k, self.top_k * 6),
             )
-        else:
-            candidates = []
-        if document_ids and not candidates:
-            candidates = self._retrieve_chunks(
-                knowledge_base_id, query_vector, keywords, None
-            )
-        return candidates
+        return global_candidates
 
     def _retrieve_chunks(
         self,
@@ -279,7 +360,10 @@ class KnowledgeRetrievalAgent:
                     )
                 )
 
-        keyword_limit = max(1, self.candidate_k // 2)
+        # Exact identifiers are often the only reliable signal for row-level
+        # facts. Give lexical search a pool as large as dense search so a
+        # common phrase in another file cannot evict the exact row.
+        keyword_limit = max(1, self.candidate_k)
         with timed_stage("retrieval.chunk_keyword_search"):
             if not keywords:
                 keyword_hits = []
@@ -375,7 +459,10 @@ def _multi_query_fusion(
 
 
 
-def _interleave_ranked_groups(groups: Sequence[Sequence[SearchHit]]) -> list[SearchHit]:
+def _interleave_ranked_groups(
+    groups: Sequence[Sequence[SearchHit]],
+    limit: int | None = None,
+) -> list[SearchHit]:
     """Interleave per-query rankings so each evidence target gets fair context space."""
     result: list[SearchHit] = []
     seen: set[str] = set()
@@ -390,16 +477,39 @@ def _interleave_ranked_groups(groups: Sequence[Sequence[SearchHit]]) -> list[Sea
                 continue
             seen.add(hit_id)
             result.append(hit)
+            if limit is not None and len(result) >= limit:
+                return result
     return result
+
+
 def _best_document_hits(hits: list[SearchHit]) -> list[SearchHit]:
-    """Deduplicate route nodes while keeping the retriever's first-seen order."""
+    """Deduplicate route nodes and rank documents by their best route score."""
     best_by_document: dict[str, SearchHit] = {}
-    document_order: list[str] = []
     for hit in hits:
         document_id = str(hit.document_id)
         current = best_by_document.get(document_id)
-        if current is None:
-            document_order.append(document_id)
         if current is None or float(hit.score) > float(current.score):
             best_by_document[document_id] = hit
-    return [best_by_document[document_id] for document_id in document_order]
+    return sorted(
+        best_by_document.values(),
+        key=lambda hit: (-float(hit.score), str(hit.document_id)),
+    )
+
+
+def _hit_matches_source_name(hit: SearchHit, source_name: str) -> bool:
+    file_name = _normalize_keyword(str(hit.file_name or hit.title or ""))
+    return _normalize_keyword(source_name) in file_name
+
+
+def _source_anchor_score(hit: SearchHit, query_terms: Sequence[str]) -> tuple[int, float, float]:
+    text = _normalize_keyword(str(hit.text or ""))
+    lexical_score = sum(
+        len(term) ** 2
+        for term in query_terms
+        if len(term) >= 3 and _normalize_keyword(term) in text
+    )
+    return (
+        lexical_score,
+        float(hit.relevance_score if hit.relevance_score is not None else -1.0),
+        float(hit.score),
+    )

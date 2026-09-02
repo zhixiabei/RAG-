@@ -195,6 +195,28 @@ class KnowledgeRetrievalAgentTest(unittest.TestCase):
 
         self.assertEqual([call[0] for call in reranker.calls], ["first target", "second target"])
         self.assertEqual([hit.chunk_id for hit in result], ["first", "third", "second"])
+
+    def test_keeps_an_explicit_source_anchor_after_noisy_reranking(self):
+        source_hit = SearchHit(
+            "source:1", "doc-source", "kb-1", "化166-2井组化学示踪剂监测设计.doc", "设计证据", 0.7
+        )
+        noisy_hit = SearchHit(
+            "noise:1", "doc-noise", "kb-1", "化166-1井组示踪剂报告.doc", "相似噪声", 0.9
+        )
+        reranker = FakeReranker([noisy_hit])
+        agent = KnowledgeRetrievalAgent(
+            FakeVectors([source_hit, noisy_hit]),
+            FakeModels(),
+            top_k=2,
+            candidate_k=2,
+            reranker=reranker,
+        )
+
+        result = agent._rerank_one_query(
+            "《化166-2井组化学示踪剂监测设计》设计阶段对应井数", [noisy_hit, source_hit]
+        )
+
+        self.assertEqual([hit.chunk_id for hit in result], ["source:1", "noise:1"])
     def test_returns_similarity_ordered_top_k_candidates(self):
         hits = [
             SearchHit(f"chunk-{index}", "doc-1", "kb-1", "制度.pdf", f"内容 {index}", 0.9)
@@ -269,7 +291,7 @@ class KnowledgeRetrievalAgentTest(unittest.TestCase):
         )
 
         self.assertEqual(vectors.calls, [("kb-1", [0.1, 0.2], 4)])
-        self.assertEqual(vectors.keyword_calls[0][2], 2)
+        self.assertEqual(vectors.keyword_calls[0][2], 4)
         query, candidates, limit = reranker.calls[0]
         self.assertEqual(query, "Policy 12-3 details")
         self.assertEqual(limit, 2)
@@ -319,6 +341,20 @@ class KnowledgeRetrievalAgentTest(unittest.TestCase):
         self.assertIn("化348-4", terms)
         self.assertIn("年累计增油", terms)
 
+    def test_extracts_bare_identifier_from_a_prefixed_phrase(self):
+        terms = extract_keyword_terms("比较化309-5井与杏6329-1井的绝对吸水量")
+
+        self.assertIn("化309-5", terms)
+        self.assertIn("杏6329-1", terms)
+
+    def test_extracts_complete_quoted_source_names_before_generic_windows(self):
+        terms = extract_keyword_terms(
+            "根据《化166-2井组化学示踪剂监测设计》和《化166-2示踪剂报告》，比较见效情况"
+        )
+
+        self.assertIn("化166-2井组化学示踪剂监测设计", terms)
+        self.assertIn("化166-2示踪剂报告", terms)
+
     def test_rejects_incompatible_embedding_model(self):
         agent = KnowledgeRetrievalAgent(FakeVectors([]), FakeModels(), 2)
 
@@ -349,9 +385,15 @@ class KnowledgeRetrievalAgentTest(unittest.TestCase):
             "目标内容是什么？",
         )
 
-        self.assertEqual([hit.chunk_id for hit in result], ["doc-1:1"])
+        self.assertEqual([hit.chunk_id for hit in result], ["doc-1:1", "doc-2:1"])
         self.assertEqual(vectors.document_calls, [("kb-1", [0.1, 0.2], 20)])
-        self.assertEqual(vectors.calls, [("kb-1", [0.1, 0.2], 4, ("doc-1",))])
+        self.assertEqual(
+            vectors.calls,
+            [
+                ("kb-1", [0.1, 0.2], 4),
+                ("kb-1", [0.1, 0.2], 4, ("doc-1",)),
+            ],
+        )
 
     def test_all_documents_above_threshold_enter_one_chunk_search(self):
         chunks = [
@@ -386,7 +428,10 @@ class KnowledgeRetrievalAgentTest(unittest.TestCase):
 
         self.assertEqual(
             vectors.calls,
-            [("kb-1", [0.1, 0.2], 4, ("doc-1", "doc-2", "doc-3"))],
+            [
+                ("kb-1", [0.1, 0.2], 4),
+                ("kb-1", [0.1, 0.2], 4, ("doc-1", "doc-2", "doc-3")),
+            ],
         )
         self.assertEqual(vectors.document_calls, [("kb-1", [0.1, 0.2], 50)])
 
@@ -416,7 +461,10 @@ class KnowledgeRetrievalAgentTest(unittest.TestCase):
 
         self.assertEqual(
             vectors.calls,
-            [("kb-1", [0.1, 0.2], 4, ("doc-2", "doc-1"))],
+            [
+                ("kb-1", [0.1, 0.2], 4),
+                ("kb-1", [0.1, 0.2], 4, ("doc-1", "doc-2")),
+            ],
         )
 
     def test_documents_below_threshold_do_not_bypass_filter(self):
@@ -440,8 +488,8 @@ class KnowledgeRetrievalAgentTest(unittest.TestCase):
             "unrelated question",
         )
 
-        self.assertEqual(result, [])
-        self.assertEqual(vectors.calls, [])
+        self.assertEqual([hit.chunk_id for hit in result], ["doc-low:1"])
+        self.assertEqual(vectors.calls, [("kb-1", [0.1, 0.2], 1)])
         self.assertEqual(vectors.document_keyword_calls, [])
 
     def test_empty_routed_search_falls_back_to_global_chunks(self):
@@ -469,11 +517,23 @@ class KnowledgeRetrievalAgentTest(unittest.TestCase):
         self.assertEqual(
             vectors.calls,
             [
-                ("kb-1", [0.1, 0.2], 1, ("doc-stale",)),
                 ("kb-1", [0.1, 0.2], 1),
+                ("kb-1", [0.1, 0.2], 1, ("doc-stale",)),
             ],
         )
 
 
 if __name__ == "__main__":
+    def test_decomposed_plan_gets_two_or_three_top_k_evidence_blocks(self):
+        agent = KnowledgeRetrievalAgent(FakeVectors([]), FakeModels(), top_k=10)
+
+        two_targets = QueryPlan("decompose", "问题", ("目标一", "目标二"))
+        three_targets = QueryPlan(
+            "decompose", "问题", ("目标一", "目标二", "目标三")
+        )
+
+        self.assertEqual(agent._result_limit(two_targets), 20)
+        self.assertEqual(agent._result_limit(three_targets), 30)
+        self.assertEqual(agent._result_limit(QueryPlan.single("问题")), 10)
+
     unittest.main()

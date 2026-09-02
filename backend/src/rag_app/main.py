@@ -105,18 +105,43 @@ def build_services(settings: Settings) -> Services:
     )
     reranker = None
     if settings.rag_rerank_enabled:
+        remote_rerank_provider = getattr(settings, "remote_rerank_provider_name", "")
+        remote_rerank_base_url = getattr(settings, "remote_rerank_base_url", "")
+        remote_rerank_api_key = getattr(settings, "remote_rerank_api_key", "")
+        remote_rerank_model = getattr(settings, "remote_rerank_model", "")
         rerank_base_url = (
-            settings.rag_rerank_base_url or settings.remote_embedding_base_url
+            settings.rag_rerank_base_url
+            or remote_rerank_base_url
+            or settings.remote_embedding_base_url
         )
         if rerank_base_url.strip():
-            reranker = HttpReranker(
-                settings.rag_rerank_provider_name
-                or settings.remote_embedding_provider_name,
-                rerank_base_url,
+            rerank_model = (
+                settings.rag_rerank_model.strip()
+                or remote_rerank_model.strip()
+                or "BAAI/bge-reranker-v2-m3"
+            )
+            rerank_provider = (
+                settings.rag_rerank_provider_name.strip()
+                or remote_rerank_provider.strip()
+                or settings.remote_embedding_provider_name.strip()
+            )
+            rerank_api_key = (
                 settings.rag_rerank_api_key
-                or settings.remote_embedding_api_key,
-                settings.rag_rerank_model,
+                or remote_rerank_api_key
+                or settings.remote_embedding_api_key
+            )
+            reranker = HttpReranker(
+                rerank_provider,
+                rerank_base_url,
+                rerank_api_key,
+                rerank_model,
                 settings.rag_rerank_timeout_seconds,
+            )
+            logger.info(
+                "Reranker configured provider=%s model=%s endpoint=%s",
+                rerank_provider or "HTTP reranker",
+                rerank_model,
+                reranker.endpoint,
             )
         else:
             logger.warning("Reranking is enabled but no reranker base URL is configured")

@@ -1,13 +1,22 @@
 from dataclasses import dataclass
 import json
+import logging
 import re
 from typing import Any
 
 from .context import select_history_messages
 from .contracts import ModelGateway
 from .query_intent import QueryIntent, analyze_query_intent
-from .query_planning_agent import QueryPlan, parse_query_plan, query_planning_trigger
+from .query_planning_agent import (
+    QueryPlan,
+    fallback_query_plan,
+    parse_query_plan,
+    query_planning_trigger,
+)
 from .telemetry import model_usage_stage, timed_stage
+
+
+logger = logging.getLogger(__name__)
 
 
 RETRIEVAL_DECISION_PROMPT = """你负责一次性完成检索判断和查询规划，不负责回答问题。
@@ -112,23 +121,41 @@ class RetrievalDecisionAgent:
             if self.query_planning_enabled
             else None
         )
-        with timed_stage("decision.generation"), model_usage_stage("retrieval_decision"):
-            output = self.models.complete(
-                retrieval_decision_messages(question, history),
-                temperature=0,
-                max_tokens=384 if self.query_planning_enabled else 16,
-                reasoning=False,
-                response_schema=(
-                    RETRIEVAL_DECISION_SCHEMA
-                    if self.query_planning_enabled
-                    else RETRIEVAL_DECISION_ONLY_SCHEMA
-                ),
+        try:
+            with timed_stage("decision.generation"), model_usage_stage("retrieval_decision"):
+                output = self.models.complete(
+                    retrieval_decision_messages(question, history),
+                    temperature=0,
+                    max_tokens=384 if self.query_planning_enabled else 16,
+                    reasoning=False,
+                    response_schema=(
+                        RETRIEVAL_DECISION_SCHEMA
+                        if self.query_planning_enabled
+                        else RETRIEVAL_DECISION_ONLY_SCHEMA
+                    ),
+                )
+        except Exception as exc:
+            logger.warning(
+                "Retrieval decision model failed; defaulting to retrieval (%s: %s)",
+                type(exc).__name__,
+                exc,
             )
+            return RetrievalDecision(True, fallback_query_plan(question, trigger))
         should_retrieve_now = should_retrieve(output)
+        if trigger == "complex_query" and not should_retrieve_now:
+            logger.warning(
+                "Complex knowledge query was classified as SKIP; forcing retrieval"
+            )
+            should_retrieve_now = True
         if not should_retrieve_now or trigger is None:
             return RetrievalDecision(should_retrieve_now, QueryPlan.single(question))
         try:
             query_plan = parse_query_plan(output, question, trigger)
-        except Exception:
-            query_plan = QueryPlan.single(question, trigger=trigger, fallback=True)
+        except Exception as exc:
+            logger.warning(
+                "Combined retrieval decision/query plan was invalid; using deterministic fallback (%s: %s)",
+                type(exc).__name__,
+                exc,
+            )
+            query_plan = fallback_query_plan(question, trigger)
         return RetrievalDecision(should_retrieve_now, query_plan)

@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     qdrant_hnsw_m: int = 16
     qdrant_hnsw_ef_construct: int = 128
     qdrant_hnsw_full_scan_threshold: int = 10_000
-    qdrant_search_hnsw_ef: int = 64
+    qdrant_search_hnsw_ef: int = 128
     ingestion_max_concurrency: int = 2
     ingestion_embedding_max_concurrency: int = 1
     ingestion_embedding_batch_size: int = 32
@@ -48,20 +48,25 @@ class Settings(BaseSettings):
     remote_embedding_base_url: str = ""
     remote_embedding_api_key: str = ""
     remote_embedding_model: str = ""
+    # Backward-compatible names used by existing .env files.
+    remote_rerank_provider_name: str = ""
+    remote_rerank_base_url: str = ""
+    remote_rerank_api_key: str = ""
+    remote_rerank_model: str = ""
     remote_llm_timeout_seconds: float = 60.0
     remote_llm_max_retries: int = 0
     remote_embedding_max_retries: int = 2
     remote_llm_retry_base_delay_seconds: float = 0.5
     remote_llm_retry_max_delay_seconds: float = 5.0
     rag_top_k: int = 10
-    rag_retrieval_candidate_k: int = 30
-    rag_document_candidate_k: int = 50
+    rag_retrieval_candidate_k: int = 60
+    rag_document_candidate_k: int = 100
     rag_document_score_threshold: float = 0.45
     rag_rerank_enabled: bool = True
     rag_rerank_provider_name: str = ""
     rag_rerank_base_url: str = ""
     rag_rerank_api_key: str = ""
-    rag_rerank_model: str = "BAAI/bge-reranker-v2-m3"
+    rag_rerank_model: str = ""
     rag_rerank_timeout_seconds: float = 60.0
     rag_min_relevance_score: float = 0.1
     rag_context_max_input_tokens: int = 0

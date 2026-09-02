@@ -1,0 +1,997 @@
+INFO:     127.0.0.1:62336 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49699 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49700 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49738 - "DELETE /api/v1/conversations/816abd39-8764-4b6a-ba7b-66cd52961afb HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:49739 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49740 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59183 - "DELETE /api/v1/conversations/076e6a18-abf5-4127-9870-5be6a9eb7a58 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59184 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59185 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57531 - "DELETE /api/v1/conversations/14b6bc30-052c-4672-a776-09a6cfc7fa17 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59342 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "DELETE /api/v1/conversations/22dbb48e-cb8b-437f-882b-b0ee84bb7ecc HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "DELETE /api/v1/conversations/8f9b288f-b369-4826-a29a-965d38a878be HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "DELETE /api/v1/conversations/5ca29184-f252-4b65-bb9e-3f5cd4ad443d HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "DELETE /api/v1/conversations/b4532b70-b1f6-4a04-a286-16686433f7c0 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "DELETE /api/v1/conversations/d4ba46e2-b766-4cb4-a069-aeee10e3e7fd HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "DELETE /api/v1/conversations/88d11cc0-d697-4b05-8281-79b2b45103d2 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "DELETE /api/v1/conversations/39a1d8d2-ccd6-482b-a385-7bfdb33f4dfd HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "DELETE /api/v1/conversations/348c9132-fa32-4a4a-9d42-825f2a7acc46 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "DELETE /api/v1/conversations/149caa7f-52cc-471c-bb84-28a3b239f716 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "DELETE /api/v1/conversations/85e84ff7-026e-40f9-855f-5462cbdbf883 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "DELETE /api/v1/conversations/3c84d852-f574-4c01-9a36-ac62c686727a HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "DELETE /api/v1/conversations/17dac378-f118-45e6-a635-e87d93ed56d7 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "DELETE /api/v1/conversations/b5f58b03-5d94-4e09-9e91-fc6c09a79ae5 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "DELETE /api/v1/conversations/b4d6a168-8a6b-4f52-83e2-205d2932dc4d HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "DELETE /api/v1/conversations/e2ec342d-a0ec-41f7-b1cc-ae7f513a6551 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "DELETE /api/v1/conversations/51980063-b925-46ee-a520-472407a9af65 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "DELETE /api/v1/conversations/8dec1005-d8c2-4167-aab5-e06a0ec755f7 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "DELETE /api/v1/conversations/73fee920-6e8d-4746-a8d8-d0020e301b0f HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "DELETE /api/v1/conversations/e6051f47-f9de-46cd-8ea6-e57b628407b2 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "DELETE /api/v1/conversations/1d871442-b87d-4392-b63c-9788756f209d HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "DELETE /api/v1/conversations/0a94b36f-02c9-42a9-bad6-b36bd7248fec HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "DELETE /api/v1/conversations/1f1ae1e2-d0cb-4db4-9e0c-99a932e766cd HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "DELETE /api/v1/conversations/a2d00907-8b03-484f-8aa3-1a0718be6f15 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "DELETE /api/v1/conversations/ec9bac52-5e97-4591-9f78-3b57406321f3 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "DELETE /api/v1/conversations/2ba90c91-6808-495d-8450-eb327bb20f09 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "DELETE /api/v1/conversations/cec45a25-efa5-4f86-970b-aa52c6e37124 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "DELETE /api/v1/conversations/47dd5477-f9c6-4d39-83c8-3cdb4d645305 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "DELETE /api/v1/conversations/3feb4a8d-3d47-4047-9b9c-c5814c6094a5 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "DELETE /api/v1/conversations/2f57b63d-5129-4bff-a116-f679e9d3930f HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "DELETE /api/v1/conversations/e2903774-e000-4bc4-a44c-c936f425777c HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "DELETE /api/v1/conversations/d1e3387f-c86e-4f9c-b504-a4e5d3c281ae HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "DELETE /api/v1/conversations/c894bf2a-be3a-4c94-8b04-99261e7814fe HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "DELETE /api/v1/conversations/bb621c4f-555c-459e-95c2-338425c6834c HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "DELETE /api/v1/conversations/b4df13f7-0894-48b2-919f-1b6835c431df HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "DELETE /api/v1/conversations/e772b7b1-4cc7-437a-8d64-526e2f300c21 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "DELETE /api/v1/conversations/b30b2dfb-a209-47f0-ae84-f3d019d1b9fc HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "DELETE /api/v1/conversations/b614fec0-123a-42bd-93c6-463da7a756c1 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "DELETE /api/v1/conversations/93cd676b-2dc3-4f13-8234-ee18b9f86d23 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "DELETE /api/v1/conversations/b9c88ac5-19ce-4f43-928b-fd6f67546f0d HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "DELETE /api/v1/conversations/45426a0a-a92b-4bfa-b114-d8833a8b3048 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "DELETE /api/v1/conversations/29643a23-c7bc-457a-a3e4-1a496f1971e6 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "DELETE /api/v1/conversations/a7789ca0-75fd-43a1-a616-9e4999807335 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "DELETE /api/v1/conversations/a7fdafc5-c338-4cf6-8902-a021fb6e4e2e HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "DELETE /api/v1/conversations/8d2ca0d4-1a1a-406a-a1ab-d5e65655c427 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "DELETE /api/v1/conversations/411429f5-b16e-4b80-b9bb-926564df4a79 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "DELETE /api/v1/conversations/4277f0a4-8b60-41d1-b3a9-f8f3a15325fd HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "DELETE /api/v1/conversations/d2a4be13-5fa6-499e-95d5-9dc18db167bb HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "DELETE /api/v1/conversations/54ae8067-6bd3-41ac-871d-33b37efeb0b0 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "DELETE /api/v1/conversations/2651b024-8327-4016-9a43-2b1f9e3e9e58 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "DELETE /api/v1/conversations/7ceae1f0-5a70-4e39-abb6-729a2936f151 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "DELETE /api/v1/conversations/0c54ee1a-e650-4688-9b61-54d31b0d8720 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "DELETE /api/v1/conversations/3780e80a-cae4-45ba-85a2-00b7ec7c5548 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "DELETE /api/v1/conversations/511ebc9c-900b-4fc4-a3af-35316b0da470 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "DELETE /api/v1/conversations/36f8230c-30d0-4d0a-9756-6ba6e6fb2165 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "DELETE /api/v1/conversations/003052b8-5e57-4b6a-aa91-1471b568943d HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "DELETE /api/v1/conversations/1272b531-5910-45fa-8b97-86fab4c7868a HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "DELETE /api/v1/conversations/28f22cce-cd07-4f0d-9ea9-37738151c6a6 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "DELETE /api/v1/conversations/2438e30b-b62c-4533-bcc3-b4c4405641fa HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "DELETE /api/v1/conversations/bd53217e-118e-4769-92dc-c7b1789d8442 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "DELETE /api/v1/conversations/61734e4b-2df9-429a-b6ba-364f836b0291 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "DELETE /api/v1/conversations/b296d2ef-176c-4dee-86e5-5c05573679fe HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "DELETE /api/v1/conversations/cffb85a5-059b-4b82-9421-fecf100fdf30 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "DELETE /api/v1/conversations/43fab107-9edd-409b-8641-13e505bcf5c7 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "DELETE /api/v1/conversations/840885ac-d58d-4c3a-88c7-c46b2ca39940 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "DELETE /api/v1/conversations/30f6bcac-081f-4156-9a10-b2af73132b88 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "DELETE /api/v1/conversations/4f97ad21-743a-425b-99b6-0af7f5243e30 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "DELETE /api/v1/conversations/527ce61d-734b-487e-a73f-d84f3e6b143b HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "DELETE /api/v1/conversations/9753fe24-69e8-482c-9bcf-d422b3fa5cae HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "DELETE /api/v1/conversations/476b74ee-bfd8-416e-a71b-1631dd05ce34 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "DELETE /api/v1/conversations/8dee48ad-6fd3-4fa6-99eb-b17f759b1725 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "DELETE /api/v1/conversations/79531c92-629e-4b1d-89bf-1d386be99383 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "DELETE /api/v1/conversations/a18b8fe0-9e16-437d-aaa7-86851b7bea79 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "DELETE /api/v1/conversations/d407c4f8-9242-4554-ac6c-8f8c326d9b60 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "DELETE /api/v1/conversations/4a6076b7-f42a-468d-9ba4-1c3dcd0adc9b HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "DELETE /api/v1/conversations/b7bb3099-022f-4aeb-9279-996eb8f82a3b HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "DELETE /api/v1/conversations/54c5ae20-2f54-4117-ae95-87bc8a959cd2 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "DELETE /api/v1/conversations/a2377527-f604-4017-b548-089b97e051d8 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "DELETE /api/v1/conversations/eb3f0924-7488-4bdc-9447-9a7271abe21f HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "DELETE /api/v1/conversations/a57bf4a0-e618-45d4-b7b8-c4dd1fcca6b3 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "DELETE /api/v1/conversations/04426689-3ec1-42a7-ae8f-de715ec3bbe1 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "DELETE /api/v1/conversations/b6440da9-d19a-42fb-81fb-b5d67f4f40b7 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "DELETE /api/v1/conversations/94e109cd-e2d4-4dfc-8dd3-3daa8dae7ea6 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "DELETE /api/v1/conversations/7507d8d4-e3b9-4358-b5c1-b084339d4e57 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "DELETE /api/v1/conversations/e25679c3-324a-4563-abe0-718c88ee0e10 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "DELETE /api/v1/conversations/ec831ad3-fde9-4372-8697-f073e9e8808b HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "DELETE /api/v1/conversations/1395da7f-a7db-4d51-962e-5898e3983194 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "DELETE /api/v1/conversations/8c272355-1632-4eeb-aead-149f7912fac6 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "DELETE /api/v1/conversations/3ecbd060-d04c-4ab4-8ad6-a9ee9348bed2 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "DELETE /api/v1/conversations/2c9c9f03-c5da-4ad7-bf39-e4e76804607d HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "DELETE /api/v1/conversations/8dbce607-e0d5-410d-91b6-b098bfba0a7e HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "DELETE /api/v1/conversations/88440c37-0ea1-4164-883b-d1c3c8841135 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "DELETE /api/v1/conversations/30d6c308-2c03-45bc-88bb-fcbafc34f89c HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "DELETE /api/v1/conversations/74e035a3-3740-474c-b2cf-1637d8350d1f HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "DELETE /api/v1/conversations/537792e9-d5cb-4942-ae49-331ac3692271 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "DELETE /api/v1/conversations/bdfae412-b1fc-4dd1-8812-f5024f17f09e HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "DELETE /api/v1/conversations/5530c296-f115-4d56-97c2-db5bad8a1de4 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "DELETE /api/v1/conversations/783ba83e-6a64-48d1-abf1-e066ab9d83bf HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "DELETE /api/v1/conversations/1f303a66-6a20-4b6f-9622-ffeb677b998c HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "DELETE /api/v1/conversations/3f3c6401-d976-4a1e-8d81-ae1eee525ae0 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "DELETE /api/v1/conversations/a1638c43-2f12-41cc-ab96-6b50afd92c30 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "DELETE /api/v1/conversations/85821b55-a6dd-4cf5-9d6f-0f423281befa HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "DELETE /api/v1/conversations/d163aea4-8495-4201-b887-4a11ba45daa8 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "DELETE /api/v1/conversations/dc14dbeb-21ee-4607-979b-f2c89775d51f HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "DELETE /api/v1/conversations/9e99fece-5dcd-4db8-9b85-11815449e311 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "DELETE /api/v1/conversations/15f4959e-076b-4da1-8832-77f313fcd837 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "DELETE /api/v1/conversations/6d1b9528-19c7-44bd-9bcd-3f5759880b87 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "DELETE /api/v1/conversations/b3c6c1e7-7809-4c8f-a3cb-0c4d43937aee HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "DELETE /api/v1/conversations/aa259c24-b4ae-4577-94d8-edcb19bd7361 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "DELETE /api/v1/conversations/e7092cad-794b-4112-b5ae-39ce40cde4a4 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "DELETE /api/v1/conversations/161e6d4d-cde0-431d-81f5-c2c1ef48490e HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "DELETE /api/v1/conversations/8723489b-7840-499c-887c-1672980b4ba6 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "DELETE /api/v1/conversations/b238f892-525c-4070-839f-351e0ea0762d HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "DELETE /api/v1/conversations/7195e809-4e81-4341-be30-8462fa92dc48 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "DELETE /api/v1/conversations/07b0c2dd-cf55-4c75-b606-c43cd2f17f48 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "DELETE /api/v1/conversations/1709cd45-3527-40aa-bac6-a27dbabacc55 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "DELETE /api/v1/conversations/9bd911a8-a705-4f83-8291-1d49a495b20f HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "DELETE /api/v1/conversations/aaf2e42a-d432-4edf-bf2c-d4b6bf9b05eb HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "DELETE /api/v1/conversations/1f310259-eda4-4b2f-a890-92bb4b0fcd9a HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "DELETE /api/v1/conversations/cd706a85-1be4-4c3a-ab13-1c868150ef44 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "DELETE /api/v1/conversations/e6e408d7-a76c-4764-9e8b-9fc147066fc5 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "DELETE /api/v1/conversations/99c30a7c-54ff-471f-af61-e99743630a5f HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "DELETE /api/v1/conversations/371e1b4c-32e4-4c5e-9214-b2c94105981c HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "DELETE /api/v1/conversations/1f88a134-0957-4743-b2ff-354cf327682e HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "DELETE /api/v1/conversations/c52bbc43-fd8b-41a5-99fb-957db55eb426 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59343 - "DELETE /api/v1/conversations/0e14e7d1-4dc8-44b3-b31b-2f98f5b0ed4d HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "DELETE /api/v1/conversations/faf88b9d-4864-429b-999b-e58d4544ab10 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:59343 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "DELETE /api/v1/conversations/2cb10089-21be-4c56-ae7e-09ab659ce87a HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/317906fc-5d97-4bad-b6bd-c93310eb2227 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/4fee4935-e09e-44be-8b32-bdc8aad754f1 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/63245ee8-befb-409c-b50f-09e085c697bb HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/9ea28626-b82d-4af3-8f60-95a448125fd0 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/5b804a62-5e53-44cd-bd2f-6e6a20d4aa23 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/44f46940-4bf6-428c-80d6-7df018c8676d HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/061ea6ac-3d5e-4136-9be0-21137c972024 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/6377d6c7-0125-4bac-9ea3-36e1e0c906ee HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/67fb0961-73c8-4a2e-8759-dcdaee6518c2 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/d0ff1252-0c61-4451-906a-b6515b5be345 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/33a585f1-bc92-4838-a8a7-d4d644d4f292 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/03d41196-7bcd-430c-b587-1cd244a9ac30 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/97f325d1-f18f-48e8-a6cf-4247129e9681 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/0fc62076-3947-487a-9f92-8e482ab95a07 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/da051a3f-ed38-4df9-ac9f-29d357974234 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/a95b46c2-7538-4305-89cc-6156ba959daa HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/b3539231-77fd-4037-8e22-f23ab4fb1dfa HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/bbd83074-e06e-4a02-9ba4-87d760fc00da HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/01316279-595f-4724-9559-23f92f214e3e HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/b8bdfeb9-7414-4c71-88ed-721e50d0462e HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/f30b9efa-b745-4995-92df-3f94d45089de HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/50a299f8-7bb5-4317-85f5-71f3c57db6af HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/3fef73a7-ab78-4c01-bd8b-21e1f4b8287e HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/d24d84ba-7b93-478f-90eb-d0d07048d146 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/6e461088-f994-4c78-ab6f-a71d70789643 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/a40a4741-4cfa-419b-b8b7-01c6d4705781 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/e1221494-7d56-494c-86eb-5f4f50e4ef25 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/676f31b6-f1e5-4010-8ee9-37c8cef35469 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/372e2a2f-763f-4f9f-b185-3a835c867c52 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/9f4ca078-2f98-4246-9ce6-2c33f1fd2e80 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/075231dd-b1fb-43a8-8c7d-363ebcce2a93 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/cfbb157e-c16b-4e0f-8d29-2b6bef531ad1 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/d73d7a0e-3c55-4eb9-889c-e4249f921a64 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/3a68889c-d43a-4bfd-97ca-18e74b839a34 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/8731ba16-b38a-4546-8036-ac4de1dd19f9 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/59029543-59fc-4477-848f-9bf48aed2a32 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/06cd9001-8427-4b17-a947-5fd4a22e28f5 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/0ed76842-9489-4b09-a982-dbd9e6af9b86 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/6734692e-f172-4217-996e-3d8ad476b1f3 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/8b48ba18-4465-400a-be0b-aca592a97cd6 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/476bd3b9-4085-48c4-93e4-c9b83526283a HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/e5da6cfa-2c5c-4b67-9c4b-665898277e96 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/1d9f2d4a-66f2-4740-b75b-70911e531bdc HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/a8977671-3559-43df-88a2-c68c1b30212a HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/f120094d-5ced-4c07-8714-5dedffcaa15e HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/2169691d-1691-4d57-ac92-dbf78f3a878c HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/e6f9c899-bfb0-408e-90bb-42d6028a5abc HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/7517ec70-de81-4eed-bb9c-bf9ff68e5e56 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/060d85bf-f049-49e8-93ac-224800c3225e HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/5e483aef-db25-4207-a421-adca01f295f5 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/8f2dc3d4-e8b5-4a19-8ec5-1f26a9f50ea0 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/d25f09dc-f0e6-4469-9dd3-f8248bce8fd6 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/582f6519-1356-40cd-abb1-8592e9dff213 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/d9babfe4-adf4-4f21-a993-d3daed5f77a5 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/46ec90cd-fb71-4f03-9e70-ba18a447502b HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/9cca302e-5e14-407e-a66f-5c0868363de3 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/c9500293-c9ae-4032-b264-b8fd762e02f6 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/12c7a56b-a611-4c54-900f-f3ae5bfa0ec1 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/ed2ca883-5f0c-481e-8714-b889f818fb24 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/a5bc9f90-10a8-4049-be8c-c22cd0ed86ff HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/4520509b-65d0-4cf1-9ebe-277b2b04096a HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/7110d4fe-449f-4f84-9ca8-f01a22b37855 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/903805c9-d2f1-4930-92a8-72647b70802f HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/edcc2e08-18b3-4102-b164-9bdda9e931fc HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/14afe27a-1316-4260-ba26-7827fab5cf9f HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/38c095ba-fc0d-46a7-908f-0de04b402e09 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/7ccffeb9-23bf-4e98-8529-1c0f1f502bcb HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/788ec663-acdd-40aa-8344-c6162eec3099 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/d70d361c-3c8f-4b45-9838-0aa738aafb0e HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/1713bc5b-a8a2-4c39-b4c1-bedac483800e HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/1a02875b-9d7c-46cc-9f03-eefb4105e9cd HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/9a46e9b4-b074-41ad-9500-08cf97154822 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/d3b42847-a430-4228-bae8-04766d3b62e2 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/229b9969-255a-4b6c-9eab-4f5aae070e9f HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/a60fa944-4f52-45b3-9eb0-99d42c19d234 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/c4741820-d552-40c4-a2ed-ebc865f94a7a HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/17489339-7891-428e-b058-7af12d03bacc HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/9fbe9291-be57-453b-88ac-5b93cf212f6a HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/8c1f4805-d0c1-44fd-a7a7-435ca4424723 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/ca1724dd-8d46-4928-9715-78aa3c88477b HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/5188d887-95ac-420b-9aa2-2e988fac439b HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/2746cf45-e62f-4f51-a29c-889ccaf68316 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/c2466b3c-0364-4ce4-a7c7-c462b1c98914 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/8038615a-a174-4cfa-95ad-fac27cce216c HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/a706590c-a94e-4a53-9c2e-0f9281307a08 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/96ac09eb-9b7d-43c2-a30b-2f5a530fe85d HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/877c4f76-e0d5-4038-b577-92e45c2e2865 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/0844e523-8593-4c20-9a72-61d7fd80e9ba HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/1c5acb34-6273-4179-8155-5b60dce28b1d HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/fda0e6c3-0952-47ca-83e9-27283b5d1842 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/853e5742-ec92-4c06-a404-748e375dcd38 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/074a141c-c46e-4587-a99d-8d582955de01 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/5aff9cb4-ffc7-4f81-ab6a-c7d1ae5fbd14 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/ad3cfa26-73c1-4e0e-a045-8fdec6d8956b HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/f6f86617-4fb7-4fe7-871e-16f7ccd57f9f HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/e8fac16a-a122-4c17-9b40-1f35922dd964 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/944819b9-5904-43fb-b9bf-5da63f2e4603 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/803ccc71-ea22-4e5e-acd7-a7dcb6f19126 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/f29dc3d2-603a-4657-af12-028d01cdb9b6 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/3e506cde-dacd-4a74-b070-44bc09132bbe HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/62c8c225-0295-4bf4-a912-75c39156e7a0 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/9d878937-0fb7-4945-824b-20ea59d4b0a6 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/998db8e5-8aba-4cc9-8c4b-1c424554954a HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/eccdfd94-3c04-4a51-b0e2-5b37f5c2fafd HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/ffa096c6-d89d-4cb8-8133-75a47d785394 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/e19b1516-d141-474b-b8b7-70face8abf80 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/ca8e4cf4-f7ab-4ef9-ba87-ede7664e30d3 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/242f51df-c55f-4933-bafa-6efc649bd760 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/a961bb7a-307d-41ef-be0b-a2f730d3d619 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/538418c5-cfbb-428e-9466-90a97054f9e8 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/c793dff9-df78-4f8c-ac92-248ee3d0eed1 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/1d84bf72-bcb1-4127-96cc-4feabff1bf2c HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/d9b5f837-a69d-44e6-9204-eaa8537fadf1 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/cb996dc2-519a-4c1d-acb5-4bf3d7044389 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/c8eb76c8-cafd-4bfe-a1d1-48cc4fdce158 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/24f30f36-e55f-4820-83b4-4245f739d352 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/9d034ff8-ea83-428b-902d-c56cbe90685f HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/9b22ca58-ca64-4b1d-b087-31b776e55782 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/6224e73c-d6ad-4d23-8efe-1171d649cb18 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/ed06c2e2-72f0-46fa-bcc0-7aae47968928 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/7cfa1fa7-ef5e-433e-837c-1e9cb583f297 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/afe4a8a5-0b17-4f9a-9562-c2cb52179bfe HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/357971f6-8289-4bbc-9786-b5d833b10428 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/3f4c35a4-267b-41a5-8245-305d85d8c4e8 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/11e56ded-bae0-4238-a315-8c69ac7ac1e2 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/cb11c7bf-e2fd-4263-84be-4928a358e16a HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/46dae8b6-a05b-4561-82a1-56e9206d6650 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/15cc96c6-98fa-429e-9a69-b9fdadbdd068 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/96fc1d85-5a19-427b-9b18-f9d6bd1a86c7 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/471f0923-523d-4939-b0ee-176f5113e125 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/c9de3a21-46d4-406c-a453-04f0e9de14b2 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/b0368a43-eeca-4df7-9e2e-838c014f6453 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/ab02dd58-9170-4e10-a64d-25576da305ea HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/d5cef725-201a-44ed-8220-f6118ffcc894 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/6c2fd439-9cb3-451e-a9aa-96420b177d18 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/483b4cb4-e4b7-45ee-b756-24699f7ec11c HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/cf8a5e04-7c80-48fb-858b-0b3d6032f982 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/5f7caaaa-2fd4-48ef-9faf-f9a3143cd98e HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/a4e3ab31-d6ef-48e8-9bac-506bba6aaae2 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/c38385f3-84a5-4737-91f4-0306309c933b HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/f0eda7eb-fe7e-43b9-a19f-f40588f98889 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/b0488e78-a406-40ec-87d6-62e8e23f2fbc HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/5736a046-71dd-4173-a1a3-afdc00a2c59d HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/cde4d0b0-322e-4333-b616-d4e819370bd7 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/b6417666-b3a4-4179-9973-849feea9c322 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/e2a305cd-afe2-4c26-9692-8e27e372f9de HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/9b24f968-3141-4b34-ae95-7b64542d9528 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/c5f145b6-a4d6-4331-b724-1484beff3432 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/083aa172-af64-4e93-99db-94a99701fae3 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/74739b56-42bd-48ff-9832-70021a6764b2 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/b59e763b-6b5d-4498-acdc-08810e796509 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/2ecdf19c-5a7c-4dd1-aa69-fb35bf3a2882 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/1bf9b30e-7e69-4d9b-89a4-623135c1adda HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/c6f3f90c-da3a-4216-a1b0-e81a18d2fcbc HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/2b309f7b-3efd-4dd4-882c-d8abbbca46c8 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/95c4e987-6e43-4f63-a805-00b15d9c5fa5 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/8f5952c6-8642-4d8b-ab0e-3fb12e47d7db HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/4834b635-4c81-4558-81eb-496472828ee1 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/45e77dab-4c0f-4f5a-a15b-cf5c5ad6bca4 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/fdeeb3c1-d936-4791-8dc0-333d0a6a7e1c HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/1840edc9-6d9a-4315-9f7c-234753533ce2 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/2bf4363f-2f8e-467e-89ef-abbca1e89f02 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/60db4d92-96dc-4807-beaa-d6fa1149a6f1 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/e52b9905-b0f3-4567-96dc-f7beddca9e40 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/595efd63-bb04-4469-abf9-513ff302e0f1 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/b211867e-a316-49ad-92fa-7a568a6276da HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/5f0515a5-c3dd-4116-911b-1d5832a0258e HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/14c9c83e-9015-429e-9502-b3cf97a830ae HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/5b9852c9-39e9-47a4-87f0-01e281330238 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/946a25df-12f3-400b-b497-c8c79fc04888 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/528ee41e-726e-4fd7-9b5f-d2a1147bebc7 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/e45199e6-176d-458b-899b-d1d491902733 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/f4a04aad-7963-4123-ace8-3fe3b280ed36 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/82c0b141-19d6-4cb5-a5b4-577acdf7264d HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/e3aae1a7-69ff-4d1e-b4d6-f0037f8cd6ef HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/25d8d278-7234-4440-934e-1d0f67332710 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/09e44eec-d227-4e4d-81e6-6c4e6d13139c HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/e853d245-371f-4c6f-9145-caba545ba4d0 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/c6045797-cbb0-44a1-bff5-a9d4b9820abd HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/9f06b3a7-1a70-42a5-8c04-0d454e7fbae3 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/809b222f-7cd5-4acc-a7b5-16ed15982630 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/cc65257a-0475-4041-b3be-d537687f561a HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/2e2cc83f-9669-476f-ae6f-c8221755c4b2 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/b2635006-c8ed-4717-8fc7-4e43446203d8 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/e962575c-c1ed-4f8f-b022-64b1e0e6de8e HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/b83a58ab-281c-45f8-8a4c-786194e7806b HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/502e7ae7-463c-4c12-b0e0-bccac4b57496 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/6a9fe230-d6cb-481e-b14d-9a095b074249 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/d76109df-8c74-493c-b45b-e9dc0e7d39dc HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/66b4d223-ee22-4301-82f1-008ab00c71a7 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/b1fa3902-a6a1-44ef-adbf-bf155f11cf33 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/fc789c85-6806-46f9-99e3-2905d7c6d9c3 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/358d0e32-7e08-4203-bf0b-c8836c103681 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/1ec2767e-d9aa-429b-bdc2-4c186c75a32b HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/545fc98b-6a1d-4fd5-9c2e-f00a9f2420ae HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/26406b75-bf38-4aaa-ba77-dc477fc07f50 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/258de462-451b-4645-a1ad-2be8add47027 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53755 - "DELETE /api/v1/conversations/1c6cafe8-d31d-4f01-98f2-26f77e7eadd3 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53762 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53762 - "DELETE /api/v1/conversations/86d78725-3910-408b-9100-16e7a8d1cd62 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:62609 - "GET /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/documents/41a710c0-65e6-49d5-b409-cc4d6d99168d HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62610 - "GET /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/documents/8a379442-9a49-4c48-83ce-47bd0c91e5a5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62611 - "GET /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/documents/96427128-328f-4179-9f27-e4d4106f719c HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56546 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56547 - "POST /api/v1/knowledge-bases/b572e8be-f96c-4699-ac95-dbfff058824c/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55338 - "DELETE /api/v1/conversations/1e45b681-1a45-44e4-b543-1c5805648b2b HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53765 - "GET /health HTTP/1.1" 200 OK

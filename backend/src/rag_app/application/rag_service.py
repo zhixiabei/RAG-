@@ -165,16 +165,20 @@ class RagService:
             )
 
         keyword_skip = intent.skips_retrieval
-        decision = (
-            RetrievalDecision(True)
-            if force_retrieval
-            else RetrievalDecision(False)
-            if keyword_skip
-            else _run_stage(
+        if keyword_skip:
+            decision = RetrievalDecision(force_retrieval)
+        else:
+            decision = _run_stage(
                 "检索判断",
                 lambda: self.decision_agent.run(question, history, intent=intent),
             )
-        )
+            if force_retrieval and not decision.should_retrieve:
+                # Evaluation and explicit callers may require retrieval while
+                # still needing the planner's decompose/rewrite query plan.
+                decision = RetrievalDecision(
+                    True,
+                    decision.query_plan or QueryPlan.single(question),
+                )
         retrieval_used = decision.should_retrieve
         hits = []
         query_plan = decision.query_plan or QueryPlan.single(question)
@@ -222,7 +226,9 @@ class RagService:
             *list(attachment_citations or []),
         ])
         retrieval_queries = query_plan.retrieval_queries(question) if retrieval_used else []
-        reranker_name = getattr(self.retrieval_agent.reranker, "name", None)
+        reranker_instance = self.retrieval_agent.reranker
+        reranker_name = getattr(reranker_instance, "name", None)
+        reranker_provider = getattr(reranker_instance, "provider_name", None)
         reranker_enabled = self.retrieval_agent.reranker is not None
         decompose_rerank = retrieval_used and reranker_enabled and query_plan.strategy == "decompose"
         response = {
@@ -237,6 +243,7 @@ class RagService:
             "retrieval_total_k": len(hits),
             "retrieval_candidate_k": self.retrieval_agent.candidate_k,
             "reranker": reranker_name,
+            "reranker_provider": reranker_provider,
             "query_plan": query_plan.as_dict(),
             "retrieval_trace": {
                 "strategy": query_plan.strategy,
@@ -253,6 +260,8 @@ class RagService:
                     else 0
                 ),
                 "rerank_top_k": self.retrieval_agent.top_k if reranker_enabled else None,
+                "reranker_provider": reranker_provider,
+                "reranker_model": reranker_name,
             },
             "retrieved_document_ids": list(dict.fromkeys(
                 hit.document_id for hit in hits if hit.document_id
@@ -278,6 +287,9 @@ class RagService:
                     "top_k": self.retrieval_agent.top_k,
                     "candidate_k": self.retrieval_agent.candidate_k,
                     "reranker": getattr(self.retrieval_agent.reranker, "name", None),
+                    "reranker_provider": getattr(
+                        self.retrieval_agent.reranker, "provider_name", None
+                    ),
                 },
                 {
                     "agent": self.answer_agent.name,

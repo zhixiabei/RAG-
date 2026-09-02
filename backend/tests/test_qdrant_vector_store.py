@@ -228,13 +228,16 @@ class QdrantVectorStoreTest(unittest.TestCase):
         store.delete_document("doc-1")
 
         client_class.assert_called_once_with(url="http://qdrant:6333", timeout=30)
-        client.delete.assert_called_once()
-        call = client.delete.call_args
-        self.assertEqual(call.kwargs["collection_name"], "chunks")
-        self.assertFalse(call.kwargs["wait"])
-        condition = call.kwargs["points_selector"].filter.must[0]
-        self.assertEqual(condition.key, "document_id")
-        self.assertEqual(condition.match.value, "doc-1")
+        self.assertEqual(client.delete.call_count, 2)
+        self.assertEqual(
+            {call.kwargs["collection_name"] for call in client.delete.call_args_list},
+            {"chunks", "chunks_documents"},
+        )
+        for call in client.delete.call_args_list:
+            self.assertFalse(call.kwargs["wait"])
+            condition = call.kwargs["points_selector"].filter.must[0]
+            self.assertEqual(condition.key, "document_id")
+            self.assertEqual(condition.match.value, "doc-1")
 
     @patch("rag_app.infrastructure.qdrant.vector_store.QdrantClient")
     def test_delete_is_a_noop_when_collection_does_not_exist(self, client_class):

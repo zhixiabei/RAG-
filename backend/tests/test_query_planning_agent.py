@@ -60,6 +60,55 @@ class QueryPlanningAgentTest(unittest.TestCase):
         self.assertEqual(len(plan.subqueries), 2)
         self.assertEqual(plan.trigger, "complex_query")
 
+    def test_triggers_planning_for_two_explicit_source_documents(self):
+        question = (
+            "根据《化166-2井组化学示踪剂监测设计》和《化166-2示踪剂报告》，"
+            "统计设计阶段井数与实际见剂井数并判断整体连通性。"
+        )
+
+        self.assertEqual(query_planning_trigger(question, []), "complex_query")
+
+    def test_forces_source_decomposition_when_model_returns_single(self):
+        question = (
+            "根据《化166-2井组化学示踪剂监测设计》和《化166-2示踪剂报告》，"
+            "统计设计阶段井数与实际见剂井数并判断整体连通性。"
+        )
+        models = FakeModels(json.dumps({
+            "strategy": "single",
+            "standalone_query": question,
+            "subqueries": [],
+        }, ensure_ascii=False))
+
+        plan = QueryPlanningAgent(models).run(question, [])
+
+        self.assertEqual(plan.strategy, "decompose")
+        self.assertEqual(len(plan.subqueries), 2)
+        self.assertIn("化166-2井组化学示踪剂监测设计", plan.subqueries[0])
+        self.assertIn("化166-2示踪剂报告", plan.subqueries[1])
+
+    def test_ignores_hallucinated_standalone_query_for_explicit_source_comparison(self):
+        question = (
+            "根据《2024年化子坪测试解释结果汇总》和《2024年杏子川采油厂油水井测试解释成果汇总表》，"
+            "比较化309-5井与杏6329-1井的绝对吸水量：哪口井更高，高出多少方/天，"
+            "约为另一口井的多少倍？结果保留两位小数。"
+        )
+        models = FakeModels(json.dumps({
+            "strategy": "decompose",
+            "standalone_query": "化309-5井为10000方/天，杏6329-1井为5000方/天，结果为2.00倍。",
+            "subqueries": [
+                "检索化309-5井绝对吸水量",
+                "检索杏6329-1井绝对吸水量",
+            ],
+        }, ensure_ascii=False))
+
+        plan = QueryPlanningAgent(models).run(question, [])
+
+        self.assertEqual(plan.strategy, "decompose")
+        self.assertEqual(plan.standalone_query, question)
+        self.assertEqual(len(plan.subqueries), 2)
+        self.assertIn("2024年化子坪测试解释结果汇总", plan.subqueries[0])
+        self.assertIn("2024年杏子川采油厂油水井测试解释成果汇总表", plan.subqueries[1])
+
     def test_planner_failure_falls_back_to_original_question(self):
         models = FakeModels(error=TimeoutError("timed out"))
         question = "分别说明井喷处置和污染物管理有哪些要求？"
@@ -126,6 +175,24 @@ class QueryPlanningAgentTest(unittest.TestCase):
             "含油率呢？", [{"role": "assistant", "content": "上一轮内容"}]
         ), "context_reference")
 
+
+    def test_subqueries_override_an_incorrect_strategy_and_keep_source_anchors(self):
+        question = (
+            "根据《设计报告》和《实际报告》，分别统计设计数量和实际数量。"
+        )
+        models = FakeModels(json.dumps({
+            "strategy": "rewrite",
+            "standalone_query": "分别统计设计数量和实际数量",
+            "subqueries": ["统计设计数量", "统计实际数量"],
+        }, ensure_ascii=False))
+
+        plan = QueryPlanningAgent(models).run(question, [])
+
+        self.assertEqual(plan.strategy, "decompose")
+        self.assertIn("《设计报告》", plan.standalone_query)
+        self.assertIn("《实际报告》", plan.standalone_query)
+        self.assertIn("《设计报告》", plan.subqueries[0])
+        self.assertIn("《实际报告》", plan.subqueries[1])
 
 if __name__ == "__main__":
     unittest.main()

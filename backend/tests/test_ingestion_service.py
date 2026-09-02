@@ -86,6 +86,8 @@ class FakeVectors:
     def __init__(self):
         self.points = []
         self.vectors = []
+        self.document_points = []
+        self.document_vectors = []
         self.upsert_batch_sizes = []
         self.deleted_documents = []
 
@@ -97,9 +99,17 @@ class FakeVectors:
         self.vectors.extend(vectors)
         self.upsert_batch_sizes.append(len(points))
 
+    def upsert_documents(self, points, vectors):
+        self.document_points.extend(points)
+        self.document_vectors.extend(vectors)
+
     def delete_document(self, document_id):
         self.deleted_documents.append(document_id)
         self.points = [point for point in self.points if point["document_id"] != document_id]
+        self.document_points = [
+            point for point in self.document_points
+            if point["document_id"] != document_id
+        ]
 
 
 class BlockingVectors(FakeVectors):
@@ -155,6 +165,9 @@ class FakeModels:
         self.embed_batch_sizes.append(len(texts))
         return [[0.1, 0.2] for _ in texts]
 
+    def complete(self, messages, **kwargs):
+        return '{"summary":"","topics":[]}'
+
 
 class FakeTestsetSync:
     def __init__(self, failure=None):
@@ -187,7 +200,7 @@ class IngestionServiceTest(unittest.TestCase):
 
         self.assertEqual(
             [(update.get("progress"), update.get("stage")) for update in self.repository.updates],
-            [(10, "parsing"), (35, "embedding"), (70, "indexing"), (90, "saving"), (100, "ready")],
+            [(10, "parsing"), (30, "profiling"), (40, "embedding"), (70, "indexing"), (90, "saving"), (100, "ready")],
         )
         self.assertEqual(result["status"], "ready")
         self.assertEqual(result["progress"], 100)
@@ -224,7 +237,11 @@ class IngestionServiceTest(unittest.TestCase):
         )
         self.assertIn("完整路径: 井资料/长63/渗透率/长63渗透率.att", service.models.embedded_texts[0])
         self.assertIn("长63渗透率.att", service.models.embedded_texts[0])
-        self.assertIn("文件后缀: .att", service.models.embedded_texts[0])
+        chunk_embedding = next(
+            text for text in service.models.embedded_texts
+            if "文件后缀: .att" in text
+        )
+        self.assertIn("文件后缀: .att", chunk_embedding)
 
     def test_embeds_and_indexes_the_chunk_section_path(self):
         chunks = [ParsedChunk(0, "安装步骤", 2, "安装/Windows")]
@@ -237,7 +254,11 @@ class IngestionServiceTest(unittest.TestCase):
             b"content",
         )
 
-        self.assertIn("章节路径: 安装/Windows", service.models.embedded_texts[0])
+        chunk_embedding = next(
+            text for text in service.models.embedded_texts
+            if "章节路径: 安装/Windows" in text
+        )
+        self.assertIn("章节路径: 安装/Windows", chunk_embedding)
         self.assertEqual(service.vectors.points[0]["section_path"], "安装/Windows")
         self.assertEqual(service.vectors.points[0]["chunk_index"], 0)
 
@@ -247,7 +268,7 @@ class IngestionServiceTest(unittest.TestCase):
 
         service.ingest("kb-1", "制度.pdf", "application/pdf", b"content")
 
-        self.assertEqual(service.models.embed_batch_sizes, [2, 2, 1])
+        self.assertEqual(service.models.embed_batch_sizes, [3, 2, 2, 1])
         self.assertEqual(service.vectors.upsert_batch_sizes, [2, 2, 1])
         self.assertEqual(len(service.vectors.points), 5)
 

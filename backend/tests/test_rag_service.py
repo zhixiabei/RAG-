@@ -80,7 +80,9 @@ class FakeModelGateway:
 
 class RagServiceTest(unittest.TestCase):
     @staticmethod
-    def build_service(repository, vectors, models, top_k=3, query_planning=False, reranker=None):
+    def build_service(
+        repository, vectors, models, top_k=3, query_planning=False, reranker=None
+    ):
         return RagService(
             repository,
             RetrievalDecisionAgent(models, query_planning_enabled=query_planning),
@@ -235,29 +237,43 @@ class RagServiceTest(unittest.TestCase):
         self.assertEqual(answer_history, history)
         self.assertEqual(repository.saved[0][2], "current question")
 
-    def test_force_retrieval_skips_decision_completion(self):
+    def test_force_retrieval_preserves_query_planning(self):
         repository = FakeRepository()
         vectors = FakeVectorStore([
-            SearchHit("chunk-1", "doc-1", "kb-1", "资料.pdf", "测试证据", 0.9, 1),
+            SearchHit("chunk-1", "doc-1", "kb-1", "test.pdf", "test evidence", 0.9, 1),
         ])
-        models = FakeModelGateway(retrieval_needed=False)
+        question = "\u7efc\u5408\u8bf4\u660e\u6d4b\u8bd5\u95ee\u9898\u4ee5\u53ca\u5176\u4ed6\u76ee\u6807\u7684\u8981\u6c42\u9879"
+        target_one = "\u6d4b\u8bd5\u76ee\u6807\u4e00"
+        target_two = "\u6d4b\u8bd5\u76ee\u6807\u4e8c"
+        models = FakeModelGateway(
+            retrieval_needed=False,
+            planner_output=json.dumps({
+                "decision": "SKIP",
+                "strategy": "decompose",
+                "standalone_query": question,
+                "subqueries": [target_one, target_two],
+            }),
+        )
 
-        result = self.build_service(repository, vectors, models).answer(
+        result = self.build_service(
+            repository, vectors, models, query_planning=True
+        ).answer(
             "kb-1",
             "conversation-1",
-            "测试集问题",
+            question,
             force_retrieval=True,
         )
 
         self.assertTrue(result["retrieval_used"])
-        self.assertEqual(models.embed_calls, [["测试集问题"]])
-        self.assertEqual(len(models.completion_calls), 1)
+        self.assertEqual(models.embed_calls, [[question, target_one, target_two]])
+        self.assertEqual(len(models.completion_calls), 2)
+        self.assertEqual(result["query_plan"]["strategy"], "decompose")
+        self.assertEqual(result["retrieval_trace"]["query_count"], 3)
         self.assertEqual(result["agent_trace"][0], {
             "agent": "retrieval_decision",
             "status": "forced",
             "outcome": "retrieve",
         })
-
     def test_vectorizes_the_question_and_returns_qdrant_ordered_top_k_chunks(self):
         hits = [
             SearchHit("chunk-1", "doc-1", "kb-1", "制度.pdf", "第一段", 0.92, 3),
@@ -302,7 +318,8 @@ class RagServiceTest(unittest.TestCase):
         self.assertEqual(result["agent_trace"], [
             {"agent": "retrieval_decision", "status": "completed", "outcome": "retrieve"},
             {"agent": "knowledge_retrieval", "status": "completed", "retrieved_count": 3,
-             "top_k": 3, "candidate_k": 3, "reranker": None},
+             "top_k": 3, "candidate_k": 3, "reranker": None,
+             "reranker_provider": None},
             {"agent": "answer", "status": "completed"},
         ])
 
