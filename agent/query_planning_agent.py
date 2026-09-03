@@ -5,6 +5,7 @@ import json
 import logging
 import re
 from typing import Any, Sequence
+import unicodedata
 
 from .context import select_history_messages
 from .contracts import ModelGateway
@@ -15,12 +16,21 @@ logger = logging.getLogger(__name__)
 _PLAN_SCHEMA = {
     "type": "object",
     "properties": {
-        "strategy": {"type": "string", "enum": ["single", "rewrite", "decompose"]},
-        "standalone_query": {"type": "string", "maxLength": 240},
+        "strategy": {
+            "type": "string",
+            "enum": ["single", "rewrite", "decompose"],
+            "description": "single=一个取证目标；rewrite=消除历史指代；decompose=多个可独立检索的取证目标",
+        },
+        "standalone_query": {
+            "type": "string",
+            "maxLength": 240,
+            "description": "仅 rewrite 使用；必须是完整、自包含的问题",
+        },
         "subqueries": {
             "type": "array",
             "items": {"type": "string", "maxLength": 180},
             "maxItems": 4,
+            "description": "仅 decompose 使用；每项对应一个独立且自包含的取证目标",
         },
     },
     "required": ["strategy", "standalone_query", "subqueries"],
@@ -41,27 +51,19 @@ _QUERY_CONTAMINATION_MARKERS = (
     "独立问题：",
     "改写：",
 )
-_REFERENCE_PATTERN = re.compile(
-    r"(?:它|这个|那个|这些|那些|上述|上面|前面|刚才|前者|后者|其中|"
-    r"该项|该对象|该文件|该记录|this|that|it|they|above)",
-    re.IGNORECASE,
-)
-_SHORT_FOLLOW_UP_PATTERN = re.compile(r"(?:呢|怎么样|如何|多少|是什么|怎么办|有何影响|有什么区别)[？?]?$", re.IGNORECASE)
-_STRONG_COMPLEX_PATTERN = re.compile(r"(?:综合|分别|各自|逐项|对比|比较|异同|多个方面|哪些方面)", re.IGNORECASE)
-_WEAK_COMPLEX_PATTERN = re.compile(r"(?:以及|并且|同时|还要|还需|并说明|并分析|并给出|及其|又有哪些)", re.IGNORECASE)
-_NUMBERED_ITEM_PATTERN = re.compile(
-    r"(?:^|[\s，,；;])(?:\d{1,2}|[一二三四五六七八九十]+)[、.)．]"
-)
-_INDEPENDENT_CLAUSE_PATTERN = re.compile(
-    r"[^，,；;。！？?]{2,}(?:是什么|是多少|如何|有哪些|说明|分析|比较|统计|列出)[^，,；;。！？?]{1,}"
-)
-_QUOTED_SOURCE_PATTERN = re.compile(r"\u300a[^\u300b]{2,160}\u300b")
 _FILE_SOURCE_PATTERN = re.compile(
     r"[\w\u4e00-\u9fff][\w\u4e00-\u9fff._()\uFF08\uFF09-]{1,100}"
     r"\.(?:docx?|pdf|xlsx?|pptx?|txt|csv|gdb|att|md)",
     re.IGNORECASE,
 )
 _SOURCE_CAPTURE_PATTERN = re.compile(r"\u300a([^\u300b]{2,160})\u300b")
+_IDENTIFIER_PATTERN = re.compile(
+    r"[A-Za-z\u4e00-\u9fff]{1,8}\s*\d+(?:\s*[-\u2010-\u2015./]\s*\d+)+"
+)
+_YEAR_PATTERN = re.compile(r"(?<!\d)(?:(?:19|20)\d{2}|\d{2})\s*(?:年|年度)")
+_ANAPHORIC_SUBQUERY_PATTERN = re.compile(
+    r"^(?:其(?:中)?|该(?:项|对象|文件|记录)?|上述|前者|后者|另一个(?:文件|对象)?)"
+)
 
 QUERY_PLANNING_PROMPT = """你负责生成知识库检索计划，不负责回答问题。
 single 表示一个检索视角足够；rewrite 仅用于消除对话历史中的指代；decompose 表示需要多个独立检索视角。
@@ -69,6 +71,9 @@ single 表示一个检索视角足够；rewrite 仅用于消除对话历史中�
 多个指标如果共享主体、来源和时间上下文，可以保持 single。只有每个子问题都能独立检索、且检索约束不同，才使用 decompose。
 必须保留井号、层位、年份、标准号、数值、专有名词和用户明确写出的来源。只能改写或拆分已有目标，不得补充答案、结论或新事实。
 single 时 standalone_query 输出空字符串；rewrite 时只输出一句不超过 120 字的消除指代后的问题；decompose 时 standalone_query 输出空字符串，subqueries 每项只写一个不超过 120 字的检索问题。
+每个 subquery 必须是自包含的完整检索问题，重复必要的主体、来源、年份和指标；禁止只写“其……”“该文件……”“前者……”“另一个……”等依赖上下文的片段。
+用户问题下方的“机械提取硬约束”只用于保留原文中的来源、编号、年份和数值，不代表必须拆分，也不能据此推断主题或答案。
+例如：用户问“根据《合同甲》和《验收记录乙》，比较付款节点与到账情况”，可拆为“《合同甲》中的付款节点是什么？”和“《验收记录乙》中的到账情况是什么？”，不能写成“其付款节点”和“另一个文件的到账情况”。
 严禁重复句子、回答问题、计算数值、生成 SQL 或添加原问题中没有的事实。只输出符合 schema 的 JSON。"""
 
 
@@ -113,8 +118,12 @@ class QueryPlanningAgent:
     def __init__(self, models: ModelGateway):
         self.models = models
 
-    def run(self, question: str, history: Sequence[dict[str, Any]]) -> QueryPlan:
-        trigger = query_planning_trigger(question, history) or "planner"
+    def run(
+        self,
+        question: str,
+        history: Sequence[dict[str, Any]],
+        trigger: str = "planner",
+    ) -> QueryPlan:
         try:
             with timed_stage("planning.generation"), model_usage_stage("query_planning"):
                 output = self.models.complete(
@@ -132,36 +141,6 @@ class QueryPlanningAgent:
             return QueryPlan.single(question, trigger=trigger, fallback=True)
 
 
-def query_planning_trigger(question: str, history: Sequence[dict[str, Any]]) -> str | None:
-    normalized = _clean_query(question)
-    compact_length = len(re.sub(r"\s+", "", normalized))
-    has_history = any(item.get("role") in {"user", "assistant"} and str(item.get("content") or "").strip() for item in history)
-    if has_history and (_REFERENCE_PATTERN.search(normalized) or compact_length <= 18 and _SHORT_FOLLOW_UP_PATTERN.search(normalized)):
-        return "context_reference"
-    if _STRONG_COMPLEX_PATTERN.search(normalized) or _looks_like_multi_source_query(normalized):
-        return "complex_query"
-    if compact_length >= 30 and (
-        len(_WEAK_COMPLEX_PATTERN.findall(normalized)) >= 2
-        or _looks_like_multi_source_query(normalized)
-        and _WEAK_COMPLEX_PATTERN.search(normalized)
-    ):
-        return "complex_query"
-    return None
-
-
-def _looks_like_multi_source_query(question: str) -> bool:
-    source_references = [
-        *_QUOTED_SOURCE_PATTERN.findall(question),
-        *_FILE_SOURCE_PATTERN.findall(question),
-    ]
-    if len({reference.casefold() for reference in source_references}) >= 2:
-        return True
-    return bool(
-        _NUMBERED_ITEM_PATTERN.search(question)
-        or len(_INDEPENDENT_CLAUSE_PATTERN.findall(question)) >= 2
-    )
-
-
 def query_planning_messages(question: str, history: Sequence[dict[str, Any]], trigger: str) -> list[dict[str, str]]:
     history_view = select_history_messages(
         history,
@@ -174,10 +153,40 @@ def query_planning_messages(question: str, history: Sequence[dict[str, Any]], tr
     )
     if history_view.omission_notice:
         transcript = f"{history_view.omission_notice}\n{transcript}"
+    constraints = format_query_constraints(question)
     return [
         {"role": "system", "content": QUERY_PLANNING_PROMPT},
-        {"role": "user", "content": f"触发原因：{trigger}\n对话历史：\n{transcript or '（无）'}\n\n当前问题：\n{question}"},
+        {
+            "role": "user",
+            "content": (
+                f"触发原因：{trigger}\n"
+                f"对话历史：\n{transcript or '（无）'}\n\n"
+                f"机械提取硬约束：\n{constraints}\n\n"
+                f"当前问题：\n{question}"
+            ),
+        },
     ]
+
+
+def format_query_constraints(question: str) -> str:
+    """Expose literal anchors without inferring a domain or decomposition."""
+    normalized = unicodedata.normalize("NFKC", _clean_query(question))
+    sources = _unique_queries([
+        *_SOURCE_CAPTURE_PATTERN.findall(normalized),
+        *_FILE_SOURCE_PATTERN.findall(normalized),
+    ])
+    identifiers = _unique_queries(
+        match.group(0) for match in _IDENTIFIER_PATTERN.finditer(normalized)
+    )
+    years = _unique_queries(match.group(0) for match in _YEAR_PATTERN.finditer(normalized))
+    fields = []
+    if sources:
+        fields.append(f"来源={'、'.join(sources[:_MAX_SUBQUERIES])}")
+    if identifiers:
+        fields.append(f"编号={'、'.join(identifiers[:_MAX_SUBQUERIES])}")
+    if years:
+        fields.append(f"时间={'、'.join(years[:_MAX_SUBQUERIES])}")
+    return "；".join(fields) or "无"
 
 
 def parse_query_plan(output: str, question: str, trigger: str) -> QueryPlan:
@@ -205,33 +214,31 @@ def parse_query_plan(output: str, question: str, trigger: str) -> QueryPlan:
         if not str(item).strip():
             continue
         try:
-            valid_subqueries.append(_validated_generated_query(item))
+            valid_subqueries.append(
+                _validated_generated_query(item, require_self_contained=True)
+            )
         except ValueError:
             partially_recovered = True
     subqueries = tuple(_unique_queries(valid_subqueries))[:_MAX_SUBQUERIES]
-    if strategy == "rewrite" and standalone_query == original:
-        strategy = "single"
-    if len(subqueries) >= 2:
-        # Small models sometimes emit valid subqueries but forget to update
-        # the strategy label. The payload is stronger evidence of intent.
-        strategy = "decompose"
-    if strategy == "decompose" and len(subqueries) < 2:
-        strategy = "rewrite" if standalone_query != original else "single"
+    if strategy == "single":
         subqueries = ()
-    if trigger == "complex_query":
-        # Complex retrieval should use only explicit model subqueries. A
-        # free-form rewrite from a small model is often an invented answer.
-        if strategy != "decompose" or len(subqueries) < 2:
-            return QueryPlan(
-                "single",
+    elif strategy == "rewrite":
+        subqueries = ()
+        if standalone_query == original:
+            return QueryPlan.single(
                 original,
                 trigger=trigger,
-                fallback=partially_recovered or strategy != "single",
+                fallback=True,
             )
-        standalone_query = original
+    elif len(subqueries) < 2:
+        return QueryPlan.single(
+            original,
+            trigger=trigger,
+            fallback=True,
+        )
     if strategy == "decompose":
-        # A decomposed plan is retrieved per subquery; do not let a free-form
-        # standalone rewrite become a potentially hallucinated rerank query.
+        # The standalone field is not used for decomposed retrieval. Keep the
+        # original question as the rerank anchor regardless of model text.
         standalone_query = original
     if strategy != "decompose":
         subqueries = ()
@@ -246,37 +253,7 @@ def parse_query_plan(output: str, question: str, trigger: str) -> QueryPlan:
 
 def fallback_query_plan(question: str, trigger: str | None) -> QueryPlan:
     """Return a retrieval-safe plan when structured model output is unusable."""
-    original = _clean_query(question)
-    clause_subqueries = deterministic_topic_subqueries(original)
-    if len(clause_subqueries) >= 2:
-        return QueryPlan(
-            "decompose",
-            original,
-            tuple(clause_subqueries[:_MAX_SUBQUERIES]),
-            trigger=trigger,
-            fallback=True,
-        )
     return QueryPlan.single(question, trigger=trigger, fallback=True)
-
-
-def deterministic_topic_subqueries(question: str) -> tuple[str, ...]:
-    """Split only explicit clause/list boundaries without inventing semantics."""
-    normalized = _clean_query(question)
-    numbered = re.split(
-        r"(?:^|[，,；;。！？?])\s*(?:\d{1,2}|[一二三四五六七八九十]+)[、.)．]\s*",
-        normalized,
-    )
-    numbered = [_clean_query(clause) for clause in numbered if _clean_query(clause)]
-    if len(numbered) >= 2:
-        return tuple(_unique_queries(numbered))[:_MAX_SUBQUERIES]
-    clauses = [
-        _clean_query(clause)
-        for clause in re.split(r"[；;。！？?]+", normalized)
-        if _clean_query(clause)
-    ]
-    if len(clauses) >= 2:
-        return tuple(_unique_queries(clauses))[:_MAX_SUBQUERIES]
-    return ()
 
 
 def _load_json_object(output: str) -> dict[str, Any]:
@@ -428,7 +405,11 @@ def _extract_json_object(value: str) -> str | None:
     return None
 
 
-def _validated_generated_query(value: object, fallback: str = "") -> str:
+def _validated_generated_query(
+    value: object,
+    fallback: str = "",
+    require_self_contained: bool = False,
+) -> str:
     query = _clean_query(str(value or ""))
     lowered = query.casefold()
     if any(marker in lowered or marker in query for marker in _QUERY_CONTAMINATION_MARKERS):
@@ -441,6 +422,8 @@ def _validated_generated_query(value: object, fallback: str = "") -> str:
         re.IGNORECASE,
     ):
         raise ValueError("Query planner generated an answer instead of a query")
+    if require_self_contained and _ANAPHORIC_SUBQUERY_PATTERN.match(query):
+        raise ValueError("Query planner generated a context-dependent subquery")
     if not query:
         if fallback:
             return fallback

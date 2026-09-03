@@ -3,8 +3,8 @@ import unittest
 
 from agent.query_planning_agent import (
     QueryPlanningAgent,
+    format_query_constraints,
     query_planning_messages,
-    query_planning_trigger,
 )
 
 
@@ -45,7 +45,11 @@ class QueryPlanningAgentTest(unittest.TestCase):
             {"role": "user", "content": "介绍化348-4井"},
             {"role": "assistant", "content": "这是该井的基本情况。"},
         ]
-        plan = QueryPlanningAgent(models).run("那它的含油率呢？", history)
+        plan = QueryPlanningAgent(models).run(
+            "那它的含油率呢？",
+            history,
+            trigger="context_reference",
+        )
         self.assertEqual(plan.strategy, "rewrite")
         self.assertEqual(plan.retrieval_queries("那它的含油率呢？"), [
             "那它的含油率呢？", "化348-4井的含油率是多少？",
@@ -60,19 +64,30 @@ class QueryPlanningAgentTest(unittest.TestCase):
             "subqueries": ["井喷失控后的应急处置要求是什么？", "钻井污染物应如何管理？"],
         }, ensure_ascii=False))
         plan = QueryPlanningAgent(models).run(
-            "综合井喷处置和污染物管理要求，应如何建立HSE控制链？", []
+            "综合井喷处置和污染物管理要求，应如何建立HSE控制链？",
+            [],
+            trigger="complex_query",
         )
         self.assertEqual(plan.strategy, "decompose")
         self.assertEqual(len(plan.subqueries), 2)
         self.assertEqual(plan.trigger, "complex_query")
 
-    def test_triggers_planning_for_two_explicit_source_documents(self):
-        question = (
-            "根据《化166-2井组化学示踪剂监测设计》和《化166-2示踪剂报告》，"
-            "统计设计阶段井数与实际见剂井数并判断整体连通性。"
+    def test_complex_trigger_does_not_override_model_strategy(self):
+        question = "综合说明两个材料中的预算变化。"
+        models = FakeModels(json.dumps({
+            "strategy": "rewrite",
+            "standalone_query": "两个材料中的预算变化是什么？",
+            "subqueries": [],
+        }, ensure_ascii=False))
+
+        plan = QueryPlanningAgent(models).run(
+            question,
+            [],
+            trigger="complex_query",
         )
 
-        self.assertEqual(query_planning_trigger(question, []), "complex_query")
+        self.assertEqual(plan.strategy, "rewrite")
+        self.assertEqual(plan.standalone_query, "两个材料中的预算变化是什么？")
 
     def test_model_single_is_not_overridden_by_explicit_sources(self):
         question = (
@@ -209,14 +224,34 @@ class QueryPlanningAgentTest(unittest.TestCase):
         self.assertIn("最近回答", prompt)
         self.assertLessEqual(len(prompt), 2_000)
 
-    def test_short_follow_up_requires_history(self):
-        self.assertIsNone(query_planning_trigger("含油率呢？", []))
-        self.assertEqual(query_planning_trigger(
-            "含油率呢？", [{"role": "assistant", "content": "上一轮内容"}]
-        ), "context_reference")
+    def test_planner_prompt_exposes_only_literal_query_constraints(self):
+        question = "根据《26年度预算方案》和《研发费用明细.xlsx》，比较2024年与2025年的研发费用。"
 
+        constraints = format_query_constraints(question)
+        messages = query_planning_messages(question, [], "complex_query")
 
-    def test_subqueries_override_an_incorrect_strategy_without_posthoc_rewriting(self):
+        self.assertIn("26年度预算方案", constraints)
+        self.assertIn("研发费用明细.xlsx", constraints)
+        self.assertIn("2024年", constraints)
+        self.assertIn("2025年", constraints)
+        self.assertIn("机械提取硬约束", messages[1]["content"])
+        self.assertIn("只用于保留", messages[0]["content"])
+
+    def test_rejects_context_dependent_subquery(self):
+        question = "根据《合同甲》和《验收记录乙》，比较付款节点与到账情况。"
+        models = FakeModels(json.dumps({
+            "strategy": "decompose",
+            "standalone_query": "",
+            "subqueries": ["其付款节点", "《验收记录乙》中的到账情况是什么？"],
+        }, ensure_ascii=False))
+
+        plan = QueryPlanningAgent(models).run(question, [])
+
+        self.assertEqual(plan.strategy, "single")
+        self.assertTrue(plan.fallback)
+        self.assertEqual(plan.subqueries, ())
+
+    def test_strategy_label_is_not_inferred_from_subquery_fields(self):
         question = (
             "根据《设计报告》和《实际报告》，分别统计设计数量和实际数量。"
         )
@@ -228,9 +263,9 @@ class QueryPlanningAgentTest(unittest.TestCase):
 
         plan = QueryPlanningAgent(models).run(question, [])
 
-        self.assertEqual(plan.strategy, "decompose")
-        self.assertEqual(plan.standalone_query, question)
-        self.assertEqual(plan.subqueries, ("统计设计数量", "统计实际数量"))
+        self.assertEqual(plan.strategy, "rewrite")
+        self.assertEqual(plan.standalone_query, "分别统计设计数量和实际数量")
+        self.assertEqual(plan.subqueries, ())
 
 if __name__ == "__main__":
     unittest.main()

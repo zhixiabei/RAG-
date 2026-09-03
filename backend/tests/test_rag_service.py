@@ -47,9 +47,11 @@ class FakeModelGateway:
     chat_model = "test-chat"
     embedding_model = "test-embedding"
 
-    def __init__(self, retrieval_needed, planner_output=None):
+    def __init__(self, retrieval_needed, planner_output=None, complexity="simple", needs_rewrite=False):
         self.retrieval_needed = retrieval_needed
         self.planner_output = planner_output
+        self.complexity = complexity
+        self.needs_rewrite = needs_rewrite
         self.embed_calls = []
         self.completion_calls = []
 
@@ -59,16 +61,16 @@ class FakeModelGateway:
         if required == ["decision"]:
             decision = "RETRIEVE" if self.retrieval_needed else "SKIP"
             return json.dumps({"decision": decision})
-        if response_schema and set(required) >= {
-            "decision",
-            "strategy",
-            "standalone_query",
-            "subqueries",
-        }:
+        if required == ["decision", "complexity", "needs_rewrite"]:
+            return json.dumps({
+                "decision": "RETRIEVE" if self.retrieval_needed else "SKIP",
+                "complexity": self.complexity,
+                "needs_rewrite": self.needs_rewrite,
+            })
+        if required == ["strategy", "standalone_query", "subqueries"]:
             return self.planner_output or json.dumps({
-                "decision": "RETRIEVE",
                 "strategy": "single",
-                "standalone_query": "测试问题",
+                "standalone_query": "",
                 "subqueries": [],
             })
         return "测试回答"
@@ -90,7 +92,7 @@ class RagServiceTest(unittest.TestCase):
             AnswerAgent(models),
         )
 
-    def test_simple_retrieval_uses_combined_planner_once(self):
+    def test_simple_retrieval_uses_only_the_decision_model(self):
         repository = FakeRepository()
         vectors = FakeVectorStore([
             SearchHit("chunk-1", "doc-1", "kb-1", "制度.pdf", "测试证据", 0.9, 1),
@@ -118,8 +120,8 @@ class RagServiceTest(unittest.TestCase):
         ])
         models = FakeModelGateway(
             retrieval_needed=True,
+            needs_rewrite=True,
             planner_output=json.dumps({
-                "decision": "RETRIEVE",
                 "strategy": "rewrite",
                 "standalone_query": "井控方案的审批要求有哪些？",
                 "subqueries": [],
@@ -130,7 +132,7 @@ class RagServiceTest(unittest.TestCase):
             repository, vectors, models, query_planning=True
         ).answer("kb-1", "conversation-1", "这个方案的审批要求呢？")
 
-        self.assertEqual(len(models.completion_calls), 2)
+        self.assertEqual(len(models.completion_calls), 3)
         self.assertEqual(
             models.embed_calls,
             [["这个方案的审批要求呢？", "井控方案的审批要求有哪些？"]],
@@ -143,7 +145,7 @@ class RagServiceTest(unittest.TestCase):
         )
         self.assertEqual(result["retrieval_trace"]["query_count"], 2)
         self.assertIn("decision.generation", result["timing"]["by_stage"])
-        self.assertNotIn("planning.generation", result["timing"]["by_stage"])
+        self.assertIn("planning.generation", result["timing"]["by_stage"])
 
     def test_reports_per_query_rerank_trace_for_decomposed_plan(self):
         repository = FakeRepository()
@@ -153,8 +155,8 @@ class RagServiceTest(unittest.TestCase):
         ])
         models = FakeModelGateway(
             retrieval_needed=True,
+            complexity="complex",
             planner_output=json.dumps({
-                "decision": "RETRIEVE",
                 "strategy": "decompose",
                 "standalone_query": "综合说明井喷处置和污染物管理要求分别有哪些？",
                 "subqueries": ["目标一", "目标二"],
@@ -247,8 +249,8 @@ class RagServiceTest(unittest.TestCase):
         target_two = "\u6d4b\u8bd5\u76ee\u6807\u4e8c"
         models = FakeModelGateway(
             retrieval_needed=False,
+            complexity="complex",
             planner_output=json.dumps({
-                "decision": "SKIP",
                 "strategy": "decompose",
                 "standalone_query": question,
                 "subqueries": [target_one, target_two],
@@ -266,7 +268,7 @@ class RagServiceTest(unittest.TestCase):
 
         self.assertTrue(result["retrieval_used"])
         self.assertEqual(models.embed_calls, [[question, target_one, target_two]])
-        self.assertEqual(len(models.completion_calls), 2)
+        self.assertEqual(len(models.completion_calls), 3)
         self.assertEqual(result["query_plan"]["strategy"], "decompose")
         self.assertEqual(result["retrieval_trace"]["query_count"], 3)
         self.assertEqual(result["agent_trace"][0], {
@@ -347,17 +349,14 @@ class RagServiceTest(unittest.TestCase):
         self.assertEqual(len(models.completion_calls), 1)
         self.assertFalse(result["catalog_used"])
 
-    def test_explicit_file_lookup_uses_metadata_without_decision_model(self):
+    def test_explicit_file_lookup_uses_metadata_after_decision_model(self):
         repository = FakeRepository()
         repository.documents = [
             {"status": "ready", "folder_path": "资料", "file_name": "制度.pdf"},
         ]
         vectors = FakeVectorStore()
-        models = FakeModelGateway(retrieval_needed=True)
+        models = FakeModelGateway(retrieval_needed=False)
         service = self.build_service(repository, vectors, models)
-        service.decision_agent.run = lambda *args, **kwargs: (_ for _ in ()).throw(
-            AssertionError("file lookup must not call decision agent")
-        )
 
         result = service.answer(
             "kb-1",
@@ -367,10 +366,10 @@ class RagServiceTest(unittest.TestCase):
 
         self.assertFalse(result["retrieval_used"])
         self.assertEqual(vectors.search_calls, [])
-        self.assertEqual(models.completion_calls, [])
+        self.assertEqual(len(models.completion_calls), 1)
         self.assertTrue(result["catalog_used"])
         self.assertIn("制度.pdf", result["answer"])
-        self.assertEqual(result["agent_trace"][0]["status"], "skipped")
+        self.assertEqual(result["agent_trace"][0]["status"], "completed")
 
     def test_reports_vector_stage_failures(self):
         repository = FakeRepository()

@@ -164,21 +164,22 @@ class RagService:
                 ),
             )
 
-        keyword_skip = intent.skips_retrieval
-        if keyword_skip:
-            decision = RetrievalDecision(force_retrieval)
-        else:
-            decision = _run_stage(
-                "检索判断",
-                lambda: self.decision_agent.run(question, history, intent=intent),
+        decision = _run_stage(
+            "检索判断",
+            lambda: self.decision_agent.run(
+                question,
+                history,
+                intent=intent,
+                force_retrieval=force_retrieval,
+            ),
+        )
+        if force_retrieval and not decision.should_retrieve:
+            # Evaluation and explicit callers may require retrieval while
+            # still needing the planner's decompose/rewrite query plan.
+            decision = RetrievalDecision(
+                True,
+                decision.query_plan or QueryPlan.single(question),
             )
-            if force_retrieval and not decision.should_retrieve:
-                # Evaluation and explicit callers may require retrieval while
-                # still needing the planner's decompose/rewrite query plan.
-                decision = RetrievalDecision(
-                    True,
-                    decision.query_plan or QueryPlan.single(question),
-                )
         retrieval_used = decision.should_retrieve
         hits = []
         query_plan = decision.query_plan or QueryPlan.single(question)
@@ -277,7 +278,7 @@ class RagService:
             "agent_trace": [
                 {
                     "agent": self.decision_agent.name,
-                    "status": "forced" if force_retrieval else "skipped" if keyword_skip else "completed",
+                    "status": "forced" if force_retrieval else "completed",
                     "outcome": decision.outcome,
                 },
                 {

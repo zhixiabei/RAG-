@@ -6,12 +6,10 @@ from typing import Any
 
 from .context import select_history_messages
 from .contracts import ModelGateway
-from .query_intent import QueryIntent, analyze_query_intent
+from .query_intent import QueryIntent
 from .query_planning_agent import (
     QueryPlan,
-    fallback_query_plan,
-    parse_query_plan,
-    query_planning_trigger,
+    QueryPlanningAgent,
 )
 from .telemetry import model_usage_stage, timed_stage
 
@@ -19,15 +17,11 @@ from .telemetry import model_usage_stage, timed_stage
 logger = logging.getLogger(__name__)
 
 
-RETRIEVAL_DECISION_PROMPT = """你负责一次性完成检索判断和查询规划，不负责回答问题。
-需要知识库事实、原文、出处或校验信息时 decision=RETRIEVE；问候、致谢、改写已有回答、助手身份问题或完全可以依据对话历史回答时 decision=SKIP。不确定时输出 RETRIEVE。
-strategy=single 表示一个检索视角足够；strategy=rewrite 仅用于消除历史指代；strategy=decompose 表示有多个独立取证目标，需要生成 2 到 4 个子问题。
-显式写出多个来源时，只有它们对应不同取证目标才拆分，并由你直接输出来源绑定的子查询；不要根据文件名或领域词推断主题。程序不会在你输出之后自动补充子查询。
-多个指标如果共享主体、来源和时间上下文，可以使用 single。只有每个子问题都能独立检索且检索约束不同，才使用 decompose。
-必须保留井号、层位、年份、标准号、数值、专有名词和用户明确写出的来源。只能改写或拆分已有目标，不得补充答案、结论或新事实。
-single 时 standalone_query 输出空字符串；rewrite 时只输出一句不超过 120 字的消除指代后的问题；decompose 时 standalone_query 输出空字符串，subqueries 每项只写一个不超过 120 字的检索问题。
-严禁重复句子、回答问题、计算数值、生成 SQL 或添加原问题中没有的事实。
-只输出符合 schema 的 JSON，不要解释。"""
+RETRIEVAL_DECISION_PROMPT = """你只负责判断当前消息是否需要知识库检索，以及它是否包含多个独立取证目标；不负责回答问题，也不生成子查询。
+需要知识库事实、原文、出处或校验信息时 decision=RETRIEVE；问候、致谢、助手身份问题、纯改写请求或完全可以依据对话历史回答时 decision=SKIP。不确定时输出 RETRIEVE。
+complexity=complex 仅表示存在两个或以上可以分别检索、且检索约束不同的取证目标；共享同一主体、来源和时间上下文的多个指标仍然是 simple。
+如果当前问题依赖对话历史中的“它、这个、上述、前者”等指代，needs_rewrite=true；否则为 false。complexity 只判断问题结构，不要因为出现某个领域词、文件名或连接词就机械判定 complex。
+只输出 decision、complexity 和 needs_rewrite 三个字段，不要输出 strategy、subqueries、答案、结论、计算结果或解释。"""
 RETRIEVAL_DECISION_ONLY_PROMPT = """你只负责判断当前消息是否需要检索知识库，不负责回答问题。
 需要知识库事实、原文、出处或校验信息时 decision=RETRIEVE；问候、致谢、改写已有回答、助手身份问题或完全可以依据对话历史回答时 decision=SKIP。
 不确定时输出 RETRIEVE。只输出 JSON：{"decision":"RETRIEVE"} 或 {"decision":"SKIP"}，不要输出其他字段或解释。"""
@@ -36,15 +30,10 @@ RETRIEVAL_DECISION_SCHEMA = {
     "type": "object",
     "properties": {
         "decision": {"type": "string", "enum": ["RETRIEVE", "SKIP"]},
-        "strategy": {"type": "string", "enum": ["single", "rewrite", "decompose"]},
-        "standalone_query": {"type": "string", "maxLength": 240},
-        "subqueries": {
-            "type": "array",
-            "items": {"type": "string", "maxLength": 180},
-            "maxItems": 4,
-        },
+        "complexity": {"type": "string", "enum": ["simple", "complex"]},
+        "needs_rewrite": {"type": "boolean"},
     },
-    "required": ["decision", "strategy", "standalone_query", "subqueries"],
+    "required": ["decision", "complexity", "needs_rewrite"],
 }
 RETRIEVAL_DECISION_ONLY_SCHEMA = {
     "type": "object",
@@ -54,13 +43,13 @@ RETRIEVAL_DECISION_ONLY_SCHEMA = {
     "required": ["decision"],
 }
 RETRIEVAL_DECISION_HISTORY_TOKENS = 512
-RETRIEVAL_DECISION_PLAN_MAX_TOKENS = 384
+RETRIEVAL_DECISION_MAX_TOKENS = 96
 
 
 def retrieval_decision_messages(
     question: str,
     history: list[dict[str, Any]],
-    include_plan: bool = True,
+    include_complexity: bool = True,
 ) -> list[dict[str, str]]:
     history_view = select_history_messages(history, RETRIEVAL_DECISION_HISTORY_TOKENS)
     transcript = "\n".join(
@@ -72,7 +61,7 @@ def retrieval_decision_messages(
     return [
         {
             "role": "system",
-            "content": RETRIEVAL_DECISION_PROMPT if include_plan else RETRIEVAL_DECISION_ONLY_PROMPT,
+            "content": RETRIEVAL_DECISION_PROMPT if include_complexity else RETRIEVAL_DECISION_ONLY_PROMPT,
         },
         {"role": "user", "content": f"对话历史：\n{transcript or '（无）'}\n\n当前消息：\n{question}"},
     ]
@@ -107,6 +96,56 @@ def should_retrieve(decision: str) -> bool:
 
 
 @dataclass(frozen=True)
+class RetrievalAssessment:
+    should_retrieve: bool
+    complexity: str = "simple"
+    needs_rewrite: bool = False
+    valid: bool = True
+
+
+def parse_retrieval_assessment(output: str) -> RetrievalAssessment:
+    """Parse the first-stage decision without treating structural regex as intent."""
+    normalized = str(output or "").strip()
+    if normalized.startswith("```"):
+        normalized = re.sub(r"^```(?:json)?\s*|\s*```$", "", normalized, flags=re.IGNORECASE)
+    payload: dict[str, Any] | None = None
+    try:
+        decoded = json.loads(normalized)
+        if isinstance(decoded, dict):
+            payload = decoded
+    except json.JSONDecodeError:
+        payload = None
+
+    decision_match = re.search(r'"decision"\s*:\s*"(RETRIEVE|SKIP)"', normalized, re.IGNORECASE)
+    complexity_match = re.search(r'"complexity"\s*:\s*"(simple|complex)"', normalized, re.IGNORECASE)
+    rewrite_match = re.search(r'"needs_rewrite"\s*:\s*(true|false)', normalized, re.IGNORECASE)
+
+    raw_decision = payload.get("decision") if payload else None
+    raw_complexity = payload.get("complexity") if payload else None
+    raw_rewrite = payload.get("needs_rewrite") if payload else None
+    decision = str(raw_decision or (decision_match.group(1) if decision_match else "RETRIEVE")).strip().upper()
+    complexity = str(raw_complexity or (complexity_match.group(1) if complexity_match else "simple")).strip().lower()
+    needs_rewrite = (
+        raw_rewrite
+        if isinstance(raw_rewrite, bool)
+        else rewrite_match.group(1).lower() == "true"
+        if rewrite_match
+        else False
+    )
+    valid = (
+        decision in {"RETRIEVE", "SKIP"}
+        and complexity in {"simple", "complex"}
+        and (isinstance(raw_rewrite, bool) or rewrite_match is not None)
+    )
+    return RetrievalAssessment(
+        should_retrieve=decision != "SKIP",
+        complexity=complexity if complexity in {"simple", "complex"} else "simple",
+        needs_rewrite=bool(needs_rewrite),
+        valid=valid,
+    )
+
+
+@dataclass(frozen=True)
 class RetrievalDecision:
     should_retrieve: bool
     query_plan: QueryPlan | None = None
@@ -121,7 +160,7 @@ class RetrievalDecisionAgent:
 
     name = "retrieval_decision"
 
-    def __init__(self, models: ModelGateway, query_planning_enabled: bool = False):
+    def __init__(self, models: ModelGateway, query_planning_enabled: bool = True):
         self.models = models
         self.query_planning_enabled = query_planning_enabled
 
@@ -130,34 +169,24 @@ class RetrievalDecisionAgent:
         question: str,
         history: list[dict[str, Any]],
         intent: QueryIntent | None = None,
+        force_retrieval: bool = False,
     ) -> RetrievalDecision:
-        intent = intent or analyze_query_intent(question)
-        if intent.skips_retrieval:
-            return RetrievalDecision(False)
-        trigger = (
-            query_planning_trigger(question, history)
-            if self.query_planning_enabled
-            else None
-        )
-        planning_requested = self.query_planning_enabled and trigger is not None
+        # QueryIntent is metadata-only; it must never bypass the model decision.
+        _ = intent
         try:
             with timed_stage("decision.generation"), model_usage_stage("retrieval_decision"):
                 output = self.models.complete(
                     retrieval_decision_messages(
                         question,
                         history,
-                        include_plan=planning_requested,
+                        include_complexity=self.query_planning_enabled,
                     ),
                     temperature=0,
-                    max_tokens=(
-                        RETRIEVAL_DECISION_PLAN_MAX_TOKENS
-                        if planning_requested
-                        else 16
-                    ),
+                    max_tokens=RETRIEVAL_DECISION_MAX_TOKENS if self.query_planning_enabled else 16,
                     reasoning=False,
                     response_schema=(
                         RETRIEVAL_DECISION_SCHEMA
-                        if planning_requested
+                        if self.query_planning_enabled
                         else RETRIEVAL_DECISION_ONLY_SCHEMA
                     ),
                 )
@@ -167,34 +196,40 @@ class RetrievalDecisionAgent:
                 type(exc).__name__,
                 exc,
             )
-            return RetrievalDecision(True, fallback_query_plan(question, trigger))
-        should_retrieve_now = should_retrieve(output)
-        planning_trigger = trigger or "planner"
-        if not should_retrieve_now:
-            # Preserve a valid combined plan for callers that may force
-            # retrieval later; do not let structural keywords override the
-            # model's retrieval decision.
-            if planning_requested:
-                try:
-                    return RetrievalDecision(
-                        False,
-                        parse_query_plan(output, question, planning_trigger),
-                    )
-                except Exception:
-                    pass
-            return RetrievalDecision(False)
-        if not planning_requested:
             return RetrievalDecision(
                 True,
-                QueryPlan.single(question, trigger=planning_trigger),
+                QueryPlan.single(question, trigger="decision", fallback=True),
             )
-        try:
-            query_plan = parse_query_plan(output, question, planning_trigger)
-        except Exception as exc:
-            logger.warning(
-                "Combined retrieval decision/query plan was invalid; using deterministic fallback (%s: %s)",
-                type(exc).__name__,
-                exc,
+
+        assessment = (
+            parse_retrieval_assessment(output)
+            if self.query_planning_enabled
+            else RetrievalAssessment(should_retrieve(output))
+        )
+        if not assessment.should_retrieve and not force_retrieval:
+            return RetrievalDecision(False)
+        if not self.query_planning_enabled or not assessment.valid:
+            return RetrievalDecision(
+                True,
+                QueryPlan.single(
+                    question,
+                    trigger="decision",
+                    fallback=not assessment.valid,
+                ),
             )
-            query_plan = fallback_query_plan(question, planning_trigger)
-        return RetrievalDecision(True, query_plan)
+        if assessment.complexity == "complex" or assessment.needs_rewrite:
+            planning_trigger = (
+                "complex_query"
+                if assessment.complexity == "complex"
+                else "context_reference"
+            )
+            query_plan = QueryPlanningAgent(self.models).run(
+                question,
+                history,
+                trigger=planning_trigger,
+            )
+            return RetrievalDecision(True, query_plan)
+        return RetrievalDecision(
+            True,
+            QueryPlan.single(question, trigger="decision"),
+        )
