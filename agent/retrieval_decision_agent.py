@@ -21,20 +21,28 @@ logger = logging.getLogger(__name__)
 
 RETRIEVAL_DECISION_PROMPT = """你负责一次性完成检索判断和查询规划，不负责回答问题。
 需要知识库事实、原文、出处或校验信息时 decision=RETRIEVE；问候、致谢、改写已有回答、助手身份问题或完全可以依据对话历史回答时 decision=SKIP。不确定时输出 RETRIEVE。
-strategy=single 表示问题独立且只有一个目标；strategy=rewrite 表示依赖历史指代；strategy=decompose 表示有多个取证目标，需要生成 2 到 4 个独立子问题。
-显式写出多个来源时，为每个来源提供一个来源检索视角，并保留联合问题；decompose 表示检索 fan-out，不代表最终要生成多个答案。不要根据文件名或领域词推断主题。
+strategy=single 表示一个检索视角足够；strategy=rewrite 仅用于消除历史指代；strategy=decompose 表示有多个独立取证目标，需要生成 2 到 4 个子问题。
+显式写出多个来源时，只有它们对应不同取证目标才拆分，并由你直接输出来源绑定的子查询；不要根据文件名或领域词推断主题。程序不会在你输出之后自动补充子查询。
 多个指标如果共享主体、来源和时间上下文，可以使用 single。只有每个子问题都能独立检索且检索约束不同，才使用 decompose。
 必须保留井号、层位、年份、标准号、数值、专有名词和用户明确写出的来源。只能改写或拆分已有目标，不得补充答案、结论或新事实。
-没有历史指代或明显多目标时使用 single，standalone_query 原样保留当前问题，subqueries 输出空数组。
+single 时 standalone_query 输出空字符串；rewrite 时只输出一句不超过 120 字的消除指代后的问题；decompose 时 standalone_query 输出空字符串，subqueries 每项只写一个不超过 120 字的检索问题。
+严禁重复句子、回答问题、计算数值、生成 SQL 或添加原问题中没有的事实。
 只输出符合 schema 的 JSON，不要解释。"""
+RETRIEVAL_DECISION_ONLY_PROMPT = """你只负责判断当前消息是否需要检索知识库，不负责回答问题。
+需要知识库事实、原文、出处或校验信息时 decision=RETRIEVE；问候、致谢、改写已有回答、助手身份问题或完全可以依据对话历史回答时 decision=SKIP。
+不确定时输出 RETRIEVE。只输出 JSON：{"decision":"RETRIEVE"} 或 {"decision":"SKIP"}，不要输出其他字段或解释。"""
 
 RETRIEVAL_DECISION_SCHEMA = {
     "type": "object",
     "properties": {
         "decision": {"type": "string", "enum": ["RETRIEVE", "SKIP"]},
         "strategy": {"type": "string", "enum": ["single", "rewrite", "decompose"]},
-        "standalone_query": {"type": "string"},
-        "subqueries": {"type": "array", "items": {"type": "string"}, "maxItems": 4},
+        "standalone_query": {"type": "string", "maxLength": 240},
+        "subqueries": {
+            "type": "array",
+            "items": {"type": "string", "maxLength": 180},
+            "maxItems": 4,
+        },
     },
     "required": ["decision", "strategy", "standalone_query", "subqueries"],
 }
@@ -46,9 +54,14 @@ RETRIEVAL_DECISION_ONLY_SCHEMA = {
     "required": ["decision"],
 }
 RETRIEVAL_DECISION_HISTORY_TOKENS = 512
+RETRIEVAL_DECISION_PLAN_MAX_TOKENS = 384
 
 
-def retrieval_decision_messages(question: str, history: list[dict[str, Any]]) -> list[dict[str, str]]:
+def retrieval_decision_messages(
+    question: str,
+    history: list[dict[str, Any]],
+    include_plan: bool = True,
+) -> list[dict[str, str]]:
     history_view = select_history_messages(history, RETRIEVAL_DECISION_HISTORY_TOKENS)
     transcript = "\n".join(
         f"{item['role']}: {item['content']}"
@@ -57,7 +70,10 @@ def retrieval_decision_messages(question: str, history: list[dict[str, Any]]) ->
     if history_view.omission_notice:
         transcript = f"{history_view.omission_notice}\n{transcript}"
     return [
-        {"role": "system", "content": RETRIEVAL_DECISION_PROMPT},
+        {
+            "role": "system",
+            "content": RETRIEVAL_DECISION_PROMPT if include_plan else RETRIEVAL_DECISION_ONLY_PROMPT,
+        },
         {"role": "user", "content": f"对话历史：\n{transcript or '（无）'}\n\n当前消息：\n{question}"},
     ]
 
@@ -123,16 +139,25 @@ class RetrievalDecisionAgent:
             if self.query_planning_enabled
             else None
         )
+        planning_requested = self.query_planning_enabled and trigger is not None
         try:
             with timed_stage("decision.generation"), model_usage_stage("retrieval_decision"):
                 output = self.models.complete(
-                    retrieval_decision_messages(question, history),
+                    retrieval_decision_messages(
+                        question,
+                        history,
+                        include_plan=planning_requested,
+                    ),
                     temperature=0,
-                    max_tokens=384 if self.query_planning_enabled else 16,
+                    max_tokens=(
+                        RETRIEVAL_DECISION_PLAN_MAX_TOKENS
+                        if planning_requested
+                        else 16
+                    ),
                     reasoning=False,
                     response_schema=(
                         RETRIEVAL_DECISION_SCHEMA
-                        if self.query_planning_enabled
+                        if planning_requested
                         else RETRIEVAL_DECISION_ONLY_SCHEMA
                     ),
                 )
@@ -149,7 +174,7 @@ class RetrievalDecisionAgent:
             # Preserve a valid combined plan for callers that may force
             # retrieval later; do not let structural keywords override the
             # model's retrieval decision.
-            if self.query_planning_enabled:
+            if planning_requested:
                 try:
                     return RetrievalDecision(
                         False,
@@ -158,8 +183,11 @@ class RetrievalDecisionAgent:
                 except Exception:
                     pass
             return RetrievalDecision(False)
-        if not self.query_planning_enabled:
-            return RetrievalDecision(True, QueryPlan.single(question))
+        if not planning_requested:
+            return RetrievalDecision(
+                True,
+                QueryPlan.single(question, trigger=planning_trigger),
+            )
         try:
             query_plan = parse_query_plan(output, question, planning_trigger)
         except Exception as exc:

@@ -87,6 +87,58 @@ class RetrievalDecisionAgentTest(unittest.TestCase):
             ["decision", "strategy", "standalone_query", "subqueries"],
         )
 
+    def test_simple_question_uses_decision_only_schema(self):
+        models = FakeModels('{"decision":"RETRIEVE"}')
+
+        result = RetrievalDecisionAgent(
+            models,
+            query_planning_enabled=True,
+        ).run("报销制度是什么？", [])
+
+        self.assertTrue(result.should_retrieve)
+        self.assertEqual(result.query_plan.strategy, "single")
+        self.assertEqual(models.calls[0][3], 16)
+        self.assertEqual(models.calls[0][5]["required"], ["decision"])
+
+    def test_truncated_combined_plan_recovers_decision_and_original_query(self):
+        models = FakeModels(
+            '{\n'
+            '  "decision": "RETRIEVE",\n'
+            '  "strategy": "decompose",\n'
+            '  "standalone_query": "'
+        )
+
+        result = RetrievalDecisionAgent(
+            models,
+            query_planning_enabled=True,
+        ).run(
+            "请分别说明合同付款节点和验收到账情况。",
+            [],
+        )
+
+        self.assertTrue(result.should_retrieve)
+        self.assertEqual(result.query_plan.strategy, "single")
+        self.assertEqual(
+            result.query_plan.retrieval_queries("请分别说明合同付款节点和验收到账情况。"),
+            ["请分别说明合同付款节点和验收到账情况。"],
+        )
+
+    def test_truncated_combined_plan_keeps_completed_subqueries(self):
+        models = FakeModels(
+            '{"decision":"RETRIEVE","strategy":"decompose",'
+            '"standalone_query":"原问题",'
+            '"subqueries":["合同付款节点","验收到账情况"'
+        )
+
+        result = RetrievalDecisionAgent(
+            models,
+            query_planning_enabled=True,
+        ).run("请比较合同和验收记录中的付款节点与到账情况。", [])
+
+        self.assertTrue(result.should_retrieve)
+        self.assertEqual(result.query_plan.strategy, "decompose")
+        self.assertEqual(result.query_plan.subqueries, ("合同付款节点", "验收到账情况"))
+
     def test_model_identity_question_skips_retrieval_without_completion(self):
         models = FakeModels('{"decision":"RETRIEVE"}')
 

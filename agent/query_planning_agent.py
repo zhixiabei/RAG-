@@ -16,8 +16,12 @@ _PLAN_SCHEMA = {
     "type": "object",
     "properties": {
         "strategy": {"type": "string", "enum": ["single", "rewrite", "decompose"]},
-        "standalone_query": {"type": "string"},
-        "subqueries": {"type": "array", "items": {"type": "string"}, "maxItems": 4},
+        "standalone_query": {"type": "string", "maxLength": 240},
+        "subqueries": {
+            "type": "array",
+            "items": {"type": "string", "maxLength": 180},
+            "maxItems": 4,
+        },
     },
     "required": ["strategy", "standalone_query", "subqueries"],
 }
@@ -60,11 +64,12 @@ _FILE_SOURCE_PATTERN = re.compile(
 _SOURCE_CAPTURE_PATTERN = re.compile(r"\u300a([^\u300b]{2,160})\u300b")
 
 QUERY_PLANNING_PROMPT = """你负责生成知识库检索计划，不负责回答问题。
-single 表示一个检索视角足够；rewrite 表示当前问题依赖对话历史中的指代；decompose 表示需要多个独立检索视角。
+single 表示一个检索视角足够；rewrite 仅用于消除对话历史中的指代；decompose 表示需要多个独立检索视角。
 如果用户明确写出多个来源，只有在它们对应不同取证目标时才拆分，并由你直接输出来源绑定的子查询；不要根据文件名推断领域或主题。程序不会在你输出之后自动补充来源子查询。
 多个指标如果共享主体、来源和时间上下文，可以保持 single。只有每个子问题都能独立检索、且检索约束不同，才使用 decompose。
 必须保留井号、层位、年份、标准号、数值、专有名词和用户明确写出的来源。只能改写或拆分已有目标，不得补充答案、结论或新事实。
-standalone_query 是消除指代后的完整原问题。只输出符合 schema 的 JSON。"""
+single 时 standalone_query 输出空字符串；rewrite 时只输出一句不超过 120 字的消除指代后的问题；decompose 时 standalone_query 输出空字符串，subqueries 每项只写一个不超过 120 字的检索问题。
+严禁重复句子、回答问题、计算数值、生成 SQL 或添加原问题中没有的事实。只输出符合 schema 的 JSON。"""
 
 
 @dataclass(frozen=True)
@@ -133,10 +138,7 @@ def query_planning_trigger(question: str, history: Sequence[dict[str, Any]]) -> 
     has_history = any(item.get("role") in {"user", "assistant"} and str(item.get("content") or "").strip() for item in history)
     if has_history and (_REFERENCE_PATTERN.search(normalized) or compact_length <= 18 and _SHORT_FOLLOW_UP_PATTERN.search(normalized)):
         return "context_reference"
-    if compact_length >= 18 and (
-        _STRONG_COMPLEX_PATTERN.search(normalized)
-        or _looks_like_multi_source_query(normalized)
-    ):
+    if _STRONG_COMPLEX_PATTERN.search(normalized) or _looks_like_multi_source_query(normalized):
         return "complex_query"
     if compact_length >= 30 and (
         len(_WEAK_COMPLEX_PATTERN.findall(normalized)) >= 2
@@ -182,22 +184,31 @@ def parse_query_plan(output: str, question: str, trigger: str) -> QueryPlan:
     payload = _load_json_object(output)
     if not isinstance(payload, dict):
         raise ValueError("Query planner output must be a JSON object")
+    partially_recovered = bool(payload.pop("_partial", False))
     strategy = str(payload.get("strategy") or "").strip().lower()
     if strategy not in {"single", "rewrite", "decompose"}:
         raise ValueError("Query planner returned an unsupported strategy")
     original = _clean_query(question)
-    standalone_query = _validated_generated_query(
-        payload.get("standalone_query") or original,
-        fallback=original,
-    )
+    try:
+        standalone_query = _validated_generated_query(
+            payload.get("standalone_query") or original,
+            fallback=original,
+        )
+    except ValueError:
+        standalone_query = original
+        partially_recovered = True
     raw_subqueries = payload.get("subqueries") or []
     if not isinstance(raw_subqueries, list):
         raise ValueError("Query planner subqueries must be a list")
-    subqueries = tuple(_unique_queries([
-        _validated_generated_query(item)
-        for item in raw_subqueries
-        if str(item).strip()
-    ]))[:_MAX_SUBQUERIES]
+    valid_subqueries: list[str] = []
+    for item in raw_subqueries:
+        if not str(item).strip():
+            continue
+        try:
+            valid_subqueries.append(_validated_generated_query(item))
+        except ValueError:
+            partially_recovered = True
+    subqueries = tuple(_unique_queries(valid_subqueries))[:_MAX_SUBQUERIES]
     if strategy == "rewrite" and standalone_query == original:
         strategy = "single"
     if len(subqueries) >= 2:
@@ -207,13 +218,30 @@ def parse_query_plan(output: str, question: str, trigger: str) -> QueryPlan:
     if strategy == "decompose" and len(subqueries) < 2:
         strategy = "rewrite" if standalone_query != original else "single"
         subqueries = ()
+    if trigger == "complex_query":
+        # Complex retrieval should use only explicit model subqueries. A
+        # free-form rewrite from a small model is often an invented answer.
+        if strategy != "decompose" or len(subqueries) < 2:
+            return QueryPlan(
+                "single",
+                original,
+                trigger=trigger,
+                fallback=partially_recovered or strategy != "single",
+            )
+        standalone_query = original
     if strategy == "decompose":
         # A decomposed plan is retrieved per subquery; do not let a free-form
         # standalone rewrite become a potentially hallucinated rerank query.
         standalone_query = original
     if strategy != "decompose":
         subqueries = ()
-    return QueryPlan(strategy, standalone_query, subqueries, trigger=trigger)
+    return QueryPlan(
+        strategy,
+        standalone_query,
+        subqueries,
+        trigger=trigger,
+        fallback=partially_recovered,
+    )
 
 
 def fallback_query_plan(question: str, trigger: str | None) -> QueryPlan:
@@ -274,9 +302,101 @@ def _load_json_object(output: str) -> dict[str, Any]:
         if not isinstance(payload, dict):
             raise ValueError("Query planner output must be a JSON object")
         return payload
+    partial = _load_partial_json_object(normalized)
+    if partial is not None:
+        return partial
     if last_error is not None:
         raise last_error
     raise ValueError("Query planner output must be a JSON object")
+
+
+def _load_partial_json_object(value: str) -> dict[str, Any] | None:
+    """Recover completed planner fields from a truncated JSON response."""
+    strategy, strategy_complete = _extract_partial_json_string(value, "strategy")
+    if not strategy_complete or strategy.strip().lower() not in {"single", "rewrite", "decompose"}:
+        if re.search(r'"decision"\s*:\s*"(?:RETRIEVE|SKIP)"', value, re.IGNORECASE):
+            return {"strategy": "single", "subqueries": [], "_partial": True}
+        return None
+    strategy = strategy.strip().lower()
+
+    payload: dict[str, Any] = {"strategy": strategy}
+    standalone, standalone_complete = _extract_partial_json_string(value, "standalone_query")
+    if standalone_complete and standalone:
+        payload["standalone_query"] = standalone
+    payload["subqueries"] = _extract_partial_json_array(value, "subqueries")
+    payload["_partial"] = True
+    return payload
+
+
+def _extract_partial_json_string(value: str, field: str) -> tuple[str, bool]:
+    marker = re.search(rf'"{re.escape(field)}"\s*:\s*"', value)
+    if not marker:
+        return "", False
+    raw: list[str] = []
+    escaped = False
+    for character in value[marker.end():]:
+        if escaped:
+            raw.append(character)
+            escaped = False
+            continue
+        if character == chr(92):
+            raw.append(character)
+            escaped = True
+            continue
+        if character == '"':
+            return _decode_partial_json_string("".join(raw)), True
+        raw.append(" " if character in "\r\n" else character)
+    return _decode_partial_json_string("".join(raw)), False
+
+
+def _extract_partial_json_array(value: str, field: str) -> list[str]:
+    marker = re.search(rf'"{re.escape(field)}"\s*:\s*\[', value)
+    if not marker:
+        return []
+    body = value[marker.end():]
+    result: list[str] = []
+    index = 0
+    while index < len(body):
+        while index < len(body) and body[index] in "\r\n\t ,":
+            index += 1
+        if index >= len(body) or body[index] == "]":
+            break
+        if body[index] != '"':
+            index += 1
+            continue
+        index += 1
+        raw: list[str] = []
+        escaped = False
+        complete = False
+        while index < len(body):
+            character = body[index]
+            index += 1
+            if escaped:
+                raw.append(character)
+                escaped = False
+                continue
+            if character == chr(92):
+                raw.append(character)
+                escaped = True
+                continue
+            if character == '"':
+                complete = True
+                break
+            raw.append(" " if character in "\r\n" else character)
+        if not complete:
+            break
+        decoded = _decode_partial_json_string("".join(raw))
+        if decoded:
+            result.append(decoded)
+    return result[:_MAX_SUBQUERIES]
+
+
+def _decode_partial_json_string(value: str) -> str:
+    try:
+        decoded = json.loads(f'"{value}"')
+    except json.JSONDecodeError:
+        decoded = value
+    return _clean_query(str(decoded))
 
 
 def _extract_json_object(value: str) -> str | None:
@@ -313,11 +433,30 @@ def _validated_generated_query(value: object, fallback: str = "") -> str:
     lowered = query.casefold()
     if any(marker in lowered or marker in query for marker in _QUERY_CONTAMINATION_MARKERS):
         raise ValueError("Query planner copied prompt text into a query")
+    if _is_repetitive_query(query):
+        raise ValueError("Query planner repeated the same text")
+    if re.search(
+        r"(?:答案|结论|结果)\s*(?:是|为|：|:)|\b(?:select|from|where)\b",
+        query,
+        re.IGNORECASE,
+    ):
+        raise ValueError("Query planner generated an answer instead of a query")
     if not query:
         if fallback:
             return fallback
         raise ValueError("Query planner returned an empty query")
     return query
+
+
+def _is_repetitive_query(query: str) -> bool:
+    compact = re.sub(r"\s+", "", query)
+    if len(compact) < 32:
+        return False
+    max_unit_length = min(80, len(compact) // 2)
+    for unit_length in range(12, max_unit_length + 1):
+        if compact[:unit_length] == compact[unit_length:unit_length * 2]:
+            return True
+    return False
 
 
 def _clip_history_text(value: str) -> str:
