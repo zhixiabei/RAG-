@@ -61,7 +61,7 @@ _SOURCE_CAPTURE_PATTERN = re.compile(r"\u300a([^\u300b]{2,160})\u300b")
 
 QUERY_PLANNING_PROMPT = """你负责生成知识库检索计划，不负责回答问题。
 single 表示一个检索视角足够；rewrite 表示当前问题依赖对话历史中的指代；decompose 表示需要多个独立检索视角。
-如果用户明确写出多个来源，为每个来源生成一个保留原问题谓词的来源检索视角，并保留联合问题；不要根据文件名推断领域或主题。
+如果用户明确写出多个来源，只有在它们对应不同取证目标时才拆分，并由你直接输出来源绑定的子查询；不要根据文件名推断领域或主题。程序不会在你输出之后自动补充来源子查询。
 多个指标如果共享主体、来源和时间上下文，可以保持 single。只有每个子问题都能独立检索、且检索约束不同，才使用 decompose。
 必须保留井号、层位、年份、标准号、数值、专有名词和用户明确写出的来源。只能改写或拆分已有目标，不得补充答案、结论或新事实。
 standalone_query 是消除指代后的完整原问题。只输出符合 schema 的 JSON。"""
@@ -190,7 +190,6 @@ def parse_query_plan(output: str, question: str, trigger: str) -> QueryPlan:
         payload.get("standalone_query") or original,
         fallback=original,
     )
-    standalone_query = _preserve_explicit_sources(original, standalone_query)
     raw_subqueries = payload.get("subqueries") or []
     if not isinstance(raw_subqueries, list):
         raise ValueError("Query planner subqueries must be a list")
@@ -199,7 +198,6 @@ def parse_query_plan(output: str, question: str, trigger: str) -> QueryPlan:
         for item in raw_subqueries
         if str(item).strip()
     ]))[:_MAX_SUBQUERIES]
-    subqueries = _ensure_subquery_source_anchors(original, subqueries)
     if strategy == "rewrite" and standalone_query == original:
         strategy = "single"
     if len(subqueries) >= 2:
@@ -209,21 +207,6 @@ def parse_query_plan(output: str, question: str, trigger: str) -> QueryPlan:
     if strategy == "decompose" and len(subqueries) < 2:
         strategy = "rewrite" if standalone_query != original else "single"
         subqueries = ()
-    # Explicitly named multiple sources are a retrieval fan-out invariant,
-    # not a semantic topic classifier. If the model did not provide usable
-    # per-source queries, create source-scoped copies without guessing topics.
-    if len(extract_explicit_source_names(original)) >= 2:
-        if len(subqueries) >= 2:
-            return QueryPlan("decompose", original, subqueries, trigger=trigger)
-        source_subqueries = deterministic_source_subqueries(original)
-        if len(source_subqueries) >= 2:
-            merged_subqueries = _unique_queries((*subqueries, *source_subqueries))
-            return QueryPlan(
-                "decompose",
-                original,
-                tuple(merged_subqueries[:_MAX_SUBQUERIES]),
-                trigger=trigger,
-            )
     if strategy == "decompose":
         # A decomposed plan is retrieved per subquery; do not let a free-form
         # standalone rewrite become a potentially hallucinated rerank query.
@@ -236,15 +219,6 @@ def parse_query_plan(output: str, question: str, trigger: str) -> QueryPlan:
 def fallback_query_plan(question: str, trigger: str | None) -> QueryPlan:
     """Return a retrieval-safe plan when structured model output is unusable."""
     original = _clean_query(question)
-    source_subqueries = deterministic_source_subqueries(original)
-    if len(source_subqueries) >= 2:
-        return QueryPlan(
-            "decompose",
-            original,
-            tuple(source_subqueries[:_MAX_SUBQUERIES]),
-            trigger=trigger,
-            fallback=True,
-        )
     clause_subqueries = deterministic_topic_subqueries(original)
     if len(clause_subqueries) >= 2:
         return QueryPlan(
@@ -275,92 +249,6 @@ def deterministic_topic_subqueries(question: str) -> tuple[str, ...]:
     if len(clauses) >= 2:
         return tuple(_unique_queries(clauses))[:_MAX_SUBQUERIES]
     return ()
-
-
-def extract_explicit_source_names(question: str) -> tuple[str, ...]:
-    """Extract quoted titles and explicit file names in first-seen order."""
-    sources: list[str] = []
-    seen: set[str] = set()
-    for source in (
-        *_SOURCE_CAPTURE_PATTERN.findall(question),
-        *_FILE_SOURCE_PATTERN.findall(question),
-    ):
-        source = _clean_query(source)
-        key = re.sub(r"\s+", "", source).casefold()
-        if not source or key in seen:
-            continue
-        seen.add(key)
-        sources.append(source)
-        if len(sources) >= _MAX_SUBQUERIES:
-            break
-    return tuple(sources)
-
-
-def _preserve_explicit_sources(original: str, generated: str) -> str:
-    sources = extract_explicit_source_names(original)
-    if not sources:
-        return generated
-    normalized_generated = re.sub(r"\s+", "", generated).casefold()
-    missing = [
-        source for source in sources
-        if re.sub(r"\s+", "", source).casefold() not in normalized_generated
-    ]
-    if not missing:
-        return generated
-    return _append_source_anchors(generated, missing)
-
-
-def _ensure_subquery_source_anchors(
-    original: str,
-    subqueries: Sequence[str],
-) -> tuple[str, ...]:
-    sources = extract_explicit_source_names(original)
-    if len(sources) < 2 or not subqueries:
-        return tuple(subqueries)
-    anchored: list[str] = []
-    one_to_one = len(subqueries) == len(sources)
-    for index, subquery in enumerate(subqueries):
-        normalized = re.sub(r"\s+", "", subquery).casefold()
-        if any(re.sub(r"\s+", "", source).casefold() in normalized for source in sources):
-            anchored.append(subquery)
-            continue
-        selected = (sources[index],) if one_to_one else tuple(sources)
-        anchored.append(_append_source_anchors(subquery, selected))
-    return tuple(_unique_queries(anchored))[:_MAX_SUBQUERIES]
-
-
-def _append_source_anchors(query: str, sources: Sequence[str]) -> str:
-    """Append source names while reserving space so the anchors survive clipping."""
-    anchors = "、".join(f"《{source}》" for source in sources)
-    suffix = f"；来源：{anchors}"
-    if len(suffix) >= _MAX_QUERY_CHARS:
-        return _clean_query(suffix)
-    prefix_limit = _MAX_QUERY_CHARS - len(suffix)
-    prefix = _clean_query(query)[:prefix_limit].rstrip(" ，,；;")
-    return f"{prefix}{suffix}"
-
-
-def deterministic_source_subqueries(question: str) -> tuple[str, ...]:
-    """Fan out explicit sources without inferring a source-specific topic."""
-    sources = list(extract_explicit_source_names(question))
-    if len(sources) < 2:
-        return ()
-    base_query = question
-    for source in sources:
-        base_query = base_query.replace(f"《{source}》", " ")
-        base_query = base_query.replace(source, " ")
-    base_query = re.sub(
-        r"(?:根据|结合|基于|依据)\s*(?:(?:和|与|及|以及|、)\s*)+",
-        " ",
-        base_query,
-    )
-    base_query = _clean_query(re.sub(r"[，,、；;]+", " ", base_query))
-    target = base_query or _clean_query(question)
-    subqueries = [
-        _clean_query(f"《{source}》；{target}")
-        for source in sources
-    ]
-    return tuple(subqueries)
 
 
 def _load_json_object(output: str) -> dict[str, Any]:

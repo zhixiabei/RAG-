@@ -3,7 +3,6 @@ import unittest
 
 from agent.query_planning_agent import (
     QueryPlanningAgent,
-    deterministic_source_subqueries,
     query_planning_messages,
     query_planning_trigger,
 )
@@ -75,7 +74,7 @@ class QueryPlanningAgentTest(unittest.TestCase):
 
         self.assertEqual(query_planning_trigger(question, []), "complex_query")
 
-    def test_explicit_sources_fan_out_without_topic_mapping(self):
+    def test_model_single_is_not_overridden_by_explicit_sources(self):
         question = (
             "根据《化166-2井组化学示踪剂监测设计》和《化166-2示踪剂报告》，"
             "统计设计阶段井数与实际见剂井数并判断整体连通性。"
@@ -88,13 +87,9 @@ class QueryPlanningAgentTest(unittest.TestCase):
 
         plan = QueryPlanningAgent(models).run(question, [])
 
-        self.assertEqual(plan.strategy, "decompose")
-        self.assertEqual(len(plan.subqueries), 2)
-        self.assertIn("化166-2井组化学示踪剂监测设计", plan.subqueries[0])
-        self.assertIn("化166-2示踪剂报告", plan.subqueries[1])
-        self.assertEqual(plan.retrieval_queries(question)[0], question)
-        self.assertEqual(len(plan.retrieval_queries(question)), 3)
-        self.assertTrue(all("设计阶段井数" in query or "实际见剂井数" in query for query in plan.subqueries))
+        self.assertEqual(plan.strategy, "single")
+        self.assertEqual(plan.subqueries, ())
+        self.assertEqual(plan.retrieval_queries(question), [question])
 
     def test_single_budget_source_does_not_select_a_domain_topic(self):
         question = "根据《26年度预算方案》，分析研发费用变化及预算增幅"
@@ -110,15 +105,24 @@ class QueryPlanningAgentTest(unittest.TestCase):
         self.assertEqual(plan.subqueries, ())
         self.assertEqual(plan.retrieval_queries(question), [question])
 
-    def test_source_fanout_is_domain_agnostic(self):
+    def test_model_owned_source_decomposition_preserves_model_queries(self):
         question = "根据《合同甲》和《验收记录乙》，比较付款节点与到账情况"
+        models = FakeModels(json.dumps({
+            "strategy": "decompose",
+            "standalone_query": question,
+            "subqueries": [
+                "《合同甲》中的付款节点",
+                "《验收记录乙》中的到账情况",
+            ],
+        }, ensure_ascii=False))
 
-        subqueries = deterministic_source_subqueries(question)
+        plan = QueryPlanningAgent(models).run(question, [])
 
-        self.assertEqual(len(subqueries), 2)
-        self.assertIn("《合同甲》", subqueries[0])
-        self.assertIn("《验收记录乙》", subqueries[1])
-        self.assertTrue(all("付款节点与到账情况" in query for query in subqueries))
+        self.assertEqual(plan.strategy, "decompose")
+        self.assertEqual(plan.subqueries, (
+            "《合同甲》中的付款节点",
+            "《验收记录乙》中的到账情况",
+        ))
 
     def test_ignores_hallucinated_standalone_query_for_explicit_source_comparison(self):
         question = (
@@ -140,8 +144,10 @@ class QueryPlanningAgentTest(unittest.TestCase):
         self.assertEqual(plan.strategy, "decompose")
         self.assertEqual(plan.standalone_query, question)
         self.assertEqual(len(plan.subqueries), 2)
-        self.assertIn("2024年化子坪测试解释结果汇总", plan.subqueries[0])
-        self.assertIn("2024年杏子川采油厂油水井测试解释成果汇总表", plan.subqueries[1])
+        self.assertEqual(plan.subqueries, (
+            "检索化309-5井绝对吸水量",
+            "检索杏6329-1井绝对吸水量",
+        ))
 
     def test_planner_failure_falls_back_to_original_question(self):
         models = FakeModels(error=TimeoutError("timed out"))
@@ -210,7 +216,7 @@ class QueryPlanningAgentTest(unittest.TestCase):
         ), "context_reference")
 
 
-    def test_subqueries_override_an_incorrect_strategy_and_keep_source_anchors(self):
+    def test_subqueries_override_an_incorrect_strategy_without_posthoc_rewriting(self):
         question = (
             "根据《设计报告》和《实际报告》，分别统计设计数量和实际数量。"
         )
@@ -223,10 +229,8 @@ class QueryPlanningAgentTest(unittest.TestCase):
         plan = QueryPlanningAgent(models).run(question, [])
 
         self.assertEqual(plan.strategy, "decompose")
-        self.assertIn("《设计报告》", plan.standalone_query)
-        self.assertIn("《实际报告》", plan.standalone_query)
-        self.assertIn("《设计报告》", plan.subqueries[0])
-        self.assertIn("《实际报告》", plan.subqueries[1])
+        self.assertEqual(plan.standalone_query, question)
+        self.assertEqual(plan.subqueries, ("统计设计数量", "统计实际数量"))
 
 if __name__ == "__main__":
     unittest.main()

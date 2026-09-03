@@ -127,7 +127,7 @@ class RetrievalDecisionAgentTest(unittest.TestCase):
         self.assertFalse(analyze_query_intent(question).skips_retrieval)
         self.assertTrue(decision.should_retrieve)
         self.assertEqual(len(models.calls), 1)
-    def test_malformed_complex_plan_uses_deterministic_decomposition(self):
+    def test_malformed_complex_plan_falls_back_to_original_question(self):
         question = (
             "根据《设计报告》和《实际报告》，分别统计设计数量和实际数量。"
         )
@@ -142,8 +142,9 @@ class RetrievalDecisionAgentTest(unittest.TestCase):
 
         self.assertTrue(decision.should_retrieve)
         self.assertTrue(decision.query_plan.fallback)
-        self.assertEqual(decision.query_plan.strategy, "decompose")
-        self.assertEqual(len(decision.query_plan.subqueries), 2)
+        self.assertEqual(decision.query_plan.strategy, "single")
+        self.assertEqual(decision.query_plan.subqueries, ())
+        self.assertEqual(decision.query_plan.retrieval_queries(question), [question])
 
     def test_model_skip_is_respected_even_for_structurally_complex_question(self):
         question = "请分别说明井喷处置和污染物管理有哪些要求？"
