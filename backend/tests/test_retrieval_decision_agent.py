@@ -145,7 +145,7 @@ class RetrievalDecisionAgentTest(unittest.TestCase):
         self.assertEqual(decision.query_plan.strategy, "decompose")
         self.assertEqual(len(decision.query_plan.subqueries), 2)
 
-    def test_complex_question_cannot_be_silently_skipped(self):
+    def test_model_skip_is_respected_even_for_structurally_complex_question(self):
         question = "请分别说明井喷处置和污染物管理有哪些要求？"
         models = FakeModels('{"decision":"SKIP"}')
 
@@ -154,8 +154,8 @@ class RetrievalDecisionAgentTest(unittest.TestCase):
             query_planning_enabled=True,
         ).run(question, [])
 
-        self.assertTrue(decision.should_retrieve)
-        self.assertEqual(decision.query_plan.strategy, "decompose")
+        self.assertFalse(decision.should_retrieve)
+        self.assertIsNone(decision.query_plan)
 
     def test_decision_model_failure_defaults_to_retrieval(self):
         class FailingModels:

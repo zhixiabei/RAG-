@@ -317,6 +317,10 @@ class KnowledgeRetrievalAgent:
             if hit.document_id not in document_ids
         )
 
+        if not callable(search_documents) and not callable(search_keyword_documents):
+            return self._retrieve_chunks(
+                knowledge_base_id, query_vector, keywords, None
+            )
         if not document_ids:
             return []
         return self._retrieve_chunks(
@@ -328,17 +332,26 @@ class KnowledgeRetrievalAgent:
         knowledge_base_id: str,
         query_vector: list[float],
         keywords: list[str],
-        document_ids: list[str],
+        document_ids: list[str] | None,
     ) -> list[SearchHit]:
         with timed_stage("retrieval.chunk_vector_search"):
-            vector_hits = list(
-                self.vectors.search(
-                    knowledge_base_id,
-                    query_vector,
-                    self.candidate_k,
-                    document_ids,
+            if document_ids is None:
+                vector_hits = list(
+                    self.vectors.search(
+                        knowledge_base_id,
+                        query_vector,
+                        self.candidate_k,
+                    )
                 )
-            )
+            else:
+                vector_hits = list(
+                    self.vectors.search(
+                        knowledge_base_id,
+                        query_vector,
+                        self.candidate_k,
+                        document_ids,
+                    )
+                )
 
         # Exact identifiers are often the only reliable signal for row-level
         # facts. Give lexical search a pool as large as dense search so a
@@ -348,14 +361,23 @@ class KnowledgeRetrievalAgent:
             if not keywords:
                 keyword_hits = []
             else:
-                keyword_hits = list(
-                    self.vectors.search_keywords(
-                        knowledge_base_id,
-                        keywords,
-                        keyword_limit,
-                        document_ids,
+                if document_ids is None:
+                    keyword_hits = list(
+                        self.vectors.search_keywords(
+                            knowledge_base_id,
+                            keywords,
+                            keyword_limit,
+                        )
                     )
-                )
+                else:
+                    keyword_hits = list(
+                        self.vectors.search_keywords(
+                            knowledge_base_id,
+                            keywords,
+                            keyword_limit,
+                            document_ids,
+                        )
+                    )
         with timed_stage("retrieval.rrf_fusion"):
             return _reciprocal_rank_fusion(
                 vector_hits,

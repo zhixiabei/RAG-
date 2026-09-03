@@ -37,42 +37,33 @@ _QUERY_CONTAMINATION_MARKERS = (
     "独立问题：",
     "改写：",
 )
-_REFERENCE_PATTERN = re.compile(r"(?:它|这个|那个|这些|那些|上述|上面|前面|刚才|前者|后者|其中|该方案|该文件|该井|该层|this|that|it|they|above)", re.IGNORECASE)
+_REFERENCE_PATTERN = re.compile(
+    r"(?:它|这个|那个|这些|那些|上述|上面|前面|刚才|前者|后者|其中|"
+    r"该项|该对象|该文件|该记录|this|that|it|they|above)",
+    re.IGNORECASE,
+)
 _SHORT_FOLLOW_UP_PATTERN = re.compile(r"(?:呢|怎么样|如何|多少|是什么|怎么办|有何影响|有什么区别)[？?]?$", re.IGNORECASE)
-_STRONG_COMPLEX_PATTERN = re.compile(r"(?:综合|分别|对比|比较|异同|各自|逐项|多个方面|哪些方面)", re.IGNORECASE)
+_STRONG_COMPLEX_PATTERN = re.compile(r"(?:综合|分别|各自|逐项|对比|比较|异同|多个方面|哪些方面)", re.IGNORECASE)
 _WEAK_COMPLEX_PATTERN = re.compile(r"(?:以及|并且|同时|还要|还需|并说明|并分析|并给出|及其|又有哪些)", re.IGNORECASE)
+_NUMBERED_ITEM_PATTERN = re.compile(
+    r"(?:^|[\s，,；;])(?:\d{1,2}|[一二三四五六七八九十]+)[、.)．]"
+)
+_INDEPENDENT_CLAUSE_PATTERN = re.compile(
+    r"[^，,；;。！？?]{2,}(?:是什么|是多少|如何|有哪些|说明|分析|比较|统计|列出)[^，,；;。！？?]{1,}"
+)
 _QUOTED_SOURCE_PATTERN = re.compile(r"\u300a[^\u300b]{2,160}\u300b")
 _FILE_SOURCE_PATTERN = re.compile(
     r"[\w\u4e00-\u9fff][\w\u4e00-\u9fff._()\uFF08\uFF09-]{1,100}"
     r"\.(?:docx?|pdf|xlsx?|pptx?|txt|csv|gdb|att|md)",
     re.IGNORECASE,
 )
-_MULTI_SOURCE_LANGUAGE_PATTERN = re.compile(
-    r"(?:\u6839\u636e|\u7ed3\u5408|\u57fa\u4e8e|\u4f9d\u636e|\u53c2\u7167|\u5bf9\u7167|\u4ece).{0,180}"
-    r"(?:\u548c|\u4e0e|\u53ca|\u4ee5\u53ca|\u3001).{0,180}"
-    r"(?:\u8bbe\u8ba1|\u5b9e\u9645|\u62a5\u544a|\u6587\u4ef6|\u6587\u6863|\u65b9\u6848|\u76d1\u6d4b|\u9636\u6bb5|\u5360\u6bd4|\u5224\u65ad|\u8bf4\u660e|\u6570\u91cf)",
-    re.IGNORECASE,
-)
-_MULTI_DOCUMENT_COUNT_PATTERN = re.compile(
-    r"(?:\u4e24|\u4e8c|\u4e09|\u56db|\u4e94|\u516d|\u4e03|\u516b|\u4e5d|\u5341|\d+|\u591a|\u5404|\u82e5\u5e72)"
-    r"\s*(?:\u4efd|\u4e2a|\u7bc7|\u5f20)?\s*"
-    r"(?:\u62a5\u544a|\u6587\u6863|\u6587\u4ef6|\u8d44\u6599|\u8868|\u53f0\u8d26|\u8bb0\u5f55|\u6570\u636e)",
-    re.IGNORECASE,
-)
-_MULTI_DOCUMENT_WORD_PATTERN = re.compile(
-    r"(?:\u591a\u4efd|\u5404\u4efd|\u5404\u6587\u6863|\u5404\u62a5\u544a|\u4e0d\u540c\u62a5\u544a|"
-    r"\u4e0d\u540c\u6587\u6863|\u591a\u4e2a\u6587\u4ef6|\u591a\u4efd\u8d44\u6599|\u591a\u5f20\u8868)",
-    re.IGNORECASE,
-)
-_DOCUMENT_REFERENCE_PATTERN = re.compile(
-    r"(?:\u62a5\u544a|\u6587\u6863|\u6587\u4ef6|\u8d44\u6599|\u6570\u636e\u8868|\u7edf\u8ba1\u8868|\u53f0\u8d26|\u8bb0\u5f55)",
-    re.IGNORECASE,
-)
 _SOURCE_CAPTURE_PATTERN = re.compile(r"\u300a([^\u300b]{2,160})\u300b")
 
-QUERY_PLANNING_PROMPT = """你负责生成知识库检索查询，不负责回答问题。
-策略：single 表示问题独立且只有一个目标；rewrite 表示依赖历史指代；decompose 表示有多个取证目标，需要生成 2 到 4 个独立子问题。
-必须保留井号、层位、年份、标准号、数值和专有名词。只能改写或拆分已有目标，不得补充答案、结论或新事实。
+QUERY_PLANNING_PROMPT = """你负责生成知识库检索计划，不负责回答问题。
+single 表示一个检索视角足够；rewrite 表示当前问题依赖对话历史中的指代；decompose 表示需要多个独立检索视角。
+如果用户明确写出多个来源，为每个来源生成一个保留原问题谓词的来源检索视角，并保留联合问题；不要根据文件名推断领域或主题。
+多个指标如果共享主体、来源和时间上下文，可以保持 single。只有每个子问题都能独立检索、且检索约束不同，才使用 decompose。
+必须保留井号、层位、年份、标准号、数值、专有名词和用户明确写出的来源。只能改写或拆分已有目标，不得补充答案、结论或新事实。
 standalone_query 是消除指代后的完整原问题。只输出符合 schema 的 JSON。"""
 
 
@@ -101,7 +92,9 @@ class QueryPlan:
         return _unique_queries(queries)
 
     def rerank_query(self, original_question: str) -> str:
-        return self.standalone_query or _clean_query(original_question)
+        if self.strategy == "rewrite":
+            return self.standalone_query or _clean_query(original_question)
+        return _clean_query(original_question)
 
     def as_dict(self) -> dict[str, Any]:
         return {"strategy": self.strategy, "standalone_query": self.standalone_query, "subqueries": list(self.subqueries), "trigger": self.trigger, "model_invoked": self.model_invoked, "fallback": self.fallback}
@@ -116,9 +109,7 @@ class QueryPlanningAgent:
         self.models = models
 
     def run(self, question: str, history: Sequence[dict[str, Any]]) -> QueryPlan:
-        trigger = query_planning_trigger(question, history)
-        if trigger is None:
-            return QueryPlan.single(question)
+        trigger = query_planning_trigger(question, history) or "planner"
         try:
             with timed_stage("planning.generation"), model_usage_stage("query_planning"):
                 output = self.models.complete(
@@ -163,21 +154,9 @@ def _looks_like_multi_source_query(question: str) -> bool:
     ]
     if len({reference.casefold() for reference in source_references}) >= 2:
         return True
-    if (
-        _MULTI_DOCUMENT_COUNT_PATTERN.search(question)
-        or _MULTI_DOCUMENT_WORD_PATTERN.search(question)
-    ):
-        return True
-    document_reference_count = len(_DOCUMENT_REFERENCE_PATTERN.findall(question))
     return bool(
-        _MULTI_SOURCE_LANGUAGE_PATTERN.search(question)
-        or document_reference_count >= 2
-        and re.search(
-            r"(?:\u6839\u636e|\u7ed3\u5408|\u5bf9\u6bd4|\u6bd4\u8f83|\u6838\u5bf9|"
-            r"\u5206\u522b|\u5404|\u4e0d\u540c|\u548c|\u4e0e|\u53ca|\u3001)",
-            question,
-            re.IGNORECASE,
-        )
+        _NUMBERED_ITEM_PATTERN.search(question)
+        or len(_INDEPENDENT_CLAUSE_PATTERN.findall(question)) >= 2
     )
 
 
@@ -230,26 +209,25 @@ def parse_query_plan(output: str, question: str, trigger: str) -> QueryPlan:
     if strategy == "decompose" and len(subqueries) < 2:
         strategy = "rewrite" if standalone_query != original else "single"
         subqueries = ()
-    if trigger == "complex_query":
-        # Complex questions are retrieval tasks, not answer-rewriting tasks.
-        # A model can accidentally place guessed values in standalone_query,
-        # so never use its free-form rewrite as the rerank query.
-        deterministic_subqueries = deterministic_source_subqueries(original)
-        if len(deterministic_subqueries) >= 2:
+    # Explicitly named multiple sources are a retrieval fan-out invariant,
+    # not a semantic topic classifier. If the model did not provide usable
+    # per-source queries, create source-scoped copies without guessing topics.
+    if len(extract_explicit_source_names(original)) >= 2:
+        if len(subqueries) >= 2:
+            return QueryPlan("decompose", original, subqueries, trigger=trigger)
+        source_subqueries = deterministic_source_subqueries(original)
+        if len(source_subqueries) >= 2:
+            merged_subqueries = _unique_queries((*subqueries, *source_subqueries))
             return QueryPlan(
                 "decompose",
                 original,
-                deterministic_subqueries,
+                tuple(merged_subqueries[:_MAX_SUBQUERIES]),
                 trigger=trigger,
             )
-        if strategy == "decompose" and len(subqueries) >= 2:
-            return QueryPlan(
-                "decompose",
-                original,
-                subqueries,
-                trigger=trigger,
-            )
-        return QueryPlan.single(original, trigger=trigger)
+    if strategy == "decompose":
+        # A decomposed plan is retrieved per subquery; do not let a free-form
+        # standalone rewrite become a potentially hallucinated rerank query.
+        standalone_query = original
     if strategy != "decompose":
         subqueries = ()
     return QueryPlan(strategy, standalone_query, subqueries, trigger=trigger)
@@ -258,25 +236,37 @@ def parse_query_plan(output: str, question: str, trigger: str) -> QueryPlan:
 def fallback_query_plan(question: str, trigger: str | None) -> QueryPlan:
     """Return a retrieval-safe plan when structured model output is unusable."""
     original = _clean_query(question)
-    if trigger == "complex_query":
-        subqueries = (
-            deterministic_source_subqueries(original)
-            or deterministic_topic_subqueries(original)
+    source_subqueries = deterministic_source_subqueries(original)
+    if len(source_subqueries) >= 2:
+        return QueryPlan(
+            "decompose",
+            original,
+            tuple(source_subqueries[:_MAX_SUBQUERIES]),
+            trigger=trigger,
+            fallback=True,
         )
-        if len(subqueries) >= 2:
-            return QueryPlan(
-                "decompose",
-                _preserve_explicit_sources(original, original),
-                tuple(subqueries[:_MAX_SUBQUERIES]),
-                trigger=trigger,
-                fallback=True,
-            )
+    clause_subqueries = deterministic_topic_subqueries(original)
+    if len(clause_subqueries) >= 2:
+        return QueryPlan(
+            "decompose",
+            original,
+            tuple(clause_subqueries[:_MAX_SUBQUERIES]),
+            trigger=trigger,
+            fallback=True,
+        )
     return QueryPlan.single(question, trigger=trigger, fallback=True)
 
 
 def deterministic_topic_subqueries(question: str) -> tuple[str, ...]:
-    """Split a clearly multi-target question without inventing new facts."""
+    """Split only explicit clause/list boundaries without inventing semantics."""
     normalized = _clean_query(question)
+    numbered = re.split(
+        r"(?:^|[，,；;。！？?])\s*(?:\d{1,2}|[一二三四五六七八九十]+)[、.)．]\s*",
+        normalized,
+    )
+    numbered = [_clean_query(clause) for clause in numbered if _clean_query(clause)]
+    if len(numbered) >= 2:
+        return tuple(_unique_queries(numbered))[:_MAX_SUBQUERIES]
     clauses = [
         _clean_query(clause)
         for clause in re.split(r"[；;。！？?]+", normalized)
@@ -284,37 +274,7 @@ def deterministic_topic_subqueries(question: str) -> tuple[str, ...]:
     ]
     if len(clauses) >= 2:
         return tuple(_unique_queries(clauses))[:_MAX_SUBQUERIES]
-
-    separator = re.search(r"(和|与|及|以及|、)", normalized)
-    if not separator:
-        return ()
-    left = normalized[:separator.start()].strip()
-    right = normalized[separator.end():].strip()
-    if len(left) < 4 or len(right) < 4:
-        return ()
-
-    # Move a shared predicate such as “的绝对吸水量” or “有哪些要求”
-    # onto both targets. This keeps each query independently searchable.
-    tail_match = re.search(
-        r"(的(?:[^，。；！？?]{1,24})|有哪些[^，。；！？?]{0,20}|"
-        r"是什么[^，。；！？?]{0,20}|是多少[^，。；！？?]{0,20}|"
-        r"如何[^，。；！？?]{0,20})",
-        right,
-    )
-    if tail_match:
-        right_target = right[:tail_match.start()].strip()
-        shared_tail = right[tail_match.start():].strip()
-    else:
-        right_target = right
-        shared_tail = ""
-    if len(right_target) < 2:
-        return ()
-
-    left_query = _clean_query(f"{left}{shared_tail}")
-    right_query = _clean_query(f"{right_target}{shared_tail}")
-    if not left_query or not right_query or left_query.casefold() == right_query.casefold():
-        return ()
-    return tuple(_unique_queries((left_query, right_query)))
+    return ()
 
 
 def extract_explicit_source_names(question: str) -> tuple[str, ...]:
@@ -381,7 +341,7 @@ def _append_source_anchors(query: str, sources: Sequence[str]) -> str:
 
 
 def deterministic_source_subqueries(question: str) -> tuple[str, ...]:
-    """Build source-anchored queries when a planner misses explicit file targets."""
+    """Fan out explicit sources without inferring a source-specific topic."""
     sources = list(extract_explicit_source_names(question))
     if len(sources) < 2:
         return ()
@@ -395,20 +355,11 @@ def deterministic_source_subqueries(question: str) -> tuple[str, ...]:
         base_query,
     )
     base_query = _clean_query(re.sub(r"[，,、；;]+", " ", base_query))
-    clauses = [
-        _clean_query(clause)
-        for clause in re.split(r"[，,；;。！？?]+", base_query)
-        if _clean_query(clause)
+    target = base_query or _clean_query(question)
+    subqueries = [
+        _clean_query(f"《{source}》；{target}")
+        for source in sources
     ]
-    subqueries = []
-    for source in sources:
-        if re.search(r"(?:设计|方案)", source):
-            topic_pattern = re.compile(r"(?:设计|阶段|对应|采油|井数)")
-        else:
-            topic_pattern = re.compile(r"(?:实际|监测|示踪剂|见剂|占比|连通)")
-        selected = [clause for clause in clauses if topic_pattern.search(clause)]
-        target = " ".join(selected) or base_query
-        subqueries.append(_clean_query(f"《{source}》；{target}"))
     return tuple(subqueries)
 
 

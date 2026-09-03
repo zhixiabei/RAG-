@@ -90,7 +90,7 @@ class RagServiceTest(unittest.TestCase):
             AnswerAgent(models),
         )
 
-    def test_simple_retrieval_skips_planner_model(self):
+    def test_simple_retrieval_uses_combined_planner_once(self):
         repository = FakeRepository()
         vectors = FakeVectorStore([
             SearchHit("chunk-1", "doc-1", "kb-1", "制度.pdf", "测试证据", 0.9, 1),
@@ -104,7 +104,7 @@ class RagServiceTest(unittest.TestCase):
         self.assertEqual(len(models.completion_calls), 2)
         self.assertEqual(models.embed_calls, [["报销制度是什么？"]])
         self.assertEqual(result["query_plan"]["strategy"], "single")
-        self.assertFalse(result["query_plan"]["model_invoked"])
+        self.assertTrue(result["query_plan"]["model_invoked"])
         self.assertEqual(result["retrieval_trace"]["query_count"], 1)
         self.assertNotIn("planning.generation", result["timing"]["by_stage"])
 

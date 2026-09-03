@@ -3,6 +3,7 @@ import unittest
 
 from agent.query_planning_agent import (
     QueryPlanningAgent,
+    deterministic_source_subqueries,
     query_planning_messages,
     query_planning_trigger,
 )
@@ -22,12 +23,18 @@ class FakeModels:
 
 
 class QueryPlanningAgentTest(unittest.TestCase):
-    def test_simple_lookup_skips_planning_model(self):
-        models = FakeModels()
-        plan = QueryPlanningAgent(models).run("化348-4井的年累计增油是多少？", [])
+    def test_simple_lookup_uses_a_single_planning_result(self):
+        question = "化348-4井的年累计增油是多少？"
+        models = FakeModels(json.dumps({
+            "strategy": "single",
+            "standalone_query": question,
+            "subqueries": [],
+        }, ensure_ascii=False))
+        plan = QueryPlanningAgent(models).run(question, [])
         self.assertEqual(plan.strategy, "single")
-        self.assertFalse(plan.model_invoked)
-        self.assertEqual(models.calls, [])
+        self.assertTrue(plan.model_invoked)
+        self.assertEqual(len(models.calls), 1)
+        self.assertEqual(plan.retrieval_queries(question), [question])
 
     def test_rewrites_a_context_dependent_follow_up(self):
         models = FakeModels(json.dumps({
@@ -68,7 +75,7 @@ class QueryPlanningAgentTest(unittest.TestCase):
 
         self.assertEqual(query_planning_trigger(question, []), "complex_query")
 
-    def test_forces_source_decomposition_when_model_returns_single(self):
+    def test_explicit_sources_fan_out_without_topic_mapping(self):
         question = (
             "根据《化166-2井组化学示踪剂监测设计》和《化166-2示踪剂报告》，"
             "统计设计阶段井数与实际见剂井数并判断整体连通性。"
@@ -85,6 +92,33 @@ class QueryPlanningAgentTest(unittest.TestCase):
         self.assertEqual(len(plan.subqueries), 2)
         self.assertIn("化166-2井组化学示踪剂监测设计", plan.subqueries[0])
         self.assertIn("化166-2示踪剂报告", plan.subqueries[1])
+        self.assertEqual(plan.retrieval_queries(question)[0], question)
+        self.assertEqual(len(plan.retrieval_queries(question)), 3)
+        self.assertTrue(all("设计阶段井数" in query or "实际见剂井数" in query for query in plan.subqueries))
+
+    def test_single_budget_source_does_not_select_a_domain_topic(self):
+        question = "根据《26年度预算方案》，分析研发费用变化及预算增幅"
+        models = FakeModels(json.dumps({
+            "strategy": "single",
+            "standalone_query": question,
+            "subqueries": [],
+        }, ensure_ascii=False))
+
+        plan = QueryPlanningAgent(models).run(question, [])
+
+        self.assertEqual(plan.strategy, "single")
+        self.assertEqual(plan.subqueries, ())
+        self.assertEqual(plan.retrieval_queries(question), [question])
+
+    def test_source_fanout_is_domain_agnostic(self):
+        question = "根据《合同甲》和《验收记录乙》，比较付款节点与到账情况"
+
+        subqueries = deterministic_source_subqueries(question)
+
+        self.assertEqual(len(subqueries), 2)
+        self.assertIn("《合同甲》", subqueries[0])
+        self.assertIn("《验收记录乙》", subqueries[1])
+        self.assertTrue(all("付款节点与到账情况" in query for query in subqueries))
 
     def test_ignores_hallucinated_standalone_query_for_explicit_source_comparison(self):
         question = (

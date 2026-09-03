@@ -22,7 +22,9 @@ logger = logging.getLogger(__name__)
 RETRIEVAL_DECISION_PROMPT = """你负责一次性完成检索判断和查询规划，不负责回答问题。
 需要知识库事实、原文、出处或校验信息时 decision=RETRIEVE；问候、致谢、改写已有回答、助手身份问题或完全可以依据对话历史回答时 decision=SKIP。不确定时输出 RETRIEVE。
 strategy=single 表示问题独立且只有一个目标；strategy=rewrite 表示依赖历史指代；strategy=decompose 表示有多个取证目标，需要生成 2 到 4 个独立子问题。
-必须保留井号、层位、年份、标准号、数值和专有名词。只能改写或拆分已有目标，不得补充答案、结论或新事实。
+显式写出多个来源时，为每个来源提供一个来源检索视角，并保留联合问题；decompose 表示检索 fan-out，不代表最终要生成多个答案。不要根据文件名或领域词推断主题。
+多个指标如果共享主体、来源和时间上下文，可以使用 single。只有每个子问题都能独立检索且检索约束不同，才使用 decompose。
+必须保留井号、层位、年份、标准号、数值、专有名词和用户明确写出的来源。只能改写或拆分已有目标，不得补充答案、结论或新事实。
 没有历史指代或明显多目标时使用 single，standalone_query 原样保留当前问题，subqueries 输出空数组。
 只输出符合 schema 的 JSON，不要解释。"""
 
@@ -142,20 +144,29 @@ class RetrievalDecisionAgent:
             )
             return RetrievalDecision(True, fallback_query_plan(question, trigger))
         should_retrieve_now = should_retrieve(output)
-        if trigger == "complex_query" and not should_retrieve_now:
-            logger.warning(
-                "Complex knowledge query was classified as SKIP; forcing retrieval"
-            )
-            should_retrieve_now = True
-        if not should_retrieve_now or trigger is None:
-            return RetrievalDecision(should_retrieve_now, QueryPlan.single(question))
+        planning_trigger = trigger or "planner"
+        if not should_retrieve_now:
+            # Preserve a valid combined plan for callers that may force
+            # retrieval later; do not let structural keywords override the
+            # model's retrieval decision.
+            if self.query_planning_enabled:
+                try:
+                    return RetrievalDecision(
+                        False,
+                        parse_query_plan(output, question, planning_trigger),
+                    )
+                except Exception:
+                    pass
+            return RetrievalDecision(False)
+        if not self.query_planning_enabled:
+            return RetrievalDecision(True, QueryPlan.single(question))
         try:
-            query_plan = parse_query_plan(output, question, trigger)
+            query_plan = parse_query_plan(output, question, planning_trigger)
         except Exception as exc:
             logger.warning(
                 "Combined retrieval decision/query plan was invalid; using deterministic fallback (%s: %s)",
                 type(exc).__name__,
                 exc,
             )
-            query_plan = fallback_query_plan(question, trigger)
-        return RetrievalDecision(should_retrieve_now, query_plan)
+            query_plan = fallback_query_plan(question, planning_trigger)
+        return RetrievalDecision(True, query_plan)
