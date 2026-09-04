@@ -1,7 +1,0 @@
-INFO:     Started server process [41608]
-INFO:     Waiting for application startup.
-INFO:     Application startup complete.
-INFO:     Uvicorn running on http://127.0.0.1:8081 (Press CTRL+C to quit)
-Combined retrieval decision/query plan was invalid; using deterministic fallback (JSONDecodeError: Unterminated string starting at: line 4 column 23 (char 75))
-Combined retrieval decision/query plan was invalid; using deterministic fallback (JSONDecodeError: Unterminated string starting at: line 4 column 23 (char 75))
-Combined retrieval decision/query plan was invalid; using deterministic fallback (JSONDecodeError: Unterminated string starting at: line 4 column 23 (char 75))
