@@ -18,10 +18,26 @@ _ASSISTANT_IDENTITY_PATTERNS = (
     re.compile(r"\bwho\s+are\s+you\b", re.IGNORECASE),
 )
 
-_CONVERSATION_ONLY_PATTERNS = (
-    re.compile(
-        r"^(?:你好|您好|嗨|哈喽|hello|hi|hey|谢谢|谢谢你|感谢|多谢|好的|好|明白了|知道了|收到|再见|拜拜)[！!。.\s]*$",
-        re.IGNORECASE,
+_CONVERSATION_REPLIES = (
+    (
+        re.compile(r"(?:你好|您好|嗨|哈喽|hello|hi|hey)(?:啊|呀)?[！!。.？?\s]*", re.IGNORECASE),
+        "你好！有什么可以帮你的吗？",
+    ),
+    (
+        re.compile(r"(?:谢谢|谢谢你|感谢|多谢)[！!。.\s]*"),
+        "不客气！",
+    ),
+    (
+        re.compile(r"(?:好的|好|明白了|知道了|收到)[！!。.\s]*"),
+        "好的。",
+    ),
+    (
+        re.compile(r"(?:再见|拜拜)[！!。.\s]*"),
+        "再见！",
+    ),
+    (
+        re.compile(r"[？?][？?！!\s]*"),
+        "请补充一下你想问的问题。",
     ),
 )
 
@@ -38,6 +54,7 @@ class QueryIntent:
     assistant_identity: bool
     conversation_only: bool
     catalog_file_lookup: bool
+    conversation_reply: str = ""
 
     @property
     def skips_retrieval(self) -> bool:
@@ -47,17 +64,20 @@ class QueryIntent:
 def analyze_query_intent(question: str) -> QueryIntent:
     '''Classify all keyword intents in one normalized pass.'''
     normalized = ' '.join(question.strip().split())
+    conversation_reply = next(
+        (reply for pattern, reply in _CONVERSATION_REPLIES if pattern.fullmatch(normalized)),
+        "",
+    )
     return QueryIntent(
         assistant_identity=any(
             pattern.search(normalized) for pattern in _ASSISTANT_IDENTITY_PATTERNS
         ),
-        conversation_only=any(
-            pattern.search(normalized) for pattern in _CONVERSATION_ONLY_PATTERNS
-        ),
+        conversation_only=bool(conversation_reply),
         catalog_file_lookup=any(
             pattern.search(normalized)
             for pattern in _KNOWLEDGE_CATALOG_FILE_LOOKUP_PATTERNS
         ),
+        conversation_reply=conversation_reply,
     )
 
 

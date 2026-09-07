@@ -92,6 +92,34 @@ class RagServiceTest(unittest.TestCase):
             AnswerAgent(models),
         )
 
+    def test_first_and_repeated_greetings_skip_all_model_and_retrieval_calls(self):
+        repository = FakeRepository()
+        vectors = FakeVectorStore()
+        models = FakeModelGateway(retrieval_needed=True, complexity="complex", needs_rewrite=True)
+        service = self.build_service(repository, vectors, models, query_planning=True)
+
+        for question in ("你好", "你好", "?", "你好"):
+            with self.subTest(turn=len(repository.saved), question=question):
+                result = service.answer("kb-1", "conversation-1", question)
+
+                expected = "请补充一下你想问的问题。" if question == "?" else "你好！有什么可以帮你的吗？"
+                self.assertEqual(result["answer"], expected)
+                self.assertFalse(result["retrieval_used"])
+                self.assertEqual(result["citations"], [])
+                self.assertEqual(result["retrieved_count"], 0)
+                self.assertFalse(result["query_plan"]["model_invoked"])
+                self.assertEqual(result["retrieval_trace"]["query_count"], 0)
+                self.assertEqual(models.completion_calls, [])
+                self.assertEqual(models.embed_calls, [])
+                self.assertEqual(vectors.search_calls, [])
+                for stage in ("decision.generation", "planning.generation", "answer.generation", "answer.history_compression"):
+                    self.assertNotIn(stage, result["timing"]["by_stage"])
+                self.assertEqual(repository.saved[-1][2:5], (question, expected, []))
+                repository.history.extend([
+                    {"role": "user", "content": question},
+                    {"role": "assistant", "content": result["answer"]},
+                ])
+
     def test_simple_retrieval_uses_only_the_decision_model(self):
         repository = FakeRepository()
         vectors = FakeVectorStore([

@@ -129,6 +129,12 @@ class AnswerAgent:
         intent: QueryIntent | None = None,
     ) -> AnswerResult:
         intent = intent or analyze_query_intent(question)
+        if intent.conversation_reply:
+            return AnswerResult(
+                intent.conversation_reply,
+                [],
+                _skipped_context_trace("conversation_only"),
+            )
         if intent.assistant_identity:
             active_model = model or self.models.chat_model
             return AnswerResult(

@@ -6,7 +6,7 @@ from typing import Any
 
 from .context import select_history_messages
 from .contracts import ModelGateway
-from .query_intent import QueryIntent
+from .query_intent import QueryIntent, analyze_query_intent
 from .query_planning_agent import (
     QueryPlan,
     QueryPlanningAgent,
@@ -171,8 +171,9 @@ class RetrievalDecisionAgent:
         intent: QueryIntent | None = None,
         force_retrieval: bool = False,
     ) -> RetrievalDecision:
-        # QueryIntent is metadata-only; it must never bypass the model decision.
-        _ = intent
+        intent = intent or analyze_query_intent(question)
+        if intent.conversation_only and not force_retrieval:
+            return RetrievalDecision(False)
         try:
             with timed_stage("decision.generation"), model_usage_stage("retrieval_decision"):
                 output = self.models.complete(

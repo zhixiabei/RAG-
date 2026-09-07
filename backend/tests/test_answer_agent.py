@@ -14,6 +14,33 @@ class FakeModels:
 
 
 class AnswerAgentTest(unittest.TestCase):
+    def test_conversation_replies_ignore_failed_retrieval_and_old_refusal(self):
+        history = [
+            {"role": "user", "content": "你好"},
+            {"role": "assistant", "content": "知识库中无相关内容。"},
+        ]
+        cases = (
+            ("你好", "你好！有什么可以帮你的吗？"),
+            ("您好？", "你好！有什么可以帮你的吗？"),
+            ("谢谢你！", "不客气！"),
+            ("好的。", "好的。"),
+            ("拜拜", "再见！"),
+            ("？", "请补充一下你想问的问题。"),
+        )
+        for question, expected in cases:
+            for retrieval_used in (False, True):
+                with self.subTest(question=question, retrieval_used=retrieval_used):
+                    models = FakeModels()
+
+                    result = AnswerAgent(models).run_with_context(
+                        question, history, [], retrieval_used=retrieval_used
+                    )
+
+                    self.assertEqual(result.answer, expected)
+                    self.assertEqual(result.selected_hits, [])
+                    self.assertEqual(result.context_trace["reason"], "conversation_only")
+                    self.assertEqual(models.calls, [])
+
     def test_returns_no_relevant_content_after_unsuccessful_retrieval(self):
         models = FakeModels()
 

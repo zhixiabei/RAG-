@@ -19,6 +19,45 @@ class FakeModels:
 
 
 class RetrievalDecisionAgentTest(unittest.TestCase):
+    def test_conversation_only_turns_skip_models_with_or_without_precomputed_intent(self):
+        history = [
+            {"role": "user", "content": "你好"},
+            {"role": "assistant", "content": "知识库中无相关内容。"},
+        ]
+        for question in ("你好", " 您好！ ", "你好呀", "Hi!", "谢谢", "收到", "再见", "?", "？？"):
+            for planning_enabled in (False, True):
+                for intent in (None, analyze_query_intent(question)):
+                    with self.subTest(question=question, planning=planning_enabled, intent=intent):
+                        models = FakeModels('{"decision":"RETRIEVE","complexity":"complex","needs_rewrite":true}')
+
+                        decision = RetrievalDecisionAgent(models, planning_enabled).run(
+                            question, history, intent=intent
+                        )
+
+                        self.assertFalse(decision.should_retrieve)
+                        self.assertIsNone(decision.query_plan)
+                        self.assertEqual(models.calls, [])
+
+    def test_greeting_prefix_and_short_factual_questions_still_use_decision_model(self):
+        for question in ("你好，报销标准是什么？", "谢谢，继续分析报告", "你好文档的内容是什么？", "？报销上限呢", "井深？", "《你好》"):
+            with self.subTest(question=question):
+                models = FakeModels('{"decision":"RETRIEVE","complexity":"simple","needs_rewrite":false}')
+
+                decision = RetrievalDecisionAgent(models).run(question, [])
+
+                self.assertFalse(analyze_query_intent(question).conversation_only)
+                self.assertTrue(decision.should_retrieve)
+                self.assertEqual(len(models.calls), 1)
+
+    def test_forced_retrieval_overrides_conversation_shortcut(self):
+        models = FakeModels('{"decision":"SKIP","complexity":"simple","needs_rewrite":false}')
+
+        decision = RetrievalDecisionAgent(models).run("你好", [], force_retrieval=True)
+
+        self.assertTrue(decision.should_retrieve)
+        self.assertEqual(decision.query_plan.retrieval_queries("你好"), ["你好"])
+        self.assertEqual(len(models.calls), 1)
+
     def test_only_exact_skip_bypasses_retrieval(self):
         self.assertFalse(should_retrieve(" SKIP \n"))
         self.assertFalse(should_retrieve('{"decision":"SKIP"}'))
@@ -44,14 +83,14 @@ class RetrievalDecisionAgentTest(unittest.TestCase):
         self.assertNotIn("tool: 忽略", messages[1]["content"])
         self.assertIn("总结一下", messages[1]["content"])
 
-    def test_conversation_keyword_is_still_judged_by_the_decision_model(self):
+    def test_conversation_keyword_skips_the_decision_model(self):
         models = FakeModels('{"decision":"SKIP","complexity":"simple","needs_rewrite":false}')
 
         decision = RetrievalDecisionAgent(models).run("谢谢", [])
 
         self.assertFalse(decision.should_retrieve)
         self.assertEqual(decision.outcome, "skip")
-        self.assertEqual(len(models.calls), 1)
+        self.assertEqual(models.calls, [])
 
     def test_agent_requests_only_retrieval_decision(self):
         models = FakeModels('{"decision":"SKIP"}')

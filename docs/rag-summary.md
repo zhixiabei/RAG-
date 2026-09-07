@@ -10,7 +10,7 @@
 
 系统的核心检索结构是“文件级路由 + 文本块级检索”两阶段。两阶段都同时使用稠密向量和关键词通道，文本块候选再通过 RRF 融合，并可调用 reranker 精排。
 
-当前代码已经具备可运行的 MVP/内网原型能力，但还不是生产级系统。主要生产缺口是：入库任务仅存在后端进程内存、没有完整身份和权限体系、PostgreSQL/MinIO/Qdrant 跨系统写入没有事务补偿、复杂多证据问题效果偏弱、最终答案质量评测尚未真正产生有效 Judge 样本。
+当前代码已经具备可运行的 MVP/内网原型能力，但还不是生产级系统。主要生产缺口是：入库任务仅存在后端进程内存、没有完整身份和权限体系、PostgreSQL/MinIO/Qdrant 跨系统写入没有事务补偿、复杂多证据问题效果偏弱。历史三份 JSON 评测产物没有有效 Judge 样本；用户提供的最新评测页面截图已经显示答案级 Judge 结果，但仍需用原始评测 JSON 核对有效 Judge 样本数和执行时间戳。
 
 ## 二、技术栈与模块
 
@@ -461,7 +461,7 @@ EvaluationDialog 支持测试集工坊和本地 JSONL，支持全部 Approved �
 | embedding | SiliconFlow Pro/BAAI/bge-m3 | 文件路由和 chunk 向量 |
 | reranker | SiliconFlow Pro/BAAI/bge-reranker-v2-m3 | 候选 chunk 重排 |
 | 上下文压缩 | Ollama Qwen3:4B | 可选历史压缩，当前关闭 |
-| Judge | 未单独配置 | 若启用且未覆盖，复用默认回答 gateway；现有产物未产生 Judge 样本 |
+| Judge | 页面截图显示 deepseek-chat | 代码支持 correctness/completeness/faithfulness 评分；未单独覆盖时复用默认回答 gateway，历史 JSON 产物没有 Judge 样本 |
 
 当前主链路是本地决策/规划 + 远程回答/embedding/rerank，多模型调用叠加会增加复杂问题时延和运行依赖。
 
@@ -479,6 +479,31 @@ EvaluationDialog 支持测试集工坊和本地 JSONL，支持全部 Approved �
 6. 有 evidence facts 时，用 embedding 比较 fact 与单 chunk 或相邻 2/3 chunk 窗口，默认阈值 0.72。
 7. 配置 Judge 时，按 correctness 0.4、completeness 0.3、faithfulness 0.3 计算总分，0.7 以上通过。
 
+### 页面实际运行结果（用户提供截图）
+
+截图中的数据集为 heishanliang_rag_eval_v2，范围为 199 道 Approved，页面显示已处理 199/199，Judge 为 deepseek-chat。这是一轮已经包含答案级 Judge 的页面运行结果，与下文历史 JSON 产物的统计口径分开记录。
+
+| 指标 | 页面结果 |
+| --- | ---: |
+| 评分错误 | 1 |
+| 答案评分 | 85% |
+| 通过率 | 79% |
+| 正确性 / 完整性 / 忠实性 | 84% / 84% / 88% |
+| 文档命中率 | 98% |
+| Chunk 命中率 | 94% |
+| MRR | 70% |
+| Retrieval Recall@15 | 85% |
+| 总耗时 | 724.26 s |
+| 平均响应 / P95 响应 | 6.08 s / 12.10 s |
+| Judge 平均耗时 | 1.14 s |
+| Token 总量 / Judge Token | 1,071,358 / 213,049 |
+
+按代码中的 Judge 规则，答案总分由 correctness 0.4、completeness 0.3、faithfulness 0.3 加权，0.7 以上判定通过。截图同时显示“评分错误 1”，因此页面上的答案统计不能直接等同于 199 道全部都有有效 Judge 结果；最终汇报应以本轮原始 JSON 中的 judge_sample_count、错误题目和运行配置为准。截图只显示 Recall@15，而历史 JSON 的检索 K 和配置未必相同，所以不能把两者直接合并为同一轮指标。
+
+从截图可确认的现象是：召回侧文档命中率 98%、Chunk 命中率 94%，但 MRR 只有 70%，说明“能召回”明显好于“把正确证据排在前面”；答案侧正确性和完整性均为 84%，忠实性为 88%，说明回答基本受证据约束，但仍有一部分题目存在排序、覆盖或答案组织问题。通过率 79% 低于答案评分 85%，也说明加权平均分不能替代逐题通过率。
+
+历史 JSON 产物（v2/v3/v4）中的 judge_sample_count 仍为 0；它们只能用于比较检索、耗时和 token，不能用来否定这次截图中已经出现的 Judge 结果。截图没有提供执行时间戳、完整模型参数或原始逐题 JSON，因此本报告不推断这轮与历史文件属于同一运行。
+
 
 ## 十四、本次实际验证
 
@@ -488,7 +513,7 @@ EvaluationDialog 支持测试集工坊和本地 JSONL，支持全部 Approved �
 - 前端：npm test，13 passed。
 - 前端：npm run build，Vite 生产构建成功。
 
-这些结果证明单元测试覆盖的行为通过，不等同于真实业务数据上的答案正确率，也不能替代线上容量、权限、容错和质量评测。
+这些结果证明单元测试覆盖的行为通过；结合页面截图可以观察到一轮真实数据上的检索与答案质量结果，但截图不是原始评测产物，仍不能替代可复现的线上容量、权限、容错和质量评测。后续应保存本轮原始 JSON、Judge 有效样本数、失败题目和完整配置。
 
 ## 十五、关键代码索引
 
